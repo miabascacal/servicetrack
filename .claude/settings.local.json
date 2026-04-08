@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(winget upgrade:*)",
+      "Bash(winget search:*)"
+    ]
+  }
+}

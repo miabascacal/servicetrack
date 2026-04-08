@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup — Plataforma Postventa Automotriz</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--surface3:#21262d;
+  --border:#21262d;--border2:#30363d;
+  --text:#e6edf3;--muted:#8b949e;--dim:#484f58;--dim2:#3d444d;
+  --ag:#1db870;--ta:#8b5cf6;--rf:#f59e0b;--ve:#f43f5e;--bj:#06b6d4;--crm:#3b82f6;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:13px}
+#app{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+#sb{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#sb-logo{padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+#sb-icon{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--crm),var(--ta));display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+#sb-brand{font-size:13px;font-weight:600;color:var(--text)}
+#sb-tag{font-size:9px;color:var(--dim);margin-top:1px;font-family:'IBM Plex Mono',monospace}
+#sb-nav{flex:1;overflow-y:auto;padding:8px 0}
+.sb-sec{padding:5px 14px 3px}
+.sb-sec-label{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--dim2);font-family:'IBM Plex Mono',monospace}
+.sb-item{display:flex;align-items:center;gap:9px;padding:7px 14px;cursor:pointer;border-radius:0;transition:background .12s;border-left:2px solid transparent;position:relative}
+.sb-item:hover{background:rgba(255,255,255,.04)}
+.sb-item.on{background:rgba(255,255,255,.06);border-left-color:var(--ic)}
+.sb-item .ic{width:7px;height:7px;border-radius:50%;background:var(--ic);flex-shrink:0}
+.sb-item .lbl{font-size:12px;color:var(--muted);flex:1}
+.sb-item.on .lbl{color:var(--text);font-weight:500}
+.sb-item .cnt{font-size:9px;font-family:'IBM Plex Mono',monospace;color:var(--dim);background:rgba(255,255,255,.04);padding:1px 6px;border-radius:8px}
+#sb-user{padding:12px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:9px;flex-shrink:0}
+.sb-avatar{width:28px;height:28px;border-radius:50%;background:rgba(59,130,246,.2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--crm);flex-shrink:0}
+.sb-uname{font-size:11px;font-weight:500;color:var(--text)}
+.sb-urole{font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace}
+
+/* ── MAIN ── */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#topbar{height:48px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0}
+#tb-title{font-size:15px;font-weight:600;color:var(--text)}
+#tb-sub{font-size:11px;color:var(--dim);margin-left:4px}
+#tb-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tb-btn{padding:5px 13px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);font-size:11px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .12s}
+.tb-btn:hover{color:var(--text);border-color:rgba(255,255,255,.15)}
+.tb-btn.primary{background:var(--ic,#3b82f6);border-color:var(--ic,#3b82f6);color:#fff}
+.tb-btn.primary:hover{filter:brightness(1.1)}
+.tb-chip{font-size:10px;padding:3px 9px;border-radius:4px;border:1px solid var(--bc,#21262d);color:var(--tc,#484f58);background:var(--tbg,transparent);font-family:'IBM Plex Mono',monospace}
+#content{flex:1;overflow:auto;background:var(--bg)}
+
+/* ── SCENES ── */
+.scene{display:none;padding:20px;height:100%;overflow:auto}
+.scene.on{display:block}
+
+/* ── STAT ROW ── */
+.stats{display:grid;gap:10px;margin-bottom:18px}
+.stats.c4{grid-template-columns:repeat(4,1fr)}
+.stats.c5{grid-template-columns:repeat(5,1fr)}
+.stats.c3{grid-template-columns:repeat(3,1fr)}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.stat-num{font-size:24px;font-weight:600;color:var(--text);margin-bottom:2px;font-family:'IBM Plex Mono',monospace}
+.stat-label{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+.stat-delta{font-size:10px;margin-top:4px}
+.stat-delta.up{color:#1db870}
+.stat-delta.down{color:#f43f5e}
+
+/* ── KANBAN ── */
+.kanban{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px}
+.kb-col{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;min-width:200px;flex-shrink:0}
+.kb-col-head{display:flex;align-items:center;gap:7px;margin-bottom:10px}
+.kb-col-dot{width:7px;height:7px;border-radius:50%}
+.kb-col-name{font-size:11px;font-weight:500;color:var(--muted)}
+.kb-col-cnt{font-size:9px;font-family:'IBM Plex Mono',monospace;color:var(--dim);background:rgba(255,255,255,.04);padding:1px 6px;border-radius:8px;margin-left:auto}
+.kb-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:7px;cursor:pointer;transition:border-color .12s;border-left:2px solid var(--cc,#21262d)}
+.kb-card:hover{border-color:var(--border2)}
+.kb-card-name{font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px}
+.kb-card-sub{font-size:10px;color:var(--dim)}
+.kb-card-bot{margin-top:6px;font-size:9px;color:var(--ta);font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;gap:4px}
+.kb-card-bot::before{content:'⚡';font-size:8px}
+.kb-card-timer{margin-top:5px;display:flex;align-items:center;gap:4px}
+.kb-timer-bar{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
+.kb-timer-fill{height:100%;border-radius:2px;background:var(--tf,#f59e0b)}
+.kb-timer-label{font-size:8px;color:var(--tf,#f59e0b);font-family:'IBM Plex Mono',monospace;white-space:nowrap}
+.kb-add{display:flex;align-items:center;gap:5px;padding:6px 8px;border-radius:6px;border:1px dashed var(--border2);color:var(--dim2);font-size:10px;cursor:pointer;margin-top:4px}
+.kb-add:hover{border-color:var(--muted);color:var(--muted)}
+
+/* ── TABLE ── */
+.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.tbl-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.tbl-title{font-size:12px;font-weight:500;color:var(--text)}
+.tbl-actions{margin-left:auto;display:flex;gap:7px}
+table{width:100%;border-collapse:collapse}
+th{padding:9px 14px;text-align:left;font-size:10px;font-weight:600;color:var(--dim);letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--border)}
+td{padding:9px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}
+tr:last-child td{border:none}
+tr:hover td{background:rgba(255,255,255,.02);color:var(--text)}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:500;padding:2px 8px;border-radius:10px;font-family:'IBM Plex Mono',monospace}
+
+/* ── CALENDAR ── */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+.cal-day-header{background:var(--surface);padding:8px 0;text-align:center;font-size:9px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.cal-day{background:var(--surface);min-height:80px;padding:6px;position:relative}
+.cal-day.today{background:var(--surface2)}
+.cal-day-num{font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace;margin-bottom:4px}
+.cal-day.today .cal-day-num{color:var(--crm);font-weight:600}
+.cal-event{font-size:9px;padding:2px 5px;border-radius:3px;margin-bottom:2px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+
+/* ── CHAT / BANDEJA ── */
+.chat-wrap{display:grid;grid-template-columns:260px 1fr;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;height:480px}
+.chat-list{border-right:1px solid var(--border);overflow-y:auto}
+.chat-item{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.chat-item:hover,.chat-item.on{background:var(--surface2)}
+.chat-item-top{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.chat-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0}
+.chat-name{font-size:12px;font-weight:500;color:var(--text);flex:1}
+.chat-time{font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace}
+.chat-preview{font-size:10px;color:var(--dim);padding-left:36px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-channel{font-size:8px;padding:1px 5px;border-radius:3px;font-family:'IBM Plex Mono',monospace;font-weight:500}
+.chat-unread{background:var(--crm);color:#fff;font-size:9px;padding:1px 6px;border-radius:8px;font-family:'IBM Plex Mono',monospace}
+.chat-main{display:flex;flex-direction:column}
+.chat-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.chat-messages{flex:1;padding:14px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:72%;padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.5}
+.msg.in{background:var(--surface2);color:var(--muted);align-self:flex-start;border-radius:10px 10px 10px 2px}
+.msg.out{background:rgba(59,130,246,.15);color:var(--text);align-self:flex-end;border-radius:10px 10px 2px 10px}
+.msg.bot{background:rgba(139,92,246,.15);color:var(--text);align-self:flex-end;border-radius:10px 10px 2px 10px}
+.msg-meta{font-size:9px;color:var(--dim);margin-top:3px;font-family:'IBM Plex Mono',monospace}
+.chat-input{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center}
+.chat-input input{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 12px;color:var(--text);font-size:12px;font-family:'Inter',sans-serif;outline:none}
+
+/* ── CRM PROFILE ── */
+.profile-grid{display:grid;grid-template-columns:320px 1fr;gap:14px}
+.profile-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.profile-head{padding:16px 18px;border-bottom:1px solid var(--border)}
+.profile-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;margin-bottom:10px}
+.profile-name{font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px}
+.profile-type{font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace}
+.profile-fields{padding:12px 18px}
+.pf{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)}
+.pf:last-child{border:none}
+.pf-label{font-size:10px;color:var(--dim);width:90px;flex-shrink:0;padding-top:1px}
+.pf-val{font-size:12px;color:var(--muted);flex:1}
+.activity-list{padding:12px 18px}
+.act{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+.act:last-child{border:none}
+.act-icon{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0;margin-top:1px}
+.act-title{font-size:11px;font-weight:500;color:var(--text);margin-bottom:1px}
+.act-sub{font-size:10px;color:var(--dim)}
+.veh-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
+.veh-card:hover{border-color:var(--border2)}
+.veh-head{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.veh-icon{font-size:16px}
+.veh-name{font-size:12px;font-weight:500;color:var(--text)}
+.veh-vin{font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace}
+.veh-stats{display:flex;gap:10px;font-size:10px;color:var(--dim)}
+
+/* ── TALLER ── */
+.ot-row{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.ot-row:hover{border-color:var(--border2)}
+.ot-num{font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--dim);min-width:70px}
+.ot-client{flex:1}
+.ot-name{font-size:12px;font-weight:500;color:var(--text)}
+.ot-veh{font-size:10px;color:var(--dim)}
+.ot-status{min-width:110px}
+.ot-asesor{font-size:10px;color:var(--dim);min-width:100px;text-align:right}
+.progress-bar{height:4px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:6px;overflow:hidden}
+.progress-fill{height:100%;border-radius:2px}
+
+/* ── AGENDA TAB ── */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px}
+.tab{padding:9px 18px;font-size:12px;font-weight:500;cursor:pointer;color:var(--dim);border-bottom:2px solid transparent;transition:all .12s}
+.tab:hover{color:var(--muted)}
+.tab.on{color:var(--text);border-bottom-color:var(--tc)}
+
+/* scrollbar */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:2px}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- SIDEBAR -->
+<nav id="sb">
+  <div id="sb-logo">
+    <div id="sb-icon">⚡</div>
+    <div>
+      <div id="sb-brand">AutoServ CRM</div>
+      <div id="sb-tag">Plataforma Postventa</div>
+    </div>
+  </div>
+  <div id="sb-nav">
+    <div class="sb-sec"><span class="sb-sec-label">Principal</span></div>
+    <div class="sb-item on" style="--ic:var(--crm)" onclick="sw('dashboard',this)"><div class="ic"></div><span class="lbl">Dashboard</span></div>
+    
+    <div class="sb-sec"><span class="sb-sec-label">Módulos</span></div>
+    <div class="sb-item" style="--ic:var(--crm)" onclick="sw('crm',this)"><div class="ic"></div><span class="lbl">CRM</span><span class="cnt">1,240</span></div>
+    <div class="sb-item" style="--ic:var(--ag)" onclick="sw('citas',this)"><div class="ic"></div><span class="lbl">Citas</span><span class="cnt">24</span></div>
+    <div class="sb-item" style="--ic:var(--ta)" onclick="sw('taller',this)"><div class="ic"></div><span class="lbl">Taller</span><span class="cnt">18</span></div>
+    <div class="sb-item" style="--ic:var(--rf)" onclick="sw('refacciones',this)"><div class="ic"></div><span class="lbl">Refacciones</span><span class="cnt">9</span></div>
+    <div class="sb-item" style="--ic:var(--ve)" onclick="sw('ventas',this)"><div class="ic"></div><span class="lbl">Ventas</span><span class="cnt">32</span></div>
+    <div class="sb-item" style="--ic:var(--bj)" onclick="sw('bandeja',this)"><div class="ic"></div><span class="lbl">Bandeja</span><span class="cnt">7</span></div>
+    
+    <div class="sb-sec"><span class="sb-sec-label">Reportes</span></div>
+    <div class="sb-item" style="--ic:#8b949e" onclick="sw('reportes',this)"><div class="ic"></div><span class="lbl">Reportes</span></div>
+    <div class="sb-item" style="--ic:#8b949e" onclick="sw('agenda_crm',this)"><div class="ic"></div><span class="lbl">Mi Agenda</span></div>
+  </div>
+  <div id="sb-user">
+    <div class="sb-avatar">MA</div>
+    <div><div class="sb-uname">Miguel Abascal</div><div class="sb-urole">Gerente · Keyloop MX</div></div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="topbar">
+    <span id="tb-title">Dashboard</span>
+    <span id="tb-sub"></span>
+    <div id="tb-right">
+      <span class="tb-chip" style="--tc:var(--ag);--bc:rgba(29,184,112,.25);--tbg:rgba(29,184,112,.08)">Bot activo</span>
+      <span class="tb-chip" style="--tc:#484f58">Autoline · Horario 8am–7:30pm</span>
+      <button class="tb-btn">↺ Sincronizar</button>
+    </div>
+  </div>
+  <div id="content">
+
+  <!-- ═══ DASHBOARD ═══ -->
+  <div id="s-dashboard" class="scene on">
+    <div class="stats c4" style="margin-bottom:14px">
+      <div class="stat" style="border-left:3px solid var(--ag)">
+        <div class="stat-num">24</div>
+        <div class="stat-label">Citas hoy</div>
+        <div class="stat-delta up">↑ 3 vs ayer</div>
+      </div>
+      <div class="stat" style="border-left:3px solid var(--ta)">
+        <div class="stat-num">18</div>
+        <div class="stat-label">Unidades en taller</div>
+        <div class="stat-delta">4 esperan pieza</div>
+      </div>
+      <div class="stat" style="border-left:3px solid var(--ta)">
+        <div class="stat-num">87%</div>
+        <div class="stat-label">CSI promedio</div>
+        <div class="stat-delta up">↑ 5 pts este mes</div>
+      </div>
+      <div class="stat" style="border-left:3px solid var(--ve)">
+        <div class="stat-num">9</div>
+        <div class="stat-label">Ventas perdidas activas</div>
+        <div class="stat-delta down">2 sin contacto</div>
+      </div>
+    </div>
+    <div class="stats c4" style="margin-bottom:20px">
+      <div class="stat"><div class="stat-num" style="color:var(--ag)">19</div><div class="stat-label">Show rate hoy</div><div class="stat-delta">de 24 citas · 79%</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--bj)">7</div><div class="stat-label">Mensajes sin responder</div><div class="stat-delta down">2 llevan +2h</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--rf)">6</div><div class="stat-label">Cotizaciones pendientes</div><div class="stat-delta">3 sin abrir</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--ta)">3</div><div class="stat-label">Escalaciones activas</div><div class="stat-delta down">Bot actuó en 1</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="tbl-wrap">
+        <div class="tbl-head"><span class="tbl-title">Actividades pendientes hoy</span><div class="tbl-actions"><button class="tb-btn" style="font-size:10px">Ver todo</button></div></div>
+        <table>
+          <tr><th>Actividad</th><th>Cliente</th><th>Módulo</th><th>Estado</th></tr>
+          <tr>
+            <td>Llamada recuperación cita</td>
+            <td style="color:var(--text)">Carlos Mendoza</td>
+            <td><span class="badge" style="background:rgba(29,184,112,.15);color:var(--ag)">Citas</span></td>
+            <td><span class="badge" style="background:rgba(245,158,11,.15);color:var(--rf)">⏳ 8 min</span></td>
+          </tr>
+          <tr>
+            <td>CSI bajo — llamar cliente</td>
+            <td style="color:var(--text)">Ana López</td>
+            <td><span class="badge" style="background:rgba(139,92,246,.15);color:var(--ta)">Taller</span></td>
+            <td><span class="badge" style="background:rgba(244,63,94,.15);color:var(--ve)">Urgente</span></td>
+          </tr>
+          <tr>
+            <td>Seguimiento cotización</td>
+            <td style="color:var(--text)">Roberto Silva</td>
+            <td><span class="badge" style="background:rgba(245,158,11,.15);color:var(--rf)">Refacciones</span></td>
+            <td><span class="badge" style="background:rgba(255,255,255,.06);color:var(--muted)">Hoy</span></td>
+          </tr>
+          <tr>
+            <td>Pieza llegó — agendar cita</td>
+            <td style="color:var(--text)">María Torres</td>
+            <td><span class="badge" style="background:rgba(139,92,246,.15);color:var(--ta)">Taller</span></td>
+            <td><span class="badge" style="background:rgba(29,184,112,.15);color:var(--ag)">Bot activo</span></td>
+          </tr>
+        </table>
+      </div>
+      <div class="tbl-wrap">
+        <div class="tbl-head"><span class="tbl-title">Estado de unidades en taller</span></div>
+        <table>
+          <tr><th>Cliente</th><th>Vehículo</th><th>Estado</th><th>Hrs</th></tr>
+          <tr><td style="color:var(--text)">J. Ramírez</td><td>KIA Sportage</td><td><span class="badge" style="background:rgba(139,92,246,.15);color:var(--ta)">En reparación</span></td><td style="color:var(--muted)">3h</td></tr>
+          <tr><td style="color:var(--text)">L. García</td><td>Toyota Corolla</td><td><span class="badge" style="background:rgba(245,158,11,.15);color:var(--rf)">Pieza pendiente</span></td><td style="color:var(--ve)">12h</td></tr>
+          <tr><td style="color:var(--text)">P. Morales</td><td>VW Tiguan</td><td><span class="badge" style="background:rgba(29,184,112,.15);color:var(--ag)">Listo</span></td><td style="color:var(--muted)">6h</td></tr>
+          <tr><td style="color:var(--text)">S. Jiménez</td><td>Nissan Sentra</td><td><span class="badge" style="background:rgba(59,130,246,.15);color:var(--crm)">Diagnóstico</span></td><td style="color:var(--muted)">1h</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CRM ═══ -->
+  <div id="s-crm" class="scene">
+    <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center">
+      <input placeholder="Buscar cliente, VIN, empresa..." style="flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;color:var(--text);font-size:12px;font-family:'Inter',sans-serif;outline:none">
+      <button class="tb-btn primary" style="--ic:var(--crm)">+ Nuevo cliente</button>
+    </div>
+    <div class="profile-grid">
+      <div>
+        <div class="profile-card" style="margin-bottom:12px">
+          <div class="profile-head">
+            <div class="profile-avatar" style="background:rgba(59,130,246,.15);color:var(--crm)">CM</div>
+            <div class="profile-name">Carlos Mendoza Ruiz</div>
+            <div class="profile-type">Particular · Cliente activo</div>
+          </div>
+          <div class="profile-fields">
+            <div class="pf"><span class="pf-label">WhatsApp</span><span class="pf-val" style="color:var(--crm)">+52 55 1234 5678</span></div>
+            <div class="pf"><span class="pf-label">Email</span><span class="pf-val">c.mendoza@email.com</span></div>
+            <div class="pf"><span class="pf-label">Empresa</span><span class="pf-val">—</span></div>
+            <div class="pf"><span class="pf-label">Canal pref.</span><span class="pf-val">WhatsApp</span></div>
+            <div class="pf"><span class="pf-label">Asesor</span><span class="pf-val">J. Pérez</span></div>
+            <div class="pf"><span class="pf-label">Última visita</span><span class="pf-val">14 Mar 2026 · Mantenimiento</span></div>
+          </div>
+        </div>
+        <div class="profile-card">
+          <div class="tbl-head" style="padding:10px 14px"><span class="tbl-title">Vehículos</span><button class="tb-btn" style="font-size:10px">+ Agregar</button></div>
+          <div style="padding:10px 14px">
+            <div class="veh-card" style="border-left:2px solid var(--ta)">
+              <div class="veh-head"><span class="veh-icon">🚗</span><div><div class="veh-name">KIA Sportage 2021 · Blanca</div><div class="veh-vin">VIN: KNDPC3A25L7912834</div></div></div>
+              <div class="veh-stats"><span>89,240 km</span><span style="color:var(--rf)">Garantía vence Jun 2026</span><span>5 visitas</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-card" style="height:fit-content">
+        <div style="display:flex;border-bottom:1px solid var(--border)">
+          <div class="tab on" style="--tc:var(--crm)">Actividades</div>
+          <div class="tab">Citas</div>
+          <div class="tab">OTs</div>
+          <div class="tab">Cotizaciones</div>
+          <div class="tab">Comunicaciones</div>
+        </div>
+        <div class="activity-list">
+          <div class="act">
+            <div class="act-icon" style="background:var(--ag)">C</div>
+            <div><div class="act-title">Cita confirmada — Mantenimiento 20k km</div><div class="act-sub">Hoy 10:30 AM · Asesor: J. Pérez · Confirmada por WA</div></div>
+          </div>
+          <div class="act">
+            <div class="act-icon" style="background:var(--bj)">W</div>
+            <div><div class="act-title">WA enviado — Recordatorio 24h antes</div><div class="act-sub">Ayer 9:05 AM · Bot automático · Leído ✓✓</div></div>
+          </div>
+          <div class="act">
+            <div class="act-icon" style="background:var(--ta)">OT</div>
+            <div><div class="act-title">OT #4821 cerrada — Mantenimiento 15k</div><div class="act-sub">12 Feb 2026 · CSI: 9/10 · Asesor: M. López</div></div>
+          </div>
+          <div class="act">
+            <div class="act-icon" style="background:var(--rf)">R</div>
+            <div><div class="act-title">Cotización enviada — Balatas + pastillas</div><div class="act-sub">10 Feb 2026 · $2,840 MXN · Aprobada por cliente</div></div>
+          </div>
+          <div class="act">
+            <div class="act-icon" style="background:var(--ve)">L</div>
+            <div><div class="act-title">Llamada de seguimiento realizada</div><div class="act-sub">5 Feb 2026 · Resultado: reagendó cita · Duración: 4 min</div></div>
+          </div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+            <button class="tb-btn primary" style="--ic:var(--crm);width:100%;justify-content:center;display:flex">+ Crear actividad</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CITAS ═══ -->
+  <div id="s-citas" class="scene">
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+      <div class="tabs" style="margin:0;flex:1;border:none">
+        <div class="tab on" style="--tc:var(--ag)">Kanban</div>
+        <div class="tab">Calendario</div>
+        <div class="tab">Lista</div>
+      </div>
+      <span class="tb-chip" style="--tc:var(--ag);--bc:rgba(29,184,112,.25);--tbg:rgba(29,184,112,.08)">Hoy · 24 citas</span>
+      <button class="tb-btn" style="font-size:10px">↑ Importar archivo</button>
+      <button class="tb-btn primary" style="--ic:var(--ag)">+ Nueva cita</button>
+    </div>
+    <!-- KANBAN CITAS -->
+    <div class="kanban">
+      <!-- Pendiente contactar -->
+      <div class="kb-col">
+        <div class="kb-col-head">
+          <div class="kb-col-dot" style="background:#f59e0b"></div>
+          <span class="kb-col-name">Pendiente contactar</span>
+          <span class="kb-col-cnt">4</span>
+        </div>
+        <div class="kb-card" style="--cc:var(--rf);border:1.5px dashed var(--rf)">
+          <div class="kb-card-name">Carlos Mendoza</div>
+          <div class="kb-card-sub">KIA Sportage · 10:30 AM · Mantenimiento</div>
+          <div class="kb-card-timer">
+            <div class="kb-timer-bar"><div class="kb-timer-fill" style="width:65%;--tf:#f59e0b"></div></div>
+            <span class="kb-timer-label" style="--tf:#f59e0b">8 min</span>
+          </div>
+        </div>
+        <div class="kb-card" style="--cc:var(--rf);border:1.5px dashed var(--rf)">
+          <div class="kb-card-name">Ana López</div>
+          <div class="kb-card-sub">Toyota Corolla · 11:00 AM · Revisión</div>
+          <div class="kb-card-timer">
+            <div class="kb-timer-bar"><div class="kb-timer-fill" style="width:90%;--tf:#ef4444"></div></div>
+            <span class="kb-timer-label" style="--tf:#ef4444">2 min</span>
+          </div>
+        </div>
+        <div class="kb-card" style="--cc:#484f58">
+          <div class="kb-card-name">Pedro Ruiz</div>
+          <div class="kb-card-sub">VW Golf · 1:00 PM · Express</div>
+          <div class="kb-card-timer">
+            <div class="kb-timer-bar"><div class="kb-timer-fill" style="width:20%;--tf:#1db870"></div></div>
+            <span class="kb-timer-label" style="--tf:#1db870">12 min</span>
+          </div>
+        </div>
+        <div class="kb-card" style="--cc:#484f58">
+          <div class="kb-card-name">Laura Jiménez</div>
+          <div class="kb-card-sub">Ford Escape · 2:30 PM · Garantía</div>
+          <div class="kb-card-bot">Bot actuó — WA + 📍 enviado</div>
+        </div>
+        <div class="kb-add">+ Agregar cita</div>
+      </div>
+
+      <!-- Contactada -->
+      <div class="kb-col">
+        <div class="kb-col-head">
+          <div class="kb-col-dot" style="background:var(--crm)"></div>
+          <span class="kb-col-name">Contactada</span>
+          <span class="kb-col-cnt">5</span>
+        </div>
+        <div class="kb-card" style="--cc:var(--crm)">
+          <div class="kb-card-name">María García</div>
+          <div class="kb-card-sub">Mazda 3 · 10:00 AM</div>
+          <div class="kb-card-bot">WA + 📍 mapa enviado</div>
+        </div>
+        <div class="kb-card" style="--cc:var(--crm)">
+          <div class="kb-card-name">Roberto Silva</div>
+          <div class="kb-card-sub">Honda CR-V · 11:30 AM</div>
+        </div>
+        <div class="kb-card" style="--cc:var(--crm)">
+          <div class="kb-card-name">Diana Torres</div>
+          <div class="kb-card-sub">Chevrolet Trax · 3:00 PM</div>
+        </div>
+      </div>
+
+      <!-- Confirmada -->
+      <div class="kb-col">
+        <div class="kb-col-head">
+          <div class="kb-col-dot" style="background:var(--ag)"></div>
+          <span class="kb-col-name">Confirmada</span>
+          <span class="kb-col-cnt">8</span>
+        </div>
+        <div class="kb-card" style="--cc:var(--ag)">
+          <div class="kb-card-name">Jorge Morales</div>
+          <div class="kb-card-sub">Nissan Sentra · 9:00 AM · Confirmó por WA</div>
+        </div>
+        <div class="kb-card" style="--cc:var(--ag)">
+          <div class="kb-card-name">Sofía Reyes</div>
+          <div class="kb-card-sub">Hyundai Tucson · 9:30 AM</div>
+        </div>
+        <div class="kb-card" style="--cc:var(--ag)">
+          <div class="kb-card-name">Luis Vargas</div>
+          <div class="kb-card-sub">BMW Serie 3 · 10:00 AM</div>
+        </div>
+      </div>
+
+      <!-- Show / Llegó -->
+      <div class="kb-col">
+        <div class="kb-col-head">
+          <div class="kb-col-dot" style="background:#22c55e"></div>
+          <span class="kb-col-name">Llegó ✓</span>
+          <span class="kb-col-cnt">5</span>
+        </div>
+        <div class="kb-card" style="--cc:#22c55e;background:rgba(34,197,94,.06)">
+          <div class="kb-card-name">Fernanda Cruz</div>
+          <div class="kb-card-sub">SEAT León · 8:00 AM · En recepción</div>
+        </div>
+        <div class="kb-card" style="--cc:#22c55e;background:rgba(34,197,94,.06)">
+          <div class="kb-card-name">Manuel Díaz</div>
+          <div class="kb-card-sub">Audi A4 · 8:30 AM · Con asesor</div>
+        </div>
+      </div>
+
+      <!-- No-show -->
+      <div class="kb-col">
+        <div class="kb-col-head">
+          <div class="kb-col-dot" style="background:#ef4444"></div>
+          <span class="kb-col-name">No-show</span>
+          <span class="kb-col-cnt">2</span>
+        </div>
+        <div class="kb-card" style="--cc:#ef4444;background:rgba(239,68,68,.06)">
+          <div class="kb-card-name">Alejandro Flores</div>
+          <div class="kb-card-sub">Mitsubishi Eclipse · 9:00 AM</div>
+          <div class="kb-card-bot">Bot WA enviado · Esperando respuesta</div>
+        </div>
+        <div class="kb-card" style="--cc:#ef4444;background:rgba(239,68,68,.06)">
+          <div class="kb-card-name">Claudia Herrera</div>
+          <div class="kb-card-sub">Mazda CX-5 · 10:00 AM</div>
+          <div class="kb-card-bot">Tarea creada: llamar directamente</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TALLER ═══ -->
+  <div id="s-taller" class="scene">
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <div class="tabs" style="margin:0;flex:1;border:none">
+        <div class="tab on" style="--tc:var(--ta)">Activas</div>
+        <div class="tab">Pieza pendiente</div>
+        <div class="tab">Venta perdida</div>
+        <div class="tab">Cerradas hoy</div>
+      </div>
+      <span class="tb-chip" style="--tc:var(--ta);--bc:rgba(139,92,246,.25);--tbg:rgba(139,92,246,.08)">18 unidades activas</span>
+      <button class="tb-btn primary" style="--ic:var(--ta)">+ Nueva OT</button>
+    </div>
+    <div class="kanban">
+      <div class="kb-col">
+        <div class="kb-col-head"><div class="kb-col-dot" style="background:#3b82f6"></div><span class="kb-col-name">Recibido</span><span class="kb-col-cnt">4</span></div>
+        <div class="kb-card" style="--cc:#3b82f6"><div class="kb-card-name">Jorge Ramírez</div><div class="kb-card-sub">KIA Sportage · OT #4891</div><div class="kb-card-bot">Link enviado al cliente</div></div>
+        <div class="kb-card" style="--cc:#3b82f6"><div class="kb-card-name">Carla Soto</div><div class="kb-card-sub">Honda Fit · OT #4892</div></div>
+        <div class="kb-card" style="--cc:#3b82f6"><div class="kb-card-name">Ernesto Vega</div><div class="kb-card-sub">Toyota RAV4 · OT #4893</div></div>
+      </div>
+      <div class="kb-col">
+        <div class="kb-col-head"><div class="kb-col-dot" style="background:#f59e0b"></div><span class="kb-col-name">Diagnóstico</span><span class="kb-col-cnt">3</span></div>
+        <div class="kb-card" style="--cc:#f59e0b"><div class="kb-card-name">Silvia Jiménez</div><div class="kb-card-sub">Nissan Sentra · OT #4888</div><div style="margin-top:5px"><div class="progress-bar"><div class="progress-fill" style="width:35%;background:var(--rf)"></div></div></div></div>
+        <div class="kb-card" style="--cc:#f59e0b"><div class="kb-card-name">Pablo Núñez</div><div class="kb-card-sub">Ford Focus · OT #4889</div><div class="kb-card-bot">Trabajo adicional detectado</div></div>
+      </div>
+      <div class="kb-col">
+        <div class="kb-col-head"><div class="kb-col-dot" style="background:var(--ta)"></div><span class="kb-col-name">En reparación</span><span class="kb-col-cnt">6</span></div>
+        <div class="kb-card" style="--cc:var(--ta)"><div class="kb-card-name">Jorge Ramírez</div><div class="kb-card-sub">KIA Sportage · OT #4881</div><div style="margin-top:5px"><div class="progress-bar"><div class="progress-fill" style="width:70%;background:var(--ta)"></div></div></div></div>
+        <div class="kb-card" style="--cc:var(--ta)"><div class="kb-card-name">Lucía García</div><div class="kb-card-sub">Toyota Corolla · OT #4882</div><div class="kb-card-bot" style="color:var(--rf)">⚠ 5h sin actualizar — escalado</div></div>
+        <div class="kb-card" style="--cc:var(--ta)"><div class="kb-card-name">Pedro Morales</div><div class="kb-card-sub">VW Tiguan · OT #4883</div></div>
+      </div>
+      <div class="kb-col">
+        <div class="kb-col-head"><div class="kb-col-dot" style="background:#22c55e"></div><span class="kb-col-name">Listo</span><span class="kb-col-cnt">3</span></div>
+        <div class="kb-card" style="--cc:#22c55e;background:rgba(34,197,94,.06)"><div class="kb-card-name">Ana Flores</div><div class="kb-card-sub">Mazda 6 · OT #4877 · Avisar cliente</div><div class="kb-card-bot" style="color:#22c55e">Bot WA enviado</div></div>
+        <div class="kb-card" style="--cc:#22c55e;background:rgba(34,197,94,.06)"><div class="kb-card-name">René Castro</div><div class="kb-card-sub">Chevrolet Sonic · OT #4878</div></div>
+      </div>
+      <div class="kb-col">
+        <div class="kb-col-head"><div class="kb-col-dot" style="background:#484f58"></div><span class="kb-col-name">Entregado</span><span class="kb-col-cnt">2</span></div>
+        <div class="kb-card" style="--cc:#484f58"><div class="kb-card-name">Marco Reyes</div><div class="kb-card-sub">Nissan Kicks · OT #4875</div><div class="kb-card-bot" style="color:#1db870">CSI: 9/10 · Google ✓</div></div>
+        <div class="kb-card" style="--cc:#484f58"><div class="kb-card-name">Elena Vargas</div><div class="kb-card-sub">Honda CR-V · OT #4876</div><div class="kb-card-bot" style="color:#f43f5e">CSI: 5/10 · MK alertado</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ REFACCIONES ═══ -->
+  <div id="s-refacciones" class="scene">
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <div class="tabs" style="margin:0;flex:1;border:none">
+        <div class="tab on" style="--tc:var(--rf)">Cotizaciones activas</div>
+        <div class="tab">Maestro de partes</div>
+        <div class="tab">Pedidos en tránsito</div>
+      </div>
+      <button class="tb-btn primary" style="--ic:var(--rf)">+ Nueva cotización</button>
+    </div>
+    <div class="tbl-wrap">
+      <div class="tbl-head"><span class="tbl-title">Cotizaciones pendientes de respuesta</span></div>
+      <table>
+        <tr><th>Cliente</th><th>Pieza</th><th>Imagen</th><th>Monto</th><th>Estado</th><th>Seguimiento</th></tr>
+        <tr>
+          <td style="color:var(--text)">Carlos Mendoza</td>
+          <td>Balatas + pastillas KIA Sportage</td>
+          <td><div style="width:28px;height:28px;background:rgba(245,158,11,.1);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px">🔧</div></td>
+          <td style="color:var(--text)">$2,840</td>
+          <td><span class="badge" style="background:rgba(29,184,112,.15);color:var(--ag)">Abierta ✓✓</span></td>
+          <td><span class="badge" style="background:rgba(245,158,11,.15);color:var(--rf)">24h hoy</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text)">Lucía García</td>
+          <td>Amortiguadores delanteros Toyota</td>
+          <td><div style="width:28px;height:28px;background:rgba(245,158,11,.1);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px">⚙️</div></td>
+          <td style="color:var(--text)">$4,200</td>
+          <td><span class="badge" style="background:rgba(239,68,68,.15);color:#ef4444">Sin abrir</span></td>
+          <td><span class="badge" style="background:rgba(245,158,11,.15);color:var(--rf)">48h mañana</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text)">Roberto Silva</td>
+          <td>Filtro de aire + aceite Honda</td>
+          <td><div style="width:28px;height:28px;background:rgba(245,158,11,.1);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px">🛠️</div></td>
+          <td style="color:var(--text)">$980</td>
+          <td><span class="badge" style="background:rgba(255,255,255,.06);color:var(--muted)">Enviada</span></td>
+          <td><span class="badge" style="background:rgba(244,63,94,.15);color:var(--ve)">Llamar hoy</span></td>
+        </tr>
+      </table>
+    </div>
+    <div class="tbl-wrap">
+      <div class="tbl-head"><span class="tbl-title">Piezas en tránsito</span></div>
+      <table>
+        <tr><th>Número de parte</th><th>Descripción</th><th>Cliente</th><th>ETA</th><th>Estado</th></tr>
+        <tr><td style="color:var(--crm);font-family:monospace">KIA-56910-D3000</td><td>Pastillas freno delantera</td><td style="color:var(--text)">C. Mendoza</td><td style="color:var(--ag)">28 Mar</td><td><span class="badge" style="background:rgba(59,130,246,.15);color:var(--crm)">En tránsito</span></td></tr>
+        <tr><td style="color:var(--crm);font-family:monospace">TOY-54620-06130</td><td>Amortiguador delantero izq.</td><td style="color:var(--text)">L. García</td><td style="color:var(--rf)">Sin fecha</td><td><span class="badge" style="background:rgba(245,158,11,.15);color:var(--rf)">Coordinando</span></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══ VENTAS ═══ -->
+  <div id="s-ventas" class="scene">
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <span style="font-size:11px;color:var(--dim)">Pipeline · Marzo 2026</span>
+      <button class="tb-btn primary" style="--ic:var(--ve);margin-left:auto">+ Nuevo lead</button>
+    </div>
+    <div class="stats c4" style="margin-bottom:16px">
+      <div class="stat"><div class="stat-num" style="color:var(--ve)">32</div><div class="stat-label">Leads activos</div></div>
+      <div class="stat"><div class="stat-num">8</div><div class="stat-label">En negociación</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--ag)">4</div><div class="stat-label">Cerrados este mes</div></div>
+      <div class="stat"><div class="stat-num">$485k</div><div class="stat-label">Pipeline valor est.</div></div>
+    </div>
+    <div class="kanban">
+      <div class="kb-col"><div class="kb-col-head"><div class="kb-col-dot" style="background:#484f58"></div><span class="kb-col-name">Nuevo</span><span class="kb-col-cnt">8</span></div>
+        <div class="kb-card" style="--cc:#484f58"><div class="kb-card-name">Empresa XYZ — Flotilla</div><div class="kb-card-sub">8 unidades · WA · Hoy</div></div>
+        <div class="kb-card" style="--cc:#484f58"><div class="kb-card-name">Martín Ochoa</div><div class="kb-card-sub">KIA Seltos · Instagram</div></div>
+      </div>
+      <div class="kb-col"><div class="kb-col-head"><div class="kb-col-dot" style="background:#3b82f6"></div><span class="kb-col-name">Contactado</span><span class="kb-col-cnt">10</span></div>
+        <div class="kb-card" style="--cc:#3b82f6"><div class="kb-card-name">Norma Leal</div><div class="kb-card-sub">Toyota Camry · Demo agendada</div></div>
+        <div class="kb-card" style="--cc:#3b82f6"><div class="kb-card-name">Carlos Ibarra</div><div class="kb-card-sub">VW Tiguan · Enviando cotiz.</div></div>
+      </div>
+      <div class="kb-col"><div class="kb-col-head"><div class="kb-col-dot" style="background:var(--rf)"></div><span class="kb-col-name">Cotizado</span><span class="kb-col-cnt">6</span></div>
+        <div class="kb-card" style="--cc:var(--rf)"><div class="kb-card-name">Patricia León</div><div class="kb-card-sub">Honda Pilot · $485,000 · Esperando</div></div>
+        <div class="kb-card" style="--cc:var(--rf)"><div class="kb-card-name">Héctor Rosales</div><div class="kb-card-sub">KIA Sorento · $390,000</div><div class="kb-card-bot" style="color:var(--ta)">IA: Candidato a renovar</div></div>
+      </div>
+      <div class="kb-col"><div class="kb-col-head"><div class="kb-col-dot" style="background:var(--ta)"></div><span class="kb-col-name">Negociando</span><span class="kb-col-cnt">4</span></div>
+        <div class="kb-card" style="--cc:var(--ta)"><div class="kb-card-name">Emilio Serrano</div><div class="kb-card-sub">Toyota Highlander · Crédito en proceso</div></div>
+      </div>
+      <div class="kb-col"><div class="kb-col-head"><div class="kb-col-dot" style="background:#22c55e"></div><span class="kb-col-name">Cerrado ✓</span><span class="kb-col-cnt">4</span></div>
+        <div class="kb-card" style="--cc:#22c55e;background:rgba(34,197,94,.06)"><div class="kb-card-name">Rosa Méndez</div><div class="kb-card-sub">KIA Carnival · Entrega 2 Abr</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ BANDEJA ═══ -->
+  <div id="s-bandeja" class="scene" style="padding:0">
+    <div style="padding:14px 20px 10px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;font-weight:500;color:var(--text)">Bandeja unificada</span>
+      <span class="tb-chip" style="--tc:var(--bj);--bc:rgba(6,182,212,.25);--tbg:rgba(6,182,212,.08)">7 sin leer</span>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <span class="tb-chip">WA</span><span class="tb-chip">FB</span><span class="tb-chip">IG</span><span class="tb-chip">Email</span>
+      </div>
+    </div>
+    <div class="chat-wrap" style="margin:12px 20px;height:calc(100vh - 180px)">
+      <div class="chat-list">
+        <div class="chat-item on">
+          <div class="chat-item-top">
+            <div class="chat-avatar" style="background:rgba(29,184,112,.15);color:var(--ag)">CM</div>
+            <span class="chat-name">Carlos Mendoza</span>
+            <span class="chat-time">10:42</span>
+          </div>
+          <div class="chat-preview">Sí, confirmo mi cita para mañana</div>
+          <div style="display:flex;gap:5px;margin-top:4px;padding-left:36px">
+            <span class="chat-channel" style="background:rgba(29,184,112,.15);color:var(--ag)">WA</span>
+          </div>
+        </div>
+        <div class="chat-item">
+          <div class="chat-item-top">
+            <div class="chat-avatar" style="background:rgba(244,63,94,.15);color:var(--ve)">LG</div>
+            <span class="chat-name">Lucía García</span>
+            <span class="chat-time">10:21</span>
+          </div>
+          <div class="chat-preview">¿Cuándo llega la pieza?</div>
+          <div style="display:flex;gap:5px;margin-top:4px;padding-left:36px;align-items:center">
+            <span class="chat-channel" style="background:rgba(29,184,112,.15);color:var(--ag)">WA</span>
+            <span class="chat-unread">1</span>
+          </div>
+        </div>
+        <div class="chat-item">
+          <div class="chat-item-top">
+            <div class="chat-avatar" style="background:rgba(59,130,246,.15);color:var(--crm)">RS</div>
+            <span class="chat-name">Roberto Silva</span>
+            <span class="chat-time">09:58</span>
+          </div>
+          <div class="chat-preview">Me interesa la cotización</div>
+          <div style="display:flex;gap:5px;margin-top:4px;padding-left:36px;align-items:center">
+            <span class="chat-channel" style="background:rgba(244,63,94,.15);color:var(--ve)">IG</span>
+            <span class="chat-unread">2</span>
+          </div>
+        </div>
+        <div class="chat-item">
+          <div class="chat-item-top">
+            <div class="chat-avatar" style="background:rgba(245,158,11,.15);color:var(--rf)">MT</div>
+            <span class="chat-name">María Torres</span>
+            <span class="chat-time">09:30</span>
+          </div>
+          <div class="chat-preview">Perfecto, el martes me queda bien</div>
+          <div style="display:flex;gap:5px;margin-top:4px;padding-left:36px">
+            <span class="chat-channel" style="background:rgba(59,130,246,.15);color:var(--crm)">Email</span>
+          </div>
+        </div>
+      </div>
+      <div class="chat-main">
+        <div class="chat-header">
+          <div class="chat-avatar" style="background:rgba(29,184,112,.15);color:var(--ag)">CM</div>
+          <div><div style="font-size:12px;font-weight:500;color:var(--text)">Carlos Mendoza</div><div style="font-size:10px;color:var(--dim)">KIA Sportage 2021 · Cita mañana 10:30 AM</div></div>
+          <div style="margin-left:auto;display:flex;gap:7px">
+            <button class="tb-btn" style="font-size:10px">Ver en CRM</button>
+            <button class="tb-btn" style="font-size:10px">Transferir</button>
+          </div>
+        </div>
+        <div class="chat-messages">
+          <div class="msg bot">
+            Hola Carlos, te confirmamos tu cita en KIA Pedregal el <strong>28 de marzo a las 10:30 AM</strong> para mantenimiento de tu Sportage. 📍 <span style="color:var(--crm)">Ver cómo llegar →</span>
+            <div class="msg-meta">Bot IA · 09:15 AM · WA ✓✓</div>
+          </div>
+          <div class="msg in">
+            Sí, confirmo mi cita para mañana. Gracias!
+            <div class="msg-meta">Carlos · 10:42 AM</div>
+          </div>
+          <div class="msg out">
+            Perfecto Carlos, te esperamos mañana a las 10:30. Si necesitas algo más, aquí estamos.
+            <div class="msg-meta">J. Pérez · 10:44 AM · WA ✓</div>
+          </div>
+        </div>
+        <div class="chat-input">
+          <input placeholder="Escribe un mensaje...">
+          <button class="tb-btn primary" style="--ic:var(--bj)">Enviar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ REPORTES ═══ -->
+  <div id="s-reportes" class="scene">
+    <div class="stats c3" style="margin-bottom:18px">
+      <div class="stat"><div class="stat-num" style="color:var(--ag)">79%</div><div class="stat-label">Show rate mensual</div><div class="stat-delta up">↑ 8 pts vs mes anterior</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--ta)">8.7</div><div class="stat-label">CSI promedio</div><div class="stat-delta up">↑ 0.4 pts</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--ve)">34%</div><div class="stat-label">Ventas perdidas recuperadas</div><div class="stat-delta up">↑ 12 pts</div></div>
+    </div>
+    <div class="tbl-wrap">
+      <div class="tbl-head"><span class="tbl-title">Desempeño por asesor — Marzo 2026</span></div>
+      <table>
+        <tr><th>Asesor</th><th>Citas atendidas</th><th>Show rate</th><th>CSI prom.</th><th>OTs cerradas</th><th>Ticket prom.</th><th>T. respuesta</th></tr>
+        <tr><td style="color:var(--text)">J. Pérez</td><td>42</td><td style="color:var(--ag)">84%</td><td style="color:var(--ag)">9.1</td><td>38</td><td>$3,240</td><td style="color:var(--ag)">12 min</td></tr>
+        <tr><td style="color:var(--text)">M. López</td><td>38</td><td style="color:var(--rf)">71%</td><td style="color:var(--rf)">7.8</td><td>34</td><td>$2,890</td><td style="color:var(--rf)">38 min</td></tr>
+        <tr><td style="color:var(--text)">A. Rodríguez</td><td>45</td><td style="color:var(--ag)">82%</td><td style="color:var(--ag)">8.9</td><td>41</td><td>$3,100</td><td style="color:var(--ag)">9 min</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══ MI AGENDA ═══ -->
+  <div id="s-agenda_crm" class="scene">
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <span style="font-size:14px;font-weight:500;color:var(--text)">Mi Agenda — Marzo 2026</span>
+      <button class="tb-btn primary" style="--ic:var(--crm);margin-left:auto">+ Nueva actividad</button>
+    </div>
+    <div class="tbl-wrap">
+      <div class="tbl-head"><span class="tbl-title">Actividades pendientes hoy</span></div>
+      <table>
+        <tr><th>Hora</th><th>Tipo</th><th>Cliente</th><th>Descripción</th><th>Módulo</th><th>Estado</th></tr>
+        <tr><td style="color:var(--crm);font-family:monospace">09:30</td><td><span class="badge" style="background:rgba(244,63,94,.15);color:var(--ve)">🔴 Urgente</span></td><td style="color:var(--text)">Ana López</td><td>CSI bajo · OT #4876 · Llamar y resolver</td><td><span class="badge" style="background:rgba(139,92,246,.15);color:var(--ta)">Taller</span></td><td><button class="tb-btn" style="font-size:10px">Marcar realizada</button></td></tr>
+        <tr><td style="color:var(--crm);font-family:monospace">10:00</td><td><span class="badge" style="background:rgba(59,130,246,.15);color:var(--crm)">Llamada</span></td><td style="color:var(--text)">Carlos Mendoza</td><td>Confirmación cita mañana</td><td><span class="badge" style="background:rgba(29,184,112,.15);color:var(--ag)">Citas</span></td><td><span class="badge" style="background:rgba(29,184,112,.15);color:var(--ag)">Completada ✓</span></td></tr>
+        <tr><td style="color:var(--crm);font-family:monospace">11:30</td><td><span class="badge" style="background:rgba(245,158,11,.15);color:var(--rf)">Seguimiento</span></td><td style="color:var(--text)">Roberto Silva</td><td>Cotización balatas — sin respuesta 72h</td><td><span class="badge" style="background:rgba(245,158,11,.15);color:var(--rf)">Refacciones</span></td><td><button class="tb-btn" style="font-size:10px">Marcar realizada</button></td></tr>
+        <tr><td style="color:var(--crm);font-family:monospace">14:00</td><td><span class="badge" style="background:rgba(244,63,94,.15);color:var(--ve)">Recuperación</span></td><td style="color:var(--text)">Diana Torres</td><td>Reparación suspensión rechazada · 45 días</td><td><span class="badge" style="background:rgba(139,92,246,.15);color:var(--ta)">Venta perdida</span></td><td><button class="tb-btn" style="font-size:10px">Marcar realizada</button></td></tr>
+      </table>
+    </div>
+    <div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:8px">
+      <span style="color:var(--crm)">📅</span> Todas tus actividades están sincronizadas con Outlook. Tienes 4 eventos en tu calendario hoy.
+    </div>
+  </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+const TITLES={
+  dashboard:{t:'Dashboard',s:'Vista general del día'},
+  crm:{t:'CRM',s:'Clientes · Vehículos · Empresas · Actividades'},
+  citas:{t:'Módulo CITAS',s:'Kanban · Calendario · Confirmaciones automáticas'},
+  taller:{t:'Módulo TALLER',s:'Seguimiento de unidades · PDV'},
+  refacciones:{t:'Módulo REFACCIONES',s:'Cotizaciones · Maestro de partes'},
+  ventas:{t:'Módulo VENTAS',s:'Pipeline de leads'},
+  bandeja:{t:'Bandeja unificada',s:'WA · FB · IG · Email'},
+  reportes:{t:'Reportes',s:'Desempeño del equipo · KPIs'},
+  agenda_crm:{t:'Mi Agenda',s:'Actividades · Outlook sync'},
+};
+function sw(id,el){
+  document.querySelectorAll('.scene').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('.sb-item').forEach(s=>s.classList.remove('on'));
+  const scene=document.getElementById('s-'+id);
+  if(scene)scene.classList.add('on');
+  if(el)el.classList.add('on');
+  const info=TITLES[id]||{t:id,s:''};
+  document.getElementById('tb-title').textContent=info.t;
+  document.getElementById('tb-sub').textContent=info.s;
+}
+</script>
+</body>
+</html>

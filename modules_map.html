@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ServiceTrack — Mapa de Módulos</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+
+  /* HEADER */
+  .header { background: #1a1d27; border-bottom: 1px solid #2d3148; padding: 16px 32px; display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+  .logo span { color: #6366f1; }
+  .subtitle { font-size: 13px; color: #64748b; }
+  .version { margin-left: auto; background: #6366f1; color: #fff; font-size: 11px; padding: 3px 10px; border-radius: 20px; }
+
+  /* LAYOUT */
+  .container { display: flex; height: calc(100vh - 57px); }
+
+  /* MAP AREA */
+  .map-area { flex: 1; padding: 40px; overflow: auto; position: relative; }
+
+  /* PANEL */
+  .panel { width: 420px; background: #1a1d27; border-left: 1px solid #2d3148; overflow-y: auto; transition: all 0.3s; }
+  .panel-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #334155; text-align: center; gap: 12px; }
+  .panel-empty svg { opacity: 0.3; }
+  .panel-empty p { font-size: 14px; }
+  .panel-content { padding: 28px; display: none; }
+  .panel-content.active { display: block; }
+
+  /* MODULE CARDS */
+  .modules-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 900px; margin: 0 auto; }
+
+  /* CRM centered full width */
+  .crm-row { grid-column: 1 / -1; display: flex; justify-content: center; margin: 10px 0; }
+
+  .module-card {
+    background: #1e2235;
+    border: 2px solid #2d3148;
+    border-radius: 16px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    min-width: 220px;
+  }
+  .module-card:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+  .module-card.active { border-color: var(--color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color) 20%, transparent); }
+
+  .module-icon { font-size: 28px; margin-bottom: 10px; }
+  .module-name { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .module-desc { font-size: 12px; color: #64748b; line-height: 1.4; margin-bottom: 12px; }
+  .module-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .module-sprint { position: absolute; top: 12px; right: 12px; font-size: 10px; color: #475569; background: #0f1117; padding: 2px 8px; border-radius: 20px; }
+  .module-tables-count { font-size: 11px; color: #94a3b8; margin-top: 10px; }
+  .reports-badge { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #f59e0b; margin-top: 6px; }
+
+  /* CONNECTORS */
+  .arrow { text-align: center; color: #334155; font-size: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .arrow-label { font-size: 10px; color: #475569; }
+
+  /* PANEL CONTENT STYLES */
+  .panel-module-header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #2d3148; }
+  .panel-module-icon { font-size: 36px; }
+  .panel-module-name { font-size: 20px; font-weight: 700; color: #fff; }
+  .panel-module-sprint { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+  .section-title { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; margin-top: 20px; }
+
+  /* TABLES */
+  .table-item { background: #131620; border: 1px solid #2d3148; border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .table-header { padding: 10px 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: background 0.15s; }
+  .table-header:hover { background: #1e2235; }
+  .table-name { font-size: 13px; font-weight: 600; color: #e2e8f0; font-family: 'Monaco', monospace; }
+  .table-arrow { margin-left: auto; font-size: 12px; color: #475569; transition: transform 0.2s; }
+  .table-arrow.open { transform: rotate(90deg); }
+  .table-fields { padding: 0 14px 12px; display: none; }
+  .table-fields.open { display: block; }
+  .field-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #1e2235; font-size: 12px; }
+  .field-row:last-child { border-bottom: none; }
+  .field-name { font-family: 'Monaco', monospace; color: #93c5fd; flex: 1; }
+  .field-type { font-size: 10px; color: #64748b; background: #1e2235; padding: 1px 6px; border-radius: 4px; }
+  .field-pk { font-size: 9px; color: #f59e0b; background: rgba(245,158,11,0.1); padding: 1px 6px; border-radius: 4px; }
+  .field-fk { font-size: 9px; color: #818cf8; background: rgba(129,140,248,0.1); padding: 1px 6px; border-radius: 4px; }
+  .field-note { font-size: 10px; color: #475569; font-style: italic; }
+
+  /* CONNECTIONS */
+  .connection-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; color: #94a3b8; border-bottom: 1px solid #1e2235; }
+  .connection-item:last-child { border-bottom: none; }
+  .conn-arrow { color: #6366f1; }
+
+  /* FLOWS */
+  .flow-item { background: #131620; border-left: 3px solid #6366f1; border-radius: 0 8px 8px 0; padding: 8px 12px; margin-bottom: 6px; font-size: 12px; color: #94a3b8; }
+  .flow-name { font-weight: 600; color: #e2e8f0; font-size: 12px; }
+
+  /* KPI section */
+  .kpi-item { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; font-size: 12px; color: #94a3b8; }
+  .kpi-dot { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; margin-top: 5px; flex-shrink: 0; }
+
+  /* COLOR VARS */
+  .mod-crm       { --color: #6366f1; }
+  .mod-citas     { --color: #22c55e; }
+  .mod-taller    { --color: #f97316; }
+  .mod-refac     { --color: #06b6d4; }
+  .mod-ventas    { --color: #ec4899; }
+  .mod-bandeja   { --color: #8b5cf6; }
+  .mod-seguros   { --color: #eab308; }
+  .mod-reportes  { --color: #f59e0b; }
+  .mod-atencion  { --color: #ef4444; }
+
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+  /* Scroll */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">Service<span>Track</span></div>
+  <div class="subtitle">Mapa de Módulos y Tablas</div>
+  <div class="version">Schema v2.2</div>
+</div>
+
+<div class="container">
+  <div class="map-area">
+
+    <!-- ROW 1: CITAS -->
+    <div style="display:flex; justify-content:center; margin-bottom:8px;">
+      <div class="module-card mod-citas" style="--color:#22c55e; width:300px;" onclick="showModule('citas')">
+        <div class="module-sprint">Sprint 3</div>
+        <div class="module-icon">📅</div>
+        <div class="module-name">CITAS</div>
+        <div class="module-desc">Kanban · Timer 15min · Recepción Express · No-show Recovery</div>
+        <div class="module-tags">
+          <span class="tag" style="background:rgba(34,197,94,0.15);color:#22c55e;">Kanban</span>
+          <span class="tag" style="background:rgba(34,197,94,0.15);color:#22c55e;">WhatsApp</span>
+          <span class="tag" style="background:rgba(34,197,94,0.15);color:#22c55e;">QR Check-in</span>
+        </div>
+        <div class="module-tables-count">📊 2 tablas principales</div>
+        <div class="reports-badge">📊 Sub-módulo Reportes incluido</div>
+      </div>
+    </div>
+
+    <!-- ARROW DOWN -->
+    <div class="arrow" style="margin-bottom:8px;">
+      <div>↓</div>
+      <div class="arrow-label">vehículo ingresa</div>
+    </div>
+
+    <!-- ROW 2: TALLER + REFACCIONES -->
+    <div style="display:flex; justify-content:center; gap:20px; margin-bottom:8px; align-items:center;">
+      <div class="module-card mod-taller" style="--color:#f97316; width:280px;" onclick="showModule('taller')">
+        <div class="module-sprint">Sprint 4</div>
+        <div class="module-icon">🔧</div>
+        <div class="module-name">TALLER (PDV)</div>
+        <div class="module-desc">OT · Líneas de trabajo · Inspección · CSI · Escalación 3 niveles</div>
+        <div class="module-tags">
+          <span class="tag" style="background:rgba(249,115,22,0.15);color:#f97316;">Firma digital</span>
+          <span class="tag" style="background:rgba(249,115,22,0.15);color:#f97316;">Link público</span>
+        </div>
+        <div class="module-tables-count">📊 3 tablas principales</div>
+        <div class="reports-badge">📊 Sub-módulo Reportes incluido</div>
+      </div>
+
+      <div class="arrow" style="flex-direction:row; gap:4px;">
+        <span style="color:#334155;">→</span>
+        <div style="display:flex;flex-direction:column;align-items:center;">
+          <div class="arrow-label" style="white-space:nowrap;">piezas</div>
+        </div>
+      </div>
+
+      <div class="module-card mod-refac" style="--color:#06b6d4; width:260px;" onclick="showModule('refacciones')">
+        <div class="module-sprint">Sprint 5</div>
+        <div class="module-icon">🔩</div>
+        <div class="module-name">REFACCIONES</div>
+        <div class="module-desc">Maestro de partes · Cotización PDF · Seguimiento · Imagen OEM</div>
+        <div class="module-tags">
+          <span class="tag" style="background:rgba(6,182,212,0.15);color:#06b6d4;">PDF</span>
+          <span class="tag" style="background:rgba(6,182,212,0.15);color:#06b6d4;">Tracking</span>
+        </div>
+        <div class="module-tables-count">📊 3 tablas principales</div>
+        <div class="reports-badge">📊 Sub-módulo Reportes incluido</div>
+      </div>
+    </div>
+
+    <!-- ARROW DOWN -->
+    <div class="arrow" style="margin-bottom:8px;">
+      <div>↓</div>
+    </div>
+
+    <!-- ROW 3: CRM (full width center) -->
+    <div class="crm-row">
+      <div class="module-card mod-crm" style="--color:#6366f1; width:500px;" onclick="showModule('crm')">
+        <div class="module-sprint">Sprint 2</div>
+        <div class="module-icon">💎</div>
+        <div class="module-name">CRM — CORAZÓN DEL SISTEMA</div>
+        <div class="module-desc">Clientes · Empresas · Vehículos · Actividades · Agenda · Outlook/Gmail Sync · Driver 360</div>
+        <div class="module-tags">
+          <span class="tag" style="background:rgba(99,102,241,0.15);color:#6366f1;">Multi-tenant</span>
+          <span class="tag" style="background:rgba(99,102,241,0.15);color:#6366f1;">Universal por Grupo</span>
+          <span class="tag" style="background:rgba(99,102,241,0.15);color:#6366f1;">Outlook/Gmail</span>
+          <span class="tag" style="background:rgba(99,102,241,0.15);color:#6366f1;">Driver 360</span>
+        </div>
+        <div class="module-tables-count">📊 8 tablas principales</div>
+        <div class="reports-badge">📊 Sub-módulo Reportes incluido · Constructor de reportes base</div>
+      </div>
+    </div>
+
+    <!-- ARROW DOWN + SPLIT -->
+    <div style="display:flex; justify-content:center; gap:80px; margin:8px 0;">
+      <div class="arrow">↓</div>
+      <div class="arrow">↓</div>
+      <div class="arrow">↓</div>
+    </div>
+
+    <!-- ROW 4: VENTAS + BANDEJA -->
+    <div style="display:flex; justify-content:center; gap:16px; margin-bottom:12px;">
+      <div class="module-card mod-ventas" style="--color:#ec4899; width:220px;" onclick="showModule('ventas')">
+        <div class="module-sprint">Sprint 6</div>
+        <div class="module-icon">🚗</div>
+        <div class="module-name">VENTAS</div>
+        <div class="module-desc">Pipeline · Leads · Bot captación · Cruce servicio→venta</div>
+        <div class="module-tags">
+          <span class="tag" style="background:rgba(236,72,153,0.15);color:#ec4899;">Kanban</span>
+          <span class="tag" style="background:rgba(236,72,153,0.15);color:#ec4899;">Bot IA</span>
+        </div>
+        <div class="module-tables-count">📊 1 tabla principal</div>
+        <div class="reports-badge">📊 Sub-módulo Reportes incluido</div>
+      </div>
+
+      <div class="module-card mod-bandeja" style="--color:#8b5cf6; width:220px;" onclick="showModule('bandeja')">
+        <div class="module-sprint">Sprint 7</div>
+        <div class="module-icon">💬</div>
+        <div class="module-name">BANDEJA + IA</div>
+        <div class="module-desc">WA · FB · IG · Email · Mensajes unificados · Claude API</div>
+        <div class="module-tags">
+          <span class="tag" style="background:rgba(139,92,246,0.15);color:#8b5cf6;">Multicanal</span>
+          <span class="tag" style="background:rgba(139,92,246,0.15);color:#8b5cf6;">IA Claude</span>
+        </div>
+        <div class="module-tables-count">📊 2 tablas principales</div>
+        <div class="reports-badge">📊 Sub-módulo Reportes incluido</div>
+      </div>
+    </div>
+
+    <!-- ATENCION A CLIENTES - full width - Sprint 8 -->
+    <div style="display:flex; justify-content:center; margin:0 0 12px;">
+      <div class="module-card mod-atencion" style="--color:#ef4444; width:480px;" onclick="showModule('atencion')">
+        <div class="module-sprint">Sprint 8</div>
+        <div class="module-icon">🎯</div>
+        <div class="module-name">ATENCIÓN A CLIENTES</div>
+        <div class="module-desc">Quejas · Folio AC-YYYY-NNNN · Receptor → Encargado AC → Gerente → Cliente → Validación → Cierre</div>
+        <div class="module-tags">
+          <span class="tag" style="background:rgba(239,68,68,0.15);color:#ef4444;">Botón flotante en todos los módulos</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15);color:#ef4444;">Seguimiento cadena</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15);color:#ef4444;">SLA</span>
+        </div>
+        <div class="module-tables-count">📊 2 tablas principales</div>
+        <div class="reports-badge">📊 Sub-módulo Reportes incluido</div>
+      </div>
+    </div>
+
+    <!-- CSI - Sprint 10 -->
+    <div style="display:flex; justify-content:center; margin-bottom:12px;">
+      <div class="module-card" style="--color:#10b981; width:480px;" onclick="showModule('csi')">
+        <div class="module-sprint">Sprint 10</div>
+        <div class="module-icon">⭐</div>
+        <div class="module-name">CSI — SATISFACCIÓN DEL CLIENTE</div>
+        <div class="module-desc">Encuestas post-servicio · WA automático · Score bajo → Queja automática en Atención a Clientes</div>
+        <div class="module-tags">
+          <span class="tag" style="background:rgba(16,185,129,0.15);color:#10b981;">NPS · Estrellas · Texto</span>
+          <span class="tag" style="background:rgba(16,185,129,0.15);color:#10b981;">Auto-queja</span>
+          <span class="tag" style="background:rgba(16,185,129,0.15);color:#10b981;">Multi-módulo</span>
+        </div>
+        <div class="module-tables-count">📊 4 tablas</div>
+        <div class="reports-badge">📊 Sub-módulo Reportes incluido</div>
+      </div>
+    </div>
+
+    <!-- SEGUROS - Sprint 11 -->
+    <div style="display:flex; justify-content:center; margin-bottom:16px;">
+      <div class="module-card mod-seguros" style="--color:#eab308; width:280px;" onclick="showModule('seguros')">
+        <div class="module-sprint">Sprint 11</div>
+        <div class="module-icon">🛡️</div>
+        <div class="module-name">SEGUROS</div>
+        <div class="module-desc">Pólizas · Coberturas · Vigencias · Alertas · Multi-aseguradora</div>
+        <div class="module-tags">
+          <span class="tag" style="background:rgba(234,179,8,0.15);color:#eab308;">Autoline</span>
+          <span class="tag" style="background:rgba(234,179,8,0.15);color:#eab308;">Alertas</span>
+        </div>
+        <div class="module-tables-count">📊 2 tablas principales</div>
+        <div class="reports-badge">📊 Sub-módulo Reportes incluido</div>
+      </div>
+    </div>
+
+    <!-- USUARIOS & PERMISOS -->
+    <div style="display:flex; justify-content:center; margin:0 0 12px;">
+      <div class="module-card" style="--color:#06b6d4; width:480px;" onclick="showModule('usuarios')">
+        <div class="module-sprint">Sprint 2</div>
+        <div class="module-icon">👥</div>
+        <div class="module-name">USUARIOS & PERMISOS</div>
+        <div class="module-desc">Roles · Permisos por módulo · Por sucursal · Overrides individuales</div>
+        <div class="module-tags">
+          <span class="tag" style="background:rgba(6,182,212,0.15);color:#06b6d4;">Ver/Crear/Editar/Eliminar/Exportar</span>
+          <span class="tag" style="background:rgba(6,182,212,0.15);color:#06b6d4;">Multi-sucursal</span>
+        </div>
+        <div class="module-tables-count">📊 4 tablas de permisos</div>
+      </div>
+    </div>
+
+    <!-- INFRA ROW -->
+    <div style="display:flex; justify-content:center; gap:16px; margin-top:10px; padding-top:16px; border-top:1px dashed #2d3148;">
+      <div class="module-card" style="--color:#475569; width:200px; opacity:0.8;" onclick="showModule('auth')">
+        <div class="module-sprint">Sprint 1</div>
+        <div class="module-icon">🔐</div>
+        <div class="module-name">AUTH + LAYOUT</div>
+        <div class="module-desc">Login · Sesión · RLS · Sidebar · Multi-tenant</div>
+        <div class="module-tables-count">📊 4 tablas de estructura</div>
+      </div>
+      <div class="module-card" style="--color:#475569; width:200px; opacity:0.8;" onclick="showModule('n8n')">
+        <div class="module-sprint">Transversal</div>
+        <div class="module-icon">⚡</div>
+        <div class="module-name">N8N AUTOMATIONS</div>
+        <div class="module-desc">~15 flujos · WhatsApp · Escalaciones · Recordatorios</div>
+        <div class="module-tables-count">📊 notificaciones_encoladas</div>
+      </div>
+      <div class="module-card" style="--color:#475569; width:200px; opacity:0.8;" onclick="showModule('reportes')">
+        <div class="module-sprint">Por módulo</div>
+        <div class="module-icon">📊</div>
+        <div class="module-name">REPORTES</div>
+        <div class="module-desc">Constructor · Dashboard · Excel/PDF · Por módulo</div>
+        <div class="module-tables-count">📊 reportes_guardados</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PANEL -->
+  <div class="panel" id="panel">
+    <div class="panel-empty" id="panel-empty">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M15 15l6 6m-11-4a7 7 0 110-14 7 7 0 010 14z"/>
+      </svg>
+      <p>Haz clic en un módulo<br>para ver sus tablas</p>
+    </div>
+    <div class="panel-content" id="panel-content"></div>
+  </div>
+</div>
+
+<script>
+const modules = {
+  crm: {
+    name: 'CRM — Corazón del Sistema',
+    icon: '💎',
+    color: '#6366f1',
+    sprint: 'Sprint 2',
+    desc: 'Hub central de la plataforma. Todos los módulos consumen datos de cliente, empresa y vehículo del CRM. Clientes universales por grupo, actividades transversales, agenda Outlook/Gmail, Driver 360.',
+    tables: [
+      {
+        name: 'grupos', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'nombre',t:'TEXT'},{n:'logo_url',t:'TEXT'},{n:'activo',t:'BOOL'},{n:'creado_at',t:'TIMESTAMPTZ',note:'auto'}
+        ]
+      },
+      {
+        name: 'razones_sociales', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'grupo_id',t:'UUID',k:'FK → grupos'},{n:'nombre',t:'TEXT'},{n:'razon_social',t:'TEXT'},{n:'rfc',t:'TEXT'},{n:'activa',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'sucursales', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'razon_social_id',t:'UUID',k:'FK → razones_sociales'},{n:'nombre',t:'TEXT'},{n:'codigo',t:'TEXT',note:'MB1, H1...'},{n:'marca',t:'TEXT'},{n:'whatsapp',t:'TEXT'},{n:'maps_url',t:'TEXT'},{n:'horario_bot_inicio',t:'TIME'},{n:'horario_bot_fin',t:'TIME'}
+        ]
+      },
+      {
+        name: 'clientes', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'grupo_id',t:'UUID',k:'FK → grupos',note:'ÚNICO a nivel grupo'},{n:'empresa_id',t:'UUID',k:'FK → empresas'},{n:'nombre',t:'TEXT'},{n:'apellido',t:'TEXT'},{n:'apellido_2',t:'TEXT'},{n:'whatsapp',t:'TEXT',note:'UNIQUE por grupo'},{n:'email',t:'TEXT'},{n:'email_2',t:'TEXT'},{n:'telefono_contacto',t:'TEXT',note:'fijo o secundario'},{n:'telefono_alterno',t:'TEXT',note:'tercer número'},{n:'tipo',t:'ENUM',note:'particular/empresa/flotilla'},{n:'canal_preferido',t:'ENUM'},{n:'rfc',t:'TEXT'},{n:'id_dms',t:'TEXT',note:'ID en Autoline'},{n:'asesor_asignado_id',t:'UUID',k:'FK → usuarios'}
+        ]
+      },
+      {
+        name: 'vehiculos', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'cliente_id',t:'UUID',k:'FK → clientes',note:'Dueño principal (denormalizado)'},{n:'vin',t:'TEXT',note:'UNIQUE'},{n:'placa',t:'TEXT'},{n:'marca',t:'TEXT'},{n:'modelo',t:'TEXT'},{n:'anio',t:'INT'},{n:'color',t:'TEXT'},{n:'km_actuales',t:'INT'},{n:'km_garantia',t:'INT'},{n:'fecha_compra',t:'DATE'},{n:'fecha_fin_garantia',t:'DATE'},{n:'garantia_ext_inicio',t:'DATE',note:'extensión de garantía'},{n:'garantia_ext_fin',t:'DATE'},{n:'intervalo_servicio_meses',t:'INT',note:'6 o 12 según marca'},{n:'proxima_servicio',t:'DATE',note:'calculado al cerrar OT'},{n:'fecha_verificacion',t:'DATE'},{n:'proxima_verificacion',t:'DATE'},{n:'estado_verificacion',t:'ENUM',note:'vigente/por_vencer/vencida/no_aplica'},{n:'numero_motor',t:'TEXT'},{n:'id_dms',t:'TEXT'}
+        ]
+      },
+      {
+        name: 'vehiculo_personas', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'vehiculo_id',t:'UUID',k:'FK → vehiculos'},{n:'cliente_id',t:'UUID',k:'FK → clientes'},{n:'rol',t:'ENUM',note:'dueno/conductor/otro'},{n:'activo',t:'BOOL'},{n:'desde',t:'DATE'},{n:'notas',t:'TEXT',note:'REGLA: min 1 Dueño siempre'}
+        ]
+      },
+      {
+        name: 'empresas', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'grupo_id',t:'UUID',k:'FK → grupos'},{n:'razon_social',t:'TEXT'},{n:'rfc',t:'TEXT'},{n:'contacto_nombre',t:'TEXT'},{n:'contacto_cargo',t:'TEXT',note:'REGLA: min 1 cliente vinculado, max 10'}
+        ]
+      },
+      {
+        name: 'actividades', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'tipo',t:'ENUM',note:'llamada/seguimiento/tarea...'},{n:'titulo',t:'TEXT'},{n:'estado',t:'ENUM'},{n:'prioridad',t:'ENUM'},{n:'usuario_asignado_id',t:'UUID',k:'FK → usuarios'},{n:'cliente_id',t:'UUID',k:'FK → clientes'},{n:'ot_id',t:'UUID',k:'FK → ordenes_trabajo'},{n:'cita_id',t:'UUID',k:'FK → citas'},{n:'outlook_event_id',t:'TEXT'},{n:'gcal_event_id',t:'TEXT',note:'Google Calendar'},{n:'wa_enviado',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'usuarios', fields: [
+          {n:'id',t:'UUID',k:'PK → auth.users'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'rol',t:'ENUM',note:'admin/gerente/asesor/tecnico...'},{n:'outlook_refresh_token',t:'TEXT'},{n:'gmail_refresh_token',t:'TEXT'},{n:'gcal_calendar_id',t:'TEXT'},{n:'calendario_preferido',t:'TEXT',note:'outlook/google/ambos/ninguno'},{n:'activo',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'configuracion_visibilidad', fields: [
+          {n:'rs_origen_id',t:'UUID',k:'FK'},{n:'rs_destino_id',t:'UUID',k:'FK'},{n:'puede_ver_clientes',t:'BOOL'},{n:'puede_ver_citas',t:'BOOL'},{n:'puede_ver_ots',t:'BOOL'}
+        ]
+      }
+    ],
+    connections: ['→ Citas: cliente/vehículo para agendar y confirmaciones','→ Taller: OTs vinculadas a cliente y vehículo','→ Refacciones: cotizaciones ligadas a cliente/vehículo','→ Ventas: leads y empresas del CRM','→ Bandeja: mensajes al expediente del cliente','→ Seguros: vehículo y Dueño para pólizas','→ Atención a Clientes: expediente completo del cliente'],
+    flows: ['F01 — Perfil único Driver 360','F02 — Agenda + Outlook/Gmail sync (configurable por usuario)','F03 — Importación archivos externos','F04 — Modelo actividades transversal (hub)','F05 — Acceso rápido Atención a Clientes','F06 — CRM como hub central de todos los módulos'],
+    kpis: ['Clientes nuevos por período','Actividades completadas vs pendientes','Vehículos próximos a mantenimiento','Retención: clientes que volvieron','Top clientes por visitas / gasto histórico']
+  },
+
+  citas: {
+    name: 'CITAS',
+    icon: '📅',
+    color: '#22c55e',
+    sprint: 'Sprint 3',
+    desc: 'Kanban de 6 columnas con timer de 15 min, Recepción Express (check-in digital), confirmaciones WA y recuperación de no-shows.',
+    tables: [
+      {
+        name: 'citas', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'cliente_id',t:'UUID',k:'FK → clientes'},{n:'vehiculo_id',t:'UUID',k:'FK → vehiculos'},{n:'asesor_id',t:'UUID',k:'FK → usuarios'},{n:'fecha_cita',t:'TIMESTAMPTZ'},{n:'estado',t:'ENUM',note:'pendiente/confirmada/en_agencia/show/no_show'},{n:'fuente',t:'ENUM',note:'SF/Seekop/manual/bot/web'},{n:'contacto_limite_at',t:'TIMESTAMPTZ',note:'timer 15 min (auto)'},{n:'prellegada_km',t:'INT',note:'Recepción Express'},{n:'prellegada_notas',t:'TEXT',note:'Recepción Express'},{n:'checkin_at',t:'TIMESTAMPTZ',note:'momento del check-in'},{n:'checkin_via',t:'TEXT',note:'wa/qr/manual'},{n:'checkin_km',t:'INT'},{n:'asesor_salio_at',t:'TIMESTAMPTZ'},{n:'ot_creada_auto',t:'BOOL'}
+        ]
+      }
+    ],
+    connections: ['→ Taller: check-in crea OT automáticamente','→ CRM: genera actividades de contacto','→ n8n: timer 15min, recordatorios WA, no-show recovery'],
+    flows: ['F01 — Lectura archivo de citas','F02 — Contacto 15 min (bot si no actúa)','F03 — Recordatorios 24h y 2h','F04 — No-show recovery','F05 — Campaña proactiva mantenimiento','F06 — Recepción Express (check-in digital)'],
+    kpis: ['Citas por estado / fuente','Tasa show vs no-show','Veces bot actuó por encargada','Tiempo espera en agencia (Recepción Express)','Citas recuperadas desde no-show']
+  },
+
+  taller: {
+    name: 'TALLER (PDV)',
+    icon: '🔧',
+    color: '#f97316',
+    sprint: 'Sprint 4',
+    desc: 'Órdenes de trabajo con líneas itemizadas, inspección digital con fotos, escalación automática 3 niveles, CSI y firma digital del cliente.',
+    tables: [
+      {
+        name: 'ordenes_trabajo', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'cliente_id',t:'UUID',k:'FK → clientes'},{n:'vehiculo_id',t:'UUID',k:'FK → vehiculos'},{n:'cita_id',t:'UUID',k:'FK → citas'},{n:'asesor_id',t:'UUID',k:'FK → usuarios'},{n:'numero_ot',t:'TEXT',note:'UNIQUE'},{n:'estado',t:'ENUM',note:'recibido→diagnóstico→listo→entregado'},{n:'nivel_escalacion',t:'INT',note:'0=normal 1=asesor 2=gerente 3=bot'},{n:'token_seguimiento',t:'TEXT',note:'link público sin login'},{n:'condicion_csi',t:'ENUM',note:'feliz/no_feliz/sin_evaluar'},{n:'firma_digital_url',t:'TEXT'},{n:'total_mano_obra',t:'DECIMAL'},{n:'total_refacciones',t:'DECIMAL'},{n:'total_ot',t:'DECIMAL'}
+        ]
+      },
+      {
+        name: 'lineas_ot', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'ot_id',t:'UUID',k:'FK → ordenes_trabajo'},{n:'tecnico_id',t:'UUID',k:'FK → usuarios'},{n:'tipo',t:'TEXT',note:'mano_obra/refaccion/fluido'},{n:'descripcion',t:'TEXT'},{n:'numero_parte',t:'TEXT'},{n:'cantidad',t:'DECIMAL'},{n:'precio_unitario',t:'DECIMAL'},{n:'descuento_porcentaje',t:'DECIMAL'},{n:'total',t:'DECIMAL'},{n:'estado',t:'TEXT',note:'pendiente/en_proceso/terminado'},{n:'aprobado_cliente',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'inspecciones_vehiculo', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'ot_id',t:'UUID',k:'FK → ordenes_trabajo'},{n:'cita_id',t:'UUID',k:'FK → citas'},{n:'usuario_id',t:'UUID',k:'FK → usuarios'},{n:'km_entrada',t:'INT'},{n:'nivel_gasolina',t:'INT',note:'0-8 octavos'},{n:'fotos_urls',t:'TEXT[]',note:'array Supabase Storage'},{n:'items',t:'JSONB',note:'checklist rayones, golpes...'},{n:'firma_cliente_url',t:'TEXT'}
+        ]
+      },
+      {
+        name: 'ventas_perdidas', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'ot_id',t:'UUID',k:'FK → ordenes_trabajo'},{n:'cliente_id',t:'UUID',k:'FK → clientes'},{n:'descripcion_reparacion',t:'TEXT'},{n:'monto_rechazado',t:'DECIMAL'},{n:'estado',t:'ENUM',note:'detectada→cita_agendada→cerrada'}
+        ]
+      }
+    ],
+    connections: ['→ Refacciones: piezas pedidas desde OT','→ CRM: actividades de seguimiento','→ n8n: escalación, CSI 48h post-entrega','→ Citas: cita de recuperación venta perdida'],
+    flows: ['F01 — Recepción del vehículo (desde Recepción Express)','F02 — Seguimiento activo + escalación 3 niveles','F03 — Pieza llegó: aviso WA + agendar','F04 — Garantía: seguimiento con marca','F05 — Diagnóstico, reparación pendiente','F06 — Venta perdida: recovery automático','F07 — CSI post-servicio 48h'],
+    kpis: ['OTs abiertas / cerradas / promedio días','CSI promedio por asesor','Ventas perdidas: detectadas / recuperadas','Escalaciones por nivel','Ingresos taller por período']
+  },
+
+  refacciones: {
+    name: 'REFACCIONES',
+    icon: '🔩',
+    color: '#06b6d4',
+    sprint: 'Sprint 5',
+    desc: 'Maestro de partes con ficha completa OEM, cotizaciones PDF con imagen, seguimiento automático y campañas de garantía/recall.',
+    tables: [
+      {
+        name: 'maestro_partes', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'numero_parte',t:'TEXT',note:'UNIQUE por sucursal'},{n:'descripcion',t:'TEXT'},{n:'categoria',t:'TEXT',note:'Motor/Frenos/Suspensión...'},{n:'marca_parte',t:'TEXT',note:'OEM o aftermarket'},{n:'imagen_oem_url',t:'TEXT'},{n:'precio_lista',t:'DECIMAL'},{n:'precio_costo',t:'DECIMAL'},{n:'precio_venta',t:'DECIMAL'},{n:'aplicaciones',t:'TEXT[]',note:'["Sentra 2018-2022"]'},{n:'proveedor_principal',t:'TEXT'},{n:'tiempo_entrega_dias',t:'INT'},{n:'notas_tecnicas',t:'TEXT'}
+        ]
+      },
+      {
+        name: 'cotizaciones', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'tipo',t:'TEXT',note:'refacciones/servicio/mixta'},{n:'numero_cotizacion',t:'TEXT',note:'UNIQUE'},{n:'estado',t:'ENUM',note:'borrador→enviada→aprobada→rechazada'},{n:'total',t:'DECIMAL'},{n:'pdf_url',t:'TEXT'},{n:'abierta_por_cliente',t:'BOOL',note:'tracking apertura'},{n:'seguimiento_24h_at',t:'TIMESTAMPTZ'},{n:'seguimiento_48h_at',t:'TIMESTAMPTZ'},{n:'seguimiento_72h_at',t:'TIMESTAMPTZ'}
+        ]
+      },
+      {
+        name: 'piezas_ot', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'ot_id',t:'UUID',k:'FK → ordenes_trabajo'},{n:'numero_parte',t:'TEXT'},{n:'cantidad',t:'INT'},{n:'proveedor',t:'TEXT'},{n:'eta',t:'DATE'},{n:'estado',t:'ENUM',note:'pendiente→pedida→recibida→instalada'},{n:'imagen_oem_url',t:'TEXT'},{n:'wa_llegada_enviado',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'campanas_servicio', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'codigo',t:'TEXT'},{n:'tipo',t:'TEXT',note:'recall/campaña/garantia_ext'},{n:'descripcion',t:'TEXT'},{n:'modelos_aplicables',t:'TEXT[]'},{n:'anio_desde',t:'INT'},{n:'anio_hasta',t:'INT'},{n:'fecha_inicio',t:'DATE'},{n:'fecha_fin',t:'DATE'}
+        ]
+      }
+    ],
+    connections: ['← Taller: piezas pedidas desde OT','→ CRM: actividades de seguimiento cotización','→ n8n: seguimiento 24h/48h/72h','→ Clientes: pieza llegó → agendar instalación'],
+    flows: ['F01 — Maestro de partes inteligente (scraping OEM)','F02 — Cotización PDF con imagen OEM','F03 — Seguimiento de presupuesto pendiente'],
+    kpis: ['Cotizaciones: enviadas/aprobadas/rechazadas','Tasa de conversión por asesor','Tiempo respuesta cliente','Piezas: ETA vencido o próximo','Partes más cotizadas (top 20)']
+  },
+
+  ventas: {
+    name: 'VENTAS',
+    icon: '🚗',
+    color: '#ec4899',
+    sprint: 'Sprint 6',
+    desc: 'Pipeline de leads con Kanban, bot de captación multicanal, cruce automático servicio→oportunidad de venta nueva.',
+    tables: [
+      {
+        name: 'leads', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'cliente_id',t:'UUID',k:'FK → clientes'},{n:'asesor_id',t:'UUID',k:'FK → usuarios'},{n:'estado',t:'ENUM',note:'nuevo→contactado→cotizado→cerrado'},{n:'fuente',t:'ENUM',note:'WA/FB/IG/email/web'},{n:'necesidad',t:'TEXT',note:'servicio/refaccion/venta/info'},{n:'vehiculo_interes',t:'TEXT'},{n:'presupuesto_estimado',t:'DECIMAL'},{n:'horas_sin_actualizar',t:'INT'}
+        ]
+      }
+    ],
+    connections: ['→ CRM: lead convertido a cliente','→ CRM: actividades de seguimiento','← Taller: cruce servicio→oportunidad venta','→ n8n: alertas sin actualizar, bot captación'],
+    flows: ['F01 — Captación de lead (WA/FB/IG/Web)','F02 — Seguimiento pipeline','F03 — Cruce servicio → venta nueva','F04 — Actividades + Outlook sync'],
+    kpis: ['Leads por fuente y período','Tasa de conversión por etapa','Leads por asesor','Tiempo promedio de cierre','Leads cruzados desde taller']
+  },
+
+  bandeja: {
+    name: 'BANDEJA + IA',
+    icon: '💬',
+    color: '#8b5cf6',
+    sprint: 'Sprint 7',
+    desc: 'Mensajes unificados de WA, FB, IG y Email en una sola bandeja. Claude API para clasificación y respuestas sugeridas.',
+    tables: [
+      {
+        name: 'mensajes', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'cliente_id',t:'UUID',k:'FK → clientes'},{n:'usuario_asesor_id',t:'UUID',k:'FK → usuarios'},{n:'canal',t:'ENUM',note:'whatsapp/facebook/instagram/email'},{n:'direccion',t:'TEXT',note:'entrante/saliente'},{n:'contenido',t:'TEXT'},{n:'media_url',t:'TEXT'},{n:'enviado_por_bot',t:'BOOL'},{n:'leido_por_asesor',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'notificaciones_encoladas', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'tipo',t:'TEXT',note:'wa/email'},{n:'destinatario',t:'TEXT'},{n:'contenido',t:'TEXT'},{n:'enviar_at',t:'TIMESTAMPTZ',note:'respeta horario 8am-7:30pm'},{n:'estado',t:'TEXT',note:'encolada/enviada'}
+        ]
+      }
+    ],
+    connections: ['→ CRM: mensajes al expediente del cliente','→ Taller: alertas de escalación','→ Citas: confirmaciones y recordatorios','← Todos los módulos: mensajes encolados fuera de horario'],
+    flows: ['F01 — Conversación entrante multicanal','F02 — Escalación automática 3 niveles','F03 — Supervisión Key User / Gerente','F04 — Transferencia entre asesores','F05 — Venta cruzada inteligente + alerta garantía'],
+    kpis: ['Mensajes por canal y período','Tiempo de primera respuesta','Conversaciones sin respuesta +Xh','Intervenciones del gerente','Sugerencias IA: aceptadas vs ignoradas']
+  },
+
+  csi: {
+    name: 'CSI — SATISFACCIÓN DEL CLIENTE',
+    icon: '⭐',
+    color: '#10b981',
+    sprint: 'Sprint 10',
+    desc: 'Encuestas de satisfacción automáticas post-servicio, post-venta y post-cita. WA automático con link personalizado. Score bajo dispara queja automática en Atención a Clientes. Constructor de encuestas por módulo.',
+    tables: [
+      {
+        name: 'csi_encuestas', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'grupo_id',t:'UUID',k:'FK → grupos'},{n:'nombre',t:'TEXT'},{n:'modulo_origen',t:'TEXT',note:'taller/ventas/citas'},{n:'activa',t:'BOOL'},{n:'dias_espera',t:'INT',note:'días post-evento para enviar'},{n:'max_recordatorios',t:'INT',note:'default 2'},{n:'horas_entre_recordatorio',t:'INT',note:'default 48'},{n:'score_alerta',t:'INT',note:'score ≤ este → crea queja auto'}
+        ]
+      },
+      {
+        name: 'csi_preguntas', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'encuesta_id',t:'UUID',k:'FK → csi_encuestas'},{n:'orden',t:'INT'},{n:'texto',t:'TEXT'},{n:'tipo',t:'TEXT',note:'estrellas/nps/texto/si_no'},{n:'obligatoria',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'csi_envios', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'encuesta_id',t:'UUID',k:'FK → csi_encuestas'},{n:'cliente_id',t:'UUID',k:'FK → clientes'},{n:'vehiculo_id',t:'UUID',k:'FK → vehiculos'},{n:'ot_id',t:'UUID',k:'FK → ordenes_trabajo'},{n:'asesor_id',t:'UUID',k:'FK → usuarios'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'estado',t:'ENUM',note:'pendiente/enviada/respondida/sin_respuesta'},{n:'enviado_at',t:'TIMESTAMPTZ'},{n:'respondido_at',t:'TIMESTAMPTZ'},{n:'recordatorios_enviados',t:'INT'},{n:'token_unico',t:'TEXT',note:'link seguro sin login'},{n:'queja_id',t:'UUID',k:'FK → quejas',note:'si score bajo'}
+        ]
+      },
+      {
+        name: 'csi_respuestas', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'envio_id',t:'UUID',k:'FK → csi_envios'},{n:'pregunta_id',t:'UUID',k:'FK → csi_preguntas'},{n:'respuesta_texto',t:'TEXT'},{n:'respuesta_numerica',t:'INT',note:'1-5 estrellas / 0-10 NPS'}
+        ]
+      }
+    ],
+    connections: ['→ Taller: se dispara al cerrar OT','→ Ventas: se dispara al entregar vehículo','→ Citas: se dispara post-visita','→ Atención a Clientes: score bajo → queja automática','→ n8n: envío WA + recordatorios'],
+    flows: ['F01 — Envío automático post-OT (WA con link)','F02 — Recordatorio si no responde (x2)','F03 — Score bajo → queja auto en Atención a Clientes','F04 — Constructor de encuestas por módulo'],
+    kpis: ['NPS por sucursal / asesor / período','Score promedio por tipo de servicio','Tasa de respuesta','Quejas generadas desde CSI','Tendencia mensual de satisfacción']
+  },
+
+  seguros: {
+    name: 'SEGUROS',
+    icon: '🛡️',
+    color: '#eab308',
+    sprint: 'Sprint 11',
+    desc: 'Módulo completo de pólizas vinculadas a vehículos. Campos exactos de Autoline. Alertas de vencimiento, multi-aseguradora.',
+    tables: [
+      {
+        name: 'seguros_vehiculo', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'vehiculo_id',t:'UUID',k:'FK → vehiculos'},{n:'cliente_id',t:'UUID',k:'FK → clientes'},{n:'compania_seguro_id',t:'UUID',k:'FK → companias_seguro'},{n:'numero_poliza',t:'TEXT'},{n:'tipo_poliza',t:'ENUM',note:'NF/NP/XF/XP'},{n:'estado',t:'ENUM',note:'M→N→C→I'},{n:'fecha_inicio',t:'DATE'},{n:'fecha_fin',t:'DATE',note:'⚠ alerta 30 días antes'},{n:'propietario_poliza',t:'TEXT'},{n:'cob_terceros',t:'BOOL'},{n:'monto_terceros',t:'DECIMAL'},{n:'cob_dano_vehiculo',t:'BOOL'},{n:'cob_parabrisas',t:'BOOL'},{n:'total_1',t:'DECIMAL',note:'grupo Terceros'},{n:'total_2',t:'DECIMAL',note:'grupo Vehículo'},{n:'alerta_vencimiento_enviada',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'companias_seguro', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'grupo_id',t:'UUID',k:'FK → grupos'},{n:'codigo',t:'TEXT',note:'2 chars, ej: QA'},{n:'nombre',t:'TEXT'},{n:'activa',t:'BOOL'}
+        ]
+      }
+    ],
+    connections: ['→ Vehículos: póliza siempre ligada a vehículo','→ CRM: alerta de vencimiento → actividad al asesor','→ n8n: WA al cliente 30 días antes de vencer'],
+    flows: ['F01 — Registro de póliza (desde expediente vehículo)','F02 — Alerta de vencimiento (actividad + WA)'],
+    kpis: ['Pólizas por vencer en 30/60/90 días','Por aseguradora y estado','Alertas enviadas vs renovaciones','Valor total asegurado']
+  },
+
+  usuarios: {
+    name: 'USUARIOS & PERMISOS',
+    icon: '👥',
+    color: '#06b6d4',
+    sprint: 'Sprint 2',
+    desc: 'Módulo administrativo independiente del CRM. Gestiona usuarios, roles reutilizables y permisos granulares por módulo y por sucursal. Incluye overrides individuales para ajustes finos sin cambiar el rol.',
+    tables: [
+      {
+        name: 'usuarios', fields: [
+          {n:'id',t:'UUID',k:'PK → auth.users'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'nombre',t:'TEXT'},{n:'apellido',t:'TEXT'},{n:'email',t:'TEXT',note:'UNIQUE'},{n:'telefono',t:'TEXT'},{n:'whatsapp',t:'TEXT'},{n:'rol',t:'ENUM',note:'legacy — reemplazado por usuario_roles'},{n:'calendario_preferido',t:'TEXT',note:'outlook/google/ambos/ninguno'},{n:'activo',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'roles', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'grupo_id',t:'UUID',k:'FK → grupos'},{n:'nombre',t:'TEXT',note:'Administrador, Gerente, Asesor...'},{n:'descripcion',t:'TEXT'},{n:'es_super_admin',t:'BOOL',note:'acceso total sin restricciones'},{n:'activo',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'rol_permisos', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'rol_id',t:'UUID',k:'FK → roles'},{n:'modulo',t:'TEXT',note:'crm/citas/taller/refacciones/ventas/bandeja/seguros/atencion_clientes/usuarios/configuracion/reportes'},{n:'puede_ver',t:'BOOL'},{n:'puede_crear',t:'BOOL'},{n:'puede_editar',t:'BOOL'},{n:'puede_eliminar',t:'BOOL'},{n:'puede_exportar',t:'BOOL'}
+        ]
+      },
+      {
+        name: 'usuario_roles', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'usuario_id',t:'UUID',k:'FK → usuarios'},{n:'rol_id',t:'UUID',k:'FK → roles'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales',note:'NULL = todas las sucursales'},{n:'activo',t:'BOOL'},{n:'asignado_por',t:'UUID',k:'FK → usuarios'}
+        ]
+      },
+      {
+        name: 'usuario_permisos_override', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'usuario_id',t:'UUID',k:'FK → usuarios'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'modulo',t:'TEXT'},{n:'puede_ver',t:'BOOL',note:'NULL = hereda del rol'},{n:'puede_crear',t:'BOOL'},{n:'puede_editar',t:'BOOL'},{n:'puede_eliminar',t:'BOOL'},{n:'puede_exportar',t:'BOOL'},{n:'motivo',t:'TEXT'},{n:'modificado_por',t:'UUID',k:'FK → usuarios'}
+        ]
+      }
+    ],
+    connections: ['→ Todos los módulos: controla acceso a cada uno','→ Auth: usuario vinculado a auth.users de Supabase','→ Sucursales: permiso puede limitarse a una o varias sucursales'],
+    flows: ['F01 — Crear usuario y asignar rol','F02 — Configurar permisos por módulo y sucursal','F03 — Override individual (ajuste fino)','F04 — Desactivar usuario (sin borrar historial)'],
+    kpis: ['Usuarios activos por sucursal','Roles más usados','Últimos accesos por usuario','Overrides activos (auditoría)']
+  },
+
+  auth: {
+    name: 'AUTH + LAYOUT',
+    icon: '🔐',
+    color: '#64748b',
+    sprint: 'Sprint 1 — BASE',
+    desc: 'Fundación de toda la plataforma. Autenticación Supabase, jerarquía multi-tenant, RLS activo, layout base y routing.',
+    tables: [
+      {
+        name: 'grupos', fields: [{n:'id',t:'UUID',k:'PK'},{n:'nombre',t:'TEXT'},{n:'logo_url',t:'TEXT'},{n:'activo',t:'BOOL'}]
+      },
+      {
+        name: 'razones_sociales', fields: [{n:'grupo_id',t:'UUID',k:'FK → grupos'},{n:'razon_social',t:'TEXT'},{n:'rfc',t:'TEXT'}]
+      },
+      {
+        name: 'sucursales', fields: [{n:'razon_social_id',t:'UUID',k:'FK'},{n:'nombre',t:'TEXT'},{n:'codigo',t:'TEXT'},{n:'marca',t:'TEXT'}]
+      },
+      {
+        name: 'usuarios', fields: [{n:'id',t:'UUID',k:'PK → auth.users'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'rol',t:'ENUM',note:'admin/gerente/asesor/tecnico...'},{n:'outlook_refresh_token',t:'TEXT'},{n:'gmail_refresh_token',t:'TEXT'},{n:'calendario_preferido',t:'TEXT',note:'outlook/google/ambos/ninguno'},{n:'activo',t:'BOOL'}]
+      }
+    ],
+    connections: ['→ Todos los módulos dependen de la jerarquía Grupo→RS→Sucursal→Usuario','→ RLS activo en todas las tablas desde este sprint'],
+    flows: ['Login / Logout con Supabase Auth','Protección de rutas por rol','Sidebar + Topbar responsive','Multi-tenant RLS'],
+    kpis: ['Base para todos los módulos']
+  },
+
+  n8n: {
+    name: 'N8N AUTOMATIONS',
+    icon: '⚡',
+    color: '#64748b',
+    sprint: 'Transversal — todos los sprints',
+    desc: '~15 flujos de automatización. Corre en paralelo con cada módulo. WhatsApp, escalaciones, recordatorios, CSI, campañas.',
+    tables: [
+      {
+        name: 'notificaciones_encoladas', fields: [
+          {n:'tipo',t:'TEXT',note:'wa/email'},{n:'destinatario',t:'TEXT'},{n:'contenido',t:'TEXT'},{n:'enviar_at',t:'TIMESTAMPTZ',note:'respeta horario'},{n:'contexto_modulo',t:'ENUM'},{n:'contexto_id',t:'UUID'},{n:'estado',t:'TEXT',note:'encolada/enviada'}
+        ]
+      },
+      {
+        name: 'archivos_importados', fields: [
+          {n:'nombre_archivo',t:'TEXT'},{n:'tipo',t:'TEXT',note:'citas/ot/csi/clientes'},{n:'fuente',t:'TEXT',note:'drive/csv/autoline'},{n:'registros_creados',t:'INT'},{n:'registros_con_error',t:'INT'},{n:'errores',t:'JSONB'}
+        ]
+      }
+    ],
+    connections: ['Conecta con TODOS los módulos','Dispara WA, email y actividades automáticamente'],
+    flows: ['n8n-001: Timer 15 min citas','n8n-002: Recordatorio 24h/2h','n8n-003: Pieza llegó → agendar','n8n-004: Escalación OT 3 niveles','n8n-005: CSI 48h post-entrega','n8n-006: Outlook Calendar sync','n8n-007: No-show recovery','n8n-008: Recepción Express (pre-llegada WA)','n8n-009: Vencimiento póliza 30 días','n8n-010: Cotización seguimiento 24/48/72h','n8n-011: Importación archivos Drive/DMS'],
+    kpis: ['Mensajes enviados por tipo','Errores de importación','Flujos activos por sucursal']
+  },
+
+  atencion: {
+    name: 'ATENCIÓN A CLIENTES',
+    icon: '🎯',
+    color: '#ef4444',
+    sprint: 'Sprint 8',
+    desc: 'Módulo independiente para quejas. Cualquier usuario desde cualquier módulo puede levantar una queja. Flujo: Receptor → Encargado AC → Gerente → Cliente → Validación → Cierre. Folio automático AC-YYYY-NNNN.',
+    tables: [
+      {
+        name: 'quejas', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'folio',t:'TEXT',note:'AC-YYYY-NNNN (auto-generado)'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'cliente_id',t:'UUID',k:'FK → clientes'},{n:'vehiculo_id',t:'UUID',k:'FK → vehiculos'},{n:'ot_id',t:'UUID',k:'FK → ordenes_trabajo'},{n:'tipo',t:'ENUM',note:'servicio/atención/tiempo/facturación...'},{n:'area_involucrada',t:'ENUM',note:'servicio/refacciones/citas/ventas...'},{n:'estado',t:'ENUM',note:'recibida→asignada→en_seguimiento→con_gerente→solucion_propuesta→validando→cerrada'},{n:'recibida_por_id',t:'UUID',k:'FK → usuarios',note:'receptor'},{n:'encargado_ac_id',t:'UUID',k:'FK → usuarios'},{n:'gerente_area_id',t:'UUID',k:'FK → usuarios'},{n:'persona_involucrada_id',t:'UUID',k:'FK → usuarios'},{n:'voz_cliente',t:'TEXT',note:'queja textual original'},{n:'hallazgo_interno',t:'TEXT'},{n:'solucion_propuesta',t:'TEXT'},{n:'compensacion',t:'TEXT'},{n:'cliente_acepto_solucion',t:'BOOL'},{n:'ciclo',t:'INT',note:'1 = primera vez, 2+ = reaperturas'},{n:'fecha_limite',t:'TIMESTAMPTZ',note:'SLA auto'}
+        ]
+      },
+      {
+        name: 'seguimientos_queja', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'queja_id',t:'UUID',k:'FK → quejas'},{n:'paso',t:'ENUM',note:'recepcion/asignacion_ac/canalizacion_gerente/investigacion/propuesta_solucion/validacion_cliente/cierre/reapertura'},{n:'responsable_id',t:'UUID',k:'FK → usuarios'},{n:'notas',t:'TEXT'},{n:'actividad_id',t:'UUID',k:'FK → actividades'},{n:'wa_enviado',t:'BOOL'},{n:'email_enviado',t:'BOOL'},{n:'outlook_event_id',t:'TEXT'},{n:'gcal_event_id',t:'TEXT'},{n:'creado_at',t:'TIMESTAMPTZ',note:'auto'}
+        ]
+      }
+    ],
+    connections: ['← Todos los módulos: botón flotante "Levantar Queja"','→ CRM: seguimiento ligado a actividades y expediente del cliente','→ n8n: WA automático en cada paso de la cadena','→ Outlook/Gmail: evento en calendario del responsable'],
+    flows: ['Paso 1 — Recepción: cualquier usuario levanta queja, folio AC generado','Paso 2 — Asignación AC: encargado asignado, WA + actividad','Paso 3 — Canalización a Gerente (si aplica)','Paso 4 — Investigación interna: hallazgo documentado','Paso 5 — Propuesta de solución: enviada al cliente vía WA','Paso 6 — Validación: cliente acepta o rechaza solución','Paso 7 — Cierre o Reapertura: ciclo +1 si se reabre'],
+    kpis: ['Quejas por área y tipo de problema','Tiempo promedio de resolución vs SLA','Quejas por ciclo (reaperturas)','Satisfacción final del cliente','Compensaciones otorgadas por área']
+  },
+
+  reportes: {
+    name: 'SISTEMA DE REPORTES',
+    icon: '📊',
+    color: '#f59e0b',
+    sprint: 'Integrado en cada sprint',
+    desc: 'Constructor de reportes reutilizable. Un componente <ReportBuilder /> se construye en Sprint 2 y cada módulo lo usa con sus propios campos y permisos.',
+    tables: [
+      {
+        name: 'reportes_guardados', fields: [
+          {n:'id',t:'UUID',k:'PK'},{n:'sucursal_id',t:'UUID',k:'FK → sucursales'},{n:'usuario_id',t:'UUID',k:'FK → usuarios'},{n:'nombre',t:'TEXT'},{n:'modulo',t:'ENUM',note:'crm/citas/taller/refacciones...'},{n:'config',t:'JSONB',note:'fields, filters, groupBy, chartType'},{n:'visibilidad',t:'TEXT',note:'privado/sucursal/grupo'},{n:'roles_acceso',t:'rol_usuario[]'},{n:'es_favorito',t:'BOOL'},{n:'veces_ejecutado',t:'INT'}
+        ]
+      }
+    ],
+    connections: ['← Todos los módulos usan reportes_guardados','→ Exporta a Excel (.xlsx) y PDF'],
+    flows: ['Dashboard fijo: KPIs por módulo','Constructor: selecciona campos → filtra → agrupa → visualiza','Guardar reporte personal','Compartir con sucursal o grupo','Exportar Excel / PDF'],
+    kpis: ['Todos los KPIs de todos los módulos','Campos visibles según rol del usuario']
+  }
+};
+
+let activeModule = null;
+
+function showModule(id) {
+  const m = modules[id];
+  if (!m) return;
+
+  // Remove previous active
+  document.querySelectorAll('.module-card').forEach(c => c.classList.remove('active'));
+
+  // Find and activate clicked card
+  event.currentTarget.classList.add('active');
+  activeModule = id;
+
+  const empty = document.getElementById('panel-empty');
+  const content = document.getElementById('panel-content');
+
+  empty.style.display = 'none';
+  content.classList.add('active');
+
+  content.innerHTML = `
+    <div class="panel-module-header">
+      <div class="panel-module-icon">${m.icon}</div>
+      <div>
+        <div class="panel-module-name" style="color:${m.color}">${m.name}</div>
+        <div class="panel-module-sprint">${m.sprint}</div>
+      </div>
+    </div>
+
+    <p style="font-size:13px;color:#94a3b8;line-height:1.6;margin-bottom:4px;">${m.desc}</p>
+
+    <div class="section-title" style="margin-top:20px;">Tablas de BD</div>
+    ${m.tables.map(t => `
+      <div class="table-item">
+        <div class="table-header" onclick="toggleTable(this)">
+          <span style="font-size:14px;">🗄️</span>
+          <span class="table-name">${t.name}</span>
+          <span style="font-size:10px;color:#475569;margin-left:4px;">(${t.fields.length} campos)</span>
+          <span class="table-arrow">▶</span>
+        </div>
+        <div class="table-fields">
+          ${t.fields.map(f => `
+            <div class="field-row">
+              <span class="field-name">${f.n}</span>
+              <span class="field-type">${f.t}</span>
+              ${f.k ? `<span class="${f.k.startsWith('PK') ? 'field-pk' : 'field-fk'}">${f.k}</span>` : ''}
+              ${f.note ? `<span class="field-note">${f.note}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('')}
+
+    <div class="section-title">Conexiones con otros módulos</div>
+    <div style="background:#131620;border-radius:10px;padding:12px;">
+      ${m.connections.map(c => `<div class="connection-item"><span class="conn-arrow">⟶</span>${c}</div>`).join('')}
+    </div>
+
+    <div class="section-title">Flujos (n8n + automáticos)</div>
+    ${m.flows.map(f => `<div class="flow-item"><span class="flow-name">${f}</span></div>`).join('')}
+
+    <div class="section-title">📊 KPIs del sub-módulo de reportes</div>
+    <div style="background:#131620;border-radius:10px;padding:12px;">
+      ${m.kpis.map(k => `<div class="kpi-item"><div class="kpi-dot"></div>${k}</div>`).join('')}
+    </div>
+    <div style="height:40px;"></div>
+  `;
+}
+
+function toggleTable(header) {
+  const fields = header.nextElementSibling;
+  const arrow = header.querySelector('.table-arrow');
+  fields.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+</script>
+</body>
+</html>

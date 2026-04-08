@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>CRM Workflow Studio v3</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:#0d1117;color:#c9d1d9;font-family:'Inter',system-ui,sans-serif;font-size:13px}
+
+/* ── TOOLBAR ── */
+#tb{height:46px;background:#161b22;border-bottom:1px solid #21262d;display:flex;align-items:center;padding:0 18px;gap:10px;flex-shrink:0;position:relative;z-index:20}
+#tb-dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+#tb-name{font-size:13px;font-weight:600;color:#e6edf3}
+.tb-sep{width:1px;height:20px;background:#21262d}
+.chip{font-size:10px;padding:2px 9px;border-radius:4px;border:1px solid var(--bc);color:var(--tc);background:var(--bg);font-family:'IBM Plex Mono',monospace;white-space:nowrap}
+#tb-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+#btn-back{display:none;padding:5px 14px;border-radius:6px;border:1px solid #30363d;background:#1c2128;color:#e6edf3;font-size:11px;cursor:pointer;font-family:'Inter',sans-serif;gap:6px;align-items:center}
+#btn-back:hover{border-color:#3b82f6;color:#3b82f6}
+#btn-back.vis{display:flex}
+#breadcrumb{font-size:11px;color:#3d444d;font-family:'IBM Plex Mono',monospace}
+#breadcrumb span{color:#e6edf3}
+.tz{padding:3px 9px;border-radius:4px;border:1px solid #21262d;background:#1c2128;color:#6e7681;font-size:11px;cursor:pointer}
+.tz:hover{color:#e6edf3}
+
+/* ── MAIN LAYOUT ── */
+#body{flex:1;display:flex;overflow:hidden;height:calc(100vh - 46px)}
+
+/* ── CANVAS ── */
+#cw{flex:1;overflow:hidden;position:relative;cursor:grab;background:#0d1117;background-image:radial-gradient(circle,rgba(48,54,61,.55) 1px,transparent 1px);background-size:24px 24px}
+#cw.drag{cursor:grabbing}
+#cw.browse{cursor:default}
+#canvas{position:absolute;transform-origin:0 0;width:1440px;height:860px}
+#svgl{position:absolute;top:0;left:0;width:1440px;height:860px;pointer-events:none}
+#nl{position:absolute;top:0;left:0;width:1440px;height:860px}
+
+/* ── MODULE NODES ── */
+.mnode{position:absolute;border-radius:12px;background:#161b22;border:1.5px solid #21262d;cursor:pointer;overflow:hidden;transition:opacity .4s,transform .4s,border-color .2s,box-shadow .2s}
+.mnode:hover{border-color:#30363d;transform:scale(1.02)}
+.mnode.dimmed{opacity:.12;pointer-events:none}
+.mnode.highlighted{border-color:var(--mc)!important;box-shadow:0 0 0 3px var(--mglow),0 8px 32px var(--mglow)}
+.mnode-bar{height:4px}
+.mnode-inner{padding:12px 14px 10px}
+.mn-tag{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-family:'IBM Plex Mono',monospace;margin-bottom:5px;display:flex;align-items:center;gap:5px}
+.mn-tag .dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.mn-name{font-size:13px;font-weight:700;color:#e6edf3;letter-spacing:-.2px;margin-bottom:3px}
+.mn-sub{font-size:10px;color:#484f58;line-height:1.45;margin-bottom:1px}
+.mn-pills{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+.mn-pill{font-size:9px;padding:2px 7px;border-radius:3px;background:rgba(255,255,255,.04);border:1px solid #21262d;color:#484f58;font-family:'IBM Plex Mono',monospace}
+.mn-pill.hi{border-color:var(--mc);color:var(--mc);background:var(--mglow)}
+
+/* ── FLOW DETAIL LAYER ── */
+#flow-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity .35s}
+#flow-layer.vis{opacity:1;pointer-events:auto}
+#flow-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#flow-nodes{position:absolute;top:0;left:0;width:100%;height:100%}
+
+/* ── FLOW CARDS (step by step) ── */
+.fcard{position:absolute;background:#161b22;border-radius:11px;border:1px solid #21262d;overflow:hidden;cursor:default;transition:box-shadow .15s}
+.fcard:hover{box-shadow:0 0 0 1px rgba(255,255,255,.06),0 4px 16px rgba(0,0,0,.4)}
+.fcard-bar{height:3px}
+.fcard-head{padding:10px 12px 7px;border-bottom:1px solid #21262d}
+.fcard-num{font-size:9px;font-weight:600;font-family:'IBM Plex Mono',monospace;margin-bottom:4px}
+.fcard-title{font-size:12px;font-weight:600;color:#e6edf3;line-height:1.3;margin-bottom:2px}
+.fcard-desc{font-size:10px;color:#484f58;line-height:1.4}
+.fcard-steps{padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.fstep{display:flex;gap:7px;align-items:flex-start}
+.fstep-dot{width:16px;height:16px;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;margin-top:1px}
+.fstep-who{font-size:8px;font-weight:600;font-family:'IBM Plex Mono',monospace;margin-bottom:1px}
+.fstep-what{font-size:10px;color:#8b949e;line-height:1.3}
+.fcard-benefit{margin:0 12px 10px;padding:6px 9px;border-radius:6px;border:1px solid var(--bc);background:var(--bbg);display:flex;align-items:flex-start;gap:6px}
+.fcard-benefit-icon{font-size:11px;flex-shrink:0;margin-top:1px}
+.fcard-benefit-text{font-size:10px;color:var(--btc);line-height:1.4}
+.fcard-benefit-label{font-size:8px;font-weight:600;font-family:'IBM Plex Mono',monospace;letter-spacing:.05em;margin-bottom:2px}
+.fcard-branch{margin:4px 12px 8px;padding:7px;border-radius:6px;border:1px dashed #2a3548;background:rgba(255,255,255,.015)}
+.fcard-branch-lbl{font-size:8px;color:#3d444d;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.fcard-branch-row{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.fcard-bcard{border-radius:5px;padding:6px 8px;border:1px solid #21262d}
+.fcard-bcard-h{font-size:9px;font-weight:600;margin-bottom:2px}
+.fcard-bcard-b{font-size:9px;color:#484f58;line-height:1.35}
+
+/* ── LEGEND ── */
+#legend{position:absolute;bottom:14px;left:14px;background:rgba(22,27,34,.92);border:1px solid #21262d;border-radius:8px;padding:9px 12px;pointer-events:none;z-index:5}
+.lg{display:flex;align-items:center;gap:7px;font-size:10px;color:#3d444d;margin-bottom:3px}
+.lg:last-child{margin:0}
+.lg-l{width:22px;height:2px}
+
+/* ── MOD HINT ── */
+#mod-hint{position:absolute;bottom:14px;right:14px;background:rgba(22,27,34,.92);border:1px solid #21262d;border-radius:8px;padding:9px 14px;pointer-events:none;z-index:5;transition:opacity .3s}
+#mod-hint.hidden{opacity:0}
+.mh-text{font-size:10px;color:#3d444d;font-family:'IBM Plex Mono',monospace}
+.mh-text span{color:#6e7681}
+</style>
+</head>
+<body>
+<div id="app" style="display:flex;flex-direction:column;height:100vh">
+
+<!-- TOOLBAR -->
+<div id="tb">
+  <div id="tb-dot">⚡</div>
+  <span id="tb-name">CRM Workflow Studio</span>
+  <div class="tb-sep"></div>
+  <span class="chip" style="--tc:#3b82f6;--bg:rgba(59,130,246,.1);--bc:rgba(59,130,246,.25)">Sistema Postventa Automotriz</span>
+  <span class="chip" style="--tc:#8b5cf6;--bg:rgba(139,92,246,.1);--bc:rgba(139,92,246,.25)">6 módulos · 26 flujos</span>
+  <div id="tb-right">
+    <span id="breadcrumb">Mapa general</span>
+    <button id="btn-back" onclick="goBack()">← Volver al mapa</button>
+    <button class="tz" onclick="zoom(.12)">＋</button>
+    <button class="tz" onclick="zoom(-.12)">－</button>
+    <button class="tz" onclick="resetV()">↺</button>
+  </div>
+</div>
+
+<div id="body">
+<div id="cw">
+  <div id="canvas">
+    <svg id="svgl"></svg>
+    <div id="nl"></div>
+    <div id="flow-layer">
+      <svg id="flow-svg"></svg>
+      <div id="flow-nodes"></div>
+    </div>
+  </div>
+  <div id="legend">
+    <div class="lg"><div class="lg-l" style="background:#3b82f6"></div>CRM — corazón del sistema</div>
+    <div class="lg"><div class="lg-l" style="background:repeating-linear-gradient(90deg,#3a4556 0,#3a4556 4px,transparent 4px,transparent 8px)"></div>Flujo de datos</div>
+    <div class="lg"><div class="lg-l" style="background:#3a4556"></div>Flujo de proceso</div>
+  </div>
+  <div id="mod-hint">
+    <div class="mh-text"><span>Clic en cualquier módulo</span> para ver sus flujos en detalle</div>
+  </div>
+</div>
+</div>
+</div>
+
+<script>
+// ── COLORS ────────────────────────────────────────────────
+const MC={crm:'#3b82f6',ag:'#1db870',ta:'#8b5cf6',rf:'#f59e0b',ve:'#f43f5e',bj:'#06b6d4'};
+const GLOW={crm:'rgba(59,130,246,.15)',ag:'rgba(29,184,112,.15)',ta:'rgba(139,92,246,.15)',rf:'rgba(245,158,11,.12)',ve:'rgba(244,63,94,.13)',bj:'rgba(6,182,212,.13)'};
+
+// ── MAIN NODES POSITIONS ──────────────────────────────────
+const MN={
+  crm:{x:490,y:300,w:260,h:152,c:MC.crm,tag:'Módulo central',name:'CRM',subs:['Clientes · Empresas · Vehículos','Historial completo · Garantías · Preferencias','Agenda · Actividades · Outlook sync'],pills:[{t:'Corazón del sistema',hi:true},{t:'Historial vehículo'},{t:'Agenda + Outlook'}]},
+  ag:{x:32,y:186,w:216,h:128,c:MC.ag,tag:'Módulo',name:'CITAS',subs:['SF · Seekop · ClearMechanic · Drive','Contactos automáticos · Recordatorios','Mapa de sucursal al cliente'],pills:[{t:'5 flujos'}]},
+  ta:{x:1002,y:186,w:216,h:128,c:MC.ta,tag:'Módulo',name:'TALLER (PDV)',subs:['Seguimiento tiempo real · Link sin app','Piezas · Garantías · Trabajo adicional','CSI · Firma digital · Venta perdida'],pills:[{t:'7 flujos'}]},
+  rf:{x:32,y:504,w:216,h:116,c:MC.rf,tag:'Módulo',name:'REFACCIONES',subs:['Maestro de partes · PDF con OEM','Cotizaciones · Scraping portal marca'],pills:[{t:'3 flujos'}]},
+  ve:{x:1002,y:504,w:216,h:116,c:MC.ve,tag:'Módulo',name:'VENTAS',subs:['Pipeline de leads · Seguimiento','Prospección · Cruce de servicios'],pills:[{t:'4 flujos'}]},
+  bj:{x:524,y:622,w:212,h:108,c:MC.bj,tag:'Transversal',name:'BANDEJA + IA',subs:['WA · FB · IG · Email unificados','Escalación automática · Bot activo'],pills:[{t:'5 flujos'}]},
+};
+
+// ── STEP TYPES ────────────────────────────────────────────
+const ST={
+  A:{c:'#1db870',n:'Asesor'},B:{c:'#8b5cf6',n:'Bot IA'},C:{c:'#38bdf8',n:'Cliente'},
+  S:{c:'#f59e0b',n:'Sistema'},L:{c:'#ef4444',n:'Alerta'},F:{c:'#22c55e',n:'Resultado'},
+  I:{c:'#f43f5e',n:'IA'},G:{c:'#38bdf8',n:'Gerente'},M:{c:'#f43f5e',n:'MK / Atención'},
+  D:{c:'#64748b',n:'Archivo / DMS'},K:{c:'#3b82f6',n:'CRM'},V:{c:'#f43f5e',n:'Ventas'},
+  E:{c:'#1db870',n:'Encargada de citas'},
+};
+
+// ── FLOWS DATA ────────────────────────────────────────────
+// Each flow: {n: name, desc: short desc, benefit: {icon, label, text}, steps: [{t,w,x}], branch?: {lbl, cols}}
+const FLOWS={
+  ag:[
+    {n:'Lectura del archivo de citas',
+     desc:'Lee el archivo del Drive, SF, Seekop o ClearMechanic y lo convierte en registros en el CRM — sin que nadie capture nada manualmente.',
+     benefit:{icon:'⚡',label:'Beneficio operativo',text:'Cero capturas dobles. Las citas del sistema de agendamiento aparecen solas en el CRM y en la agenda de la encargada.'},
+     steps:[{t:'D',w:'Archivo (Drive / SF / Seekop)',x:'Comparte el archivo de citas del día — CSV, Excel o exportación directa'},{t:'S',w:'Sistema',x:'Lee el archivo, valida los datos y extrae: nombre, WA, fecha, hora, sucursal'},{t:'K',w:'CRM',x:'Crea o actualiza el registro del cliente y su vehículo. Vincula la cita.'},{t:'E',w:'Encargada de citas',x:'La cita aparece en su agenda CRM como "Contacto pendiente" y en su Outlook'},{t:'F',w:'Resultado',x:'Agenda actualizada · 0 capturas manuales · Cliente registrado en BD'}]},
+    {n:'Contacto de confirmación',
+     desc:'La encargada tiene 15 minutos para realizar el contacto. Si no actúa, el bot lanza automáticamente el WA con la confirmación y el mapa de la sucursal.',
+     benefit:{icon:'📍',label:'Beneficio al cliente',text:'El cliente siempre recibe la confirmación de su cita — con fecha, hora, nombre de la sucursal y link de Google Maps para llegar. Aunque la encargada esté ocupada.'},
+     steps:[{t:'E',w:'Encargada de citas',x:'Ve el "Contacto pendiente" en su agenda · Tiene 15 min para llamar o mandar WA'},{t:'L',w:'Si NO actúa en 15 min',x:'El sistema detecta que el contacto sigue sin realizarse'},{t:'B',w:'Bot IA — automático',x:'Lanza WA personalizado: "Hola [nombre], tu cita es el [fecha] a las [hora] en [sucursal]. 📍 Cómo llegar: [link Maps]"'},{t:'K',w:'CRM',x:'Registra el contacto como "realizado por sistema" · Actividad marcada en agenda de la encargada'},{t:'F',w:'Resultado',x:'Cliente informado · La encargada ve qué contactos hizo ella y cuáles hizo el bot'}],
+     branch:{lbl:'Si la encargada sí actúa antes de los 15 min →',cols:[{bc:'#1db870',h:'Realiza la llamada',b:'Marca el contacto como realizado. El bot NO interviene.'},{bc:'#06b6d4',h:'Envía WA manualmente',b:'Desde la bandeja del CRM con el mapa incluido. Queda registrado.'}]}},
+    {n:'Recordatorio 24h y 2h antes',
+     desc:'El bot envía dos recordatorios automáticos antes de la cita — siempre con el mapa de la sucursal para que el cliente llegue sin problemas.',
+     benefit:{icon:'📊',label:'Beneficio en show rate',text:'Los recordatorios automáticos reducen los no-shows hasta en un 35%. El cliente recibe la ubicación exacta sin tener que buscarla.'},
+     steps:[{t:'B',w:'Bot IA · 24h antes',x:'WA: "Mañana tienes cita en [agencia] a las [hora]. ¿Todo bien para asistir? 📍 [link Maps]"'},{t:'C',w:'Cliente',x:'Responde SÍ / NO / No contesta'},{t:'B',w:'Bot IA · 2h antes',x:'Recordatorio final si no confirmó: "En 2 horas te esperamos. Aquí te dejamos la ubicación 📍"'},{t:'K',w:'CRM',x:'Actualiza estado de la cita: Confirmada / Sin confirmar / No-show pendiente'},{t:'F',w:'Resultado',x:'Show rate aumenta · Estado de cita actualizado en tiempo real'}]},
+    {n:'No-show: recuperación',
+     desc:'El cliente no llegó. El bot activa la recuperación empática y si no responde, se crea una tarea en la agenda de la encargada para llamarle.',
+     benefit:{icon:'🔄',label:'Beneficio de retención',text:'Sin este flujo el no-show queda en el olvido. Con él, la mayoría de los clientes reagendan y la agenda se mantiene llena.'},
+     steps:[{t:'E',w:'Encargada de citas',x:'Marca la cita como no-show con 1 clic en el CRM'},{t:'B',w:'Bot IA · 2h después',x:'WA empático: "Notamos que no pudiste llegar. ¿Quieres reagendar? Te propongo estas fechas:"'},{t:'L',w:'Sin respuesta · 48h',x:'Se crea actividad en agenda de la encargada: "Llamar a [cliente] para reagendar" + WA a la encargada + Outlook sync'},{t:'K',w:'CRM',x:'Registra el resultado: reagendado / cancelado / sin contacto'},{t:'F',w:'Resultado',x:'Nada queda sin seguimiento · Todo trazado en el historial del cliente'}]},
+    {n:'Campaña proactiva de mantenimiento',
+     desc:'El sistema detecta en el CRM qué vehículos están próximos a necesitar servicio y el bot los contacta antes de que el cliente lo recuerde.',
+     benefit:{icon:'💰',label:'Beneficio en ingresos',text:'Genera citas que de otra forma nunca existirían. El concesionario llama primero — no espera a que el cliente llame. 70–80% del taller cubierto con citas agendadas.'},
+     steps:[{t:'S',w:'Sistema IA',x:'Analiza el CRM y detecta vehículos próximos a mantenimiento por km, meses o garantía por vencer'},{t:'B',w:'Bot IA',x:'WA personalizado: "Hola [nombre], tu [marca modelo] está próximo a su mantenimiento. ¿Agendamos?"'},{t:'L',w:'Sin respuesta · 3 días',x:'Actividad en agenda de la encargada: "Llamar a [cliente]" + WA recordatorio + Outlook'},{t:'K',w:'CRM',x:'Si agenda → cita vinculada al expediente. Si no → recordatorio automático a 30 días.'},{t:'F',w:'Resultado',x:'Agenda llena · Ingresos proactivos · KPI de conversión por campaña'}]},
+  ],
+  ta:[
+    {n:'Seguimiento activo del vehículo',
+     desc:'El cliente sabe en todo momento qué está pasando con su vehículo. Si el asesor no actualiza, el sistema actúa por él en 3 niveles.',
+     benefit:{icon:'📱',label:'Beneficio al cliente',text:'El cliente deja de llamar al concesionario para preguntar. Tiene un link que actualiza en tiempo real — sin app, sin login. La confianza en el servicio sube.'},
+     steps:[{t:'A',w:'Asesor de servicio',x:'Recibe el vehículo · Toma fotos · Checklist · Registra promesa de entrega'},{t:'B',w:'Bot IA',x:'WA al cliente: "Tu vehículo fue recibido. Sigue el estado aquí:" + link sin app ni login'},{t:'A',w:'Asesor',x:'Actualiza el estado desde su celular: Diagnóstico → Reparación → Control calidad → Listo'},{t:'B',w:'Bot IA · cada cambio',x:'WA automático al cliente con el nuevo estado en lenguaje simple'},{t:'F',w:'Resultado',x:'Firma digital al entregar · CSI activado automáticamente · Todo en CRM'}],
+     branch:{lbl:'Si el asesor no actualiza en 4 horas →',cols:[{bc:'#f59e0b',h:'Nivel 1 — Asesor',b:'Bot alerta al asesor: "La unidad de [cliente] lleva 4h sin novedad"'},{bc:'#f43f5e',h:'Nivel 2+3 — Gerente / Bot',b:'+2h → alerta al gerente. +1h → bot actúa por el asesor.'}]}},
+    {n:'Pieza no disponible + ETA',
+     desc:'La pieza no está. El sistema hace el seguimiento activo hasta que llega. Cuando llega, el bot pregunta al cliente si quiere agendar — si responde Sí, la encargada de citas recibe WA + email + actividad en su agenda CRM y el cliente queda en espera de la llamada.',
+     benefit:{icon:'🔧',label:'Beneficio crítico',text:'El 28% de los clientes enfrenta esto. El 50% no regresa sin seguimiento activo. Este flujo los recupera — y cuando la pieza llega, la cita se agenda sin que el asesor tenga que perseguir al cliente.'},
+     steps:[
+       {t:'A',w:'Asesor de servicio',x:'Abre expediente de pieza en CRM: número de parte, proveedor, ETA si la tiene',nt:''},
+       {t:'B',w:'Bot IA',x:'Con ETA: "La pieza llegará aprox. el [fecha], te avisamos en cuanto esté lista" · Sin ETA: "Seguimos coordinando con el proveedor, te mantenemos al tanto"',nt:'Seguimiento automático cada 3 días si no hay novedad'},
+       {t:'A',w:'Asesor de servicio',x:'Pieza llega → registra con 1 clic en CRM · Estado cambia a: recibida',nt:''},
+       {t:'B',w:'Bot IA — inmediato al registrar',x:'"¡Buenas noticias [nombre]! La pieza de tu [vehículo] ya llegó. ¿Quieres agendar tu cita para la instalación?" 🔘 Botón: Sí, quiero agendar',nt:''},
+       {t:'C',w:'Cliente',x:'Toca el botón "Sí, quiero agendar"',nt:''},
+       {t:'B',w:'Bot IA — respuesta inmediata',x:'"Perfecto [nombre], en breve un asesor de citas se pondrá en contacto contigo para confirmar la fecha y hora de tu cita. ¡Gracias!"',nt:'El cliente queda con expectativa clara — no en el aire'},
+       {t:'K',w:'CRM — automático',x:'Crea actividad tipo "Agendar instalación de pieza" asignada a la encargada de citas con: nombre del cliente, WA, vehículo, número de parte y descripción del servicio',nt:'Prioridad: alta · Se activa al instante que el cliente toca el botón'},
+       {t:'E',w:'Encargada de citas',x:'Recibe simultáneamente: ① WA: "Tienes actividad urgente: [cliente] quiere agendar instalación de [pieza]. Ya confirmó interés." ② Email con los mismos datos ③ Actividad visible en su agenda CRM ④ Evento creado en su Outlook',nt:''},
+       {t:'E',w:'Encargada de citas',x:'Llama al cliente · Agenda la cita en CRM · La actividad se marca como realizada · El flujo normal de confirmación y recordatorios toma el control',nt:''},
+       {t:'F',w:'Resultado',x:'Cita agendada · Ciclo cerrado · Historial completo en CRM · Sin perseguir al cliente ni al asesor',nt:''},
+     ],
+     branch:{lbl:'Si el cliente NO responde al botón inicial →',cols:[{bc:'#f59e0b',h:'Sin respuesta · 3 días',b:'Bot reintenta con mensaje diferente: "¿Sigues interesado en agendar la instalación?"'},{bc:'#ef4444',h:'Sin respuesta · 6 días',b:'Actividad en agenda de la encargada: "Llamar directamente a [cliente] — pieza disponible"'}]}},
+    {n:'Trabajo adicional detectado',
+     desc:'El técnico encuentra un problema extra. El cliente lo ve con foto y decide en minutos desde su teléfono.',
+     benefit:{icon:'💳',label:'Beneficio en ticket',text:'Mayor ticket promedio por visita. El cliente toma la decisión con evidencia visual — no solo palabras. Si rechaza, el recordatorio a 30 días recupera la oportunidad.'},
+     steps:[{t:'A',w:'Técnico / Asesor',x:'Detecta problema adicional · Toma foto o video como evidencia'},{t:'B',w:'Sistema',x:'WA al cliente: foto + descripción simple + costo desglosado + botones de respuesta'},{t:'C',w:'Cliente',x:'Autorizo / No por ahora / Necesito más información'},
+     {t:'F',w:'Resultado',x:'Aprueba → trabajo suma a OT · Rechaza → recordatorio automático a 30 días en CRM'}],
+     branch:{lbl:'Según la decisión del cliente →',cols:[{bc:'#1db870',h:'Aprueba',b:'Asesor procede. Trabajo suma a la OT. Cliente recibe nuevo tiempo estimado.'},{bc:'#f59e0b',h:'Rechaza / no responde',b:'Se documenta. Recordatorio a 30 días: "¿Quieres atender el problema que encontramos?"'}]}},
+    {n:'Garantía formal con la marca',
+     desc:'Expediente completo con foto y código de falla. El bot hace el seguimiento con la marca cada 2 días y mantiene al cliente informado.',
+     benefit:{icon:'📋',label:'Beneficio documental',text:'El concesionario deja de perseguir manualmente la aprobación de la marca. El bot lo hace solo. El cliente siempre sabe el estado de su garantía desde su link.'},
+     steps:[{t:'S',w:'Sistema',x:'Verifica vigencia automáticamente al abrir la OT · Cruza km + fecha de compra del CRM'},{t:'A',w:'Asesor',x:'Abre expediente con foto + código de falla DTC · Sistema envía a la marca'},{t:'B',w:'Bot IA',x:'Seguimiento cada 2 días con la marca · WA informativo al cliente cada 3 días'},{t:'F',w:'Resultado',x:'Aprobada: reparación agendada · Rechazada: presupuesto al cliente · Trazabilidad completa'}]},
+    {n:'Diagnóstico · reparación pendiente',
+     desc:'El vehículo sale sin reparar pero el sistema no lo deja en el olvido. El recordatorio automático lo trae de vuelta.',
+     benefit:{icon:'🔁',label:'Beneficio de retención',text:'Sin este flujo el cliente se va y probablemente va a otro taller. Con el recordatorio a 30/60/90 días, la agencia sigue presente hasta que el cliente está listo.'},
+     steps:[{t:'A',w:'Asesor',x:'Diagnóstico realizado · No se puede reparar hoy: sin pieza, garantía pendiente o cliente no autoriza'},{t:'B',w:'Bot IA',x:'WA con resumen del diagnóstico en lenguaje simple, no técnico'},{t:'S',w:'Sistema',x:'Activa el flujo según el motivo: Pieza pendiente / Garantía / Decisión del cliente'},{t:'F',w:'Resultado',x:'Recordatorio automático a 30 / 60 / 90 días · Nada queda en el olvido'}]},
+    {n:'Venta perdida: recuperación',
+     desc:'El cliente rechazó una reparación adicional. Cuando llega el archivo de ventas perdidas, el bot le recuerda y CITAS agenda la llamada de recuperación.',
+     benefit:{icon:'💰',label:'Beneficio de recuperación',text:'Una reparación rechazada no es una oportunidad perdida — es una oportunidad diferida. Este flujo la recupera automáticamente cuando el cliente está listo, sin trabajo extra del asesor.'},
+     steps:[{t:'L',w:'Venta perdida registrada',x:'El cliente no aprobó el trabajo adicional · El CRM registra: reparación, fecha, OT, vehículo y cliente'},{t:'D',w:'Archivo de ventas perdidas',x:'El concesionario genera el archivo de ventas pendientes de recuperar · El sistema lo lee por los medios habituales: Drive, CSV, layout'},{t:'B',w:'Bot IA · contacto automático',x:'"Hola [nombre], hace [X tiempo] detectamos que tu [vehículo] necesitaba [reparación]. Es importante atenderlo. ¿Quieres agendar?" 🔘 Botón: Agendar servicio'},{t:'C',w:'Cliente',x:'Toca el botón "Agendar servicio"'},{t:'B',w:'Bot IA · respuesta inmediata',x:'"Perfecto [nombre], en breve un asesor de citas se pondrá en contacto contigo para confirmar la fecha y hora de tu servicio."'},{t:'K',w:'CRM — acción automática',x:'Crea actividad "Llamada de recuperación" asignada a la encargada de citas con: nombre del cliente, vehículo, descripción de la reparación pendiente'},{t:'E',w:'Encargada de citas',x:'Recibe WA: "Tienes actividad urgente: llamar a [cliente] — ya confirmó que quiere agendar reparación de [descripción]" · Actividad en agenda CRM + Outlook'},{t:'E',w:'Encargada de citas',x:'Llama al cliente · Agenda la cita en CRM · El flujo normal de confirmación y recordatorios toma el control'},{t:'F',w:'Resultado',x:'Venta perdida convertida en cita agendada · Oportunidad recuperada · Historial actualizado en CRM'}],
+     branch:{lbl:'Si el cliente NO responde al WA inicial →',cols:[{bc:'#f59e0b',h:'Sin respuesta · 3 días',b:'Bot reintenta con mensaje diferente'},{bc:'#ef4444',h:'Sin respuesta · 6 días',b:'Actividad en agenda de la encargada: "Llamar directamente a [cliente]" + WA al agente + Outlook'}]}},
+    {n:'CSI post-servicio',
+     desc:'48h después de que el vehículo salió, el sistema actúa según la condición del cliente: WA automático si está feliz, actividad en la agenda de MK si no lo está.',
+     benefit:{icon:'⭐',label:'Beneficio en reputación',text:'Los clientes felices generan reseñas en Google. Los insatisfechos son contactados antes de que su experiencia negativa se publique. El gerente nunca se entera tarde.'},
+     steps:[{t:'D',w:'Archivo post-servicio · 48h',x:'El sistema recibe el archivo con nombre, WA, OT, asesor y condición del cliente'},{t:'S',w:'Sistema',x:'Evalúa la condición de cada cliente del archivo'}],
+     branch:{lbl:'Según la condición del cliente →',cols:[{bc:'#1db870',h:'✅ Cliente feliz',b:'Bot WA automático: "¿Nos dejarías una reseña de tu experiencia? [link]" · Registrado en CRM.'},{bc:'#f43f5e',h:'❌ Cliente no feliz',b:'Actividad en agenda MK: "Llamar a [nombre] · OT #[número]" · WA al agente MK · Outlook sync.'}]},
+     steps2:[{t:'M',w:'MK / Atención al cliente',x:'Ve la actividad en su agenda CRM y en Outlook con todos los datos del cliente'},{t:'M',w:'MK / Atención al cliente',x:'Realiza la llamada · Registra el resultado y las notas'},{t:'F',w:'Resultado',x:'Actividad cerrada · Historial actualizado · Ningún cliente insatisfecho sin contacto'}]},
+  ],
+  rf:[
+    {n:'Maestro de partes',
+     desc:'El asesor busca una pieza y el sistema la encuentra solo — primero en el DMS y si no está, la extrae del portal de la marca con imagen y precio.',
+     benefit:{icon:'🔍',label:'Beneficio operativo',text:'El asesor no tiene que abrir el portal de la marca en otra pestaña ni llamar al almacén. Todo está en el sistema en segundos.'},
+     steps:[{t:'A',w:'Asesor de refacciones',x:'Busca el número de parte en el sistema'},{t:'S',w:'Sistema · Autoline',x:'Consulta el maestro de partes del DMS primero'},{t:'B',w:'Scraping automático',x:'Si no encuentra: consulta el portal de la marca y extrae imagen OEM + número + precio + disponibilidad'},{t:'F',w:'Resultado',x:'Pieza encontrada en segundos · Sin salir del sistema · Registrado en CRM'}]},
+    {n:'Cotización PDF con imagen OEM',
+     desc:'Se genera un PDF profesional con la foto de la pieza, número de parte oficial y precio. Se envía por WA y el sistema sabe si el cliente lo abrió.',
+     benefit:{icon:'📄',label:'Beneficio de confianza',text:'El cliente ve la foto de la pieza real con el número oficial. Genera confianza y acelera la decisión. El asesor sabe si el cliente ya leyó la cotización.'},
+     steps:[{t:'A',w:'Asesor',x:'Genera la cotización con 1 clic · Revisa y aprueba'},{t:'S',w:'Sistema',x:'Genera PDF automático: foto OEM + número de parte + precio + vigencia + logo del concesionario'},{t:'C',w:'Cliente',x:'Recibe el PDF por WA · El sistema detecta si lo abrió (tracking de apertura)'},{t:'F',w:'Resultado',x:'Cotización profesional enviada en segundos · El asesor sabe si fue leída'}]},
+    {n:'Seguimiento de presupuesto',
+     desc:'El bot hace el seguimiento a 24, 48 y 72 horas. Si no responde, crea una tarea en la agenda del asesor.',
+     benefit:{icon:'📈',label:'Beneficio en conversión',text:'Sin seguimiento activo, la mayoría de las cotizaciones mueren. Con el bot, la tasa de conversión sube significativamente sin trabajo extra del asesor.'},
+     steps:[{t:'B',w:'Bot · 24h',x:'"¿Pudiste revisar la cotización que te enviamos?"'},{t:'B',w:'Bot · 48h',x:'Segundo intento con mensaje diferente'},{t:'L',w:'Sin respuesta · 72h',x:'Actividad en agenda del asesor: "Llamar a [cliente] por cotización" + WA recordatorio + Outlook'},{t:'F',w:'Resultado',x:'Aprueba → orden de pedido · Rechaza → recordatorio a 30 días · Ninguna oportunidad perdida'}]},
+  ],
+  ve:[
+    {n:'Captación de lead',
+     desc:'El lead llega por cualquier canal, el bot lo califica en segundos y lo registra en el CRM asignado al asesor correcto.',
+     benefit:{icon:'⚡',label:'Beneficio en velocidad',text:'Respuesta en menos de 60 segundos. El primer concesionario en responder tiene 238% más probabilidad de ganar el negocio.'},
+     steps:[{t:'C',w:'Lead / Prospecto',x:'Contacta por WA, FB, IG o formulario web'},{t:'B',w:'Bot IA',x:'Responde en segundos · Califica la necesidad: ¿servicio, refacción o venta nueva?'},{t:'K',w:'CRM',x:'Crea el lead con: fuente, canal, necesidad · Asigna al asesor correspondiente'},{t:'F',w:'Resultado',x:'Lead en el pipeline · Asesor recibe WA de notificación · Actividad en su agenda'}]},
+    {n:'Seguimiento del pipeline',
+     desc:'El asesor gestiona todos sus leads desde el CRM. El sistema alerta si alguno lleva tiempo sin actualización.',
+     benefit:{icon:'🎯',label:'Beneficio en seguimiento',text:'Ningún lead se pierde. El gerente puede ver el pipeline de todo el equipo en tiempo real y detectar cuellos de botella.'},
+     steps:[{t:'V',w:'Asesor de ventas',x:'Ve su pipeline en CRM: Nuevo → Contactado → Cotizado → Negociando → Cerrado'},{t:'K',w:'CRM',x:'Registra automáticamente cada interacción: llamadas, WA, visitas, cotizaciones'},{t:'B',w:'Bot IA',x:'Si el asesor lleva +X horas sin actualizar el lead → alerta al asesor y al gerente'},{t:'F',w:'Resultado',x:'Ningún lead olvidado · Trazabilidad completa · KPIs de conversión por asesor'}]},
+    {n:'Cruce servicio → venta nueva',
+     desc:'La IA detecta clientes con vehículos candidatos a renovación y sugiere al asesor de ventas la oportunidad en el momento correcto.',
+     benefit:{icon:'🔄',label:'Beneficio de cruce',text:'El historial de servicio convierte en oportunidades de venta. El asesor de ventas no tiene que buscar leads — el CRM los genera internamente.'},
+     steps:[{t:'I',w:'IA',x:'Detecta en CRM: vehículo mayor a 4 años o con alto historial de servicio'},{t:'V',w:'Asesor de ventas',x:'Recibe sugerencia en pantalla con historial completo del cliente y su vehículo'},{t:'B',w:'Bot IA',x:'Si el asesor lo aprueba: WA personalizado con oferta de renovación al cliente'},{t:'F',w:'Resultado',x:'Oportunidad creada en pipeline · Ingreso adicional generado desde el historial de servicio'}]},
+    {n:'Actividades + Outlook sync',
+     desc:'El asesor o el sistema crea actividades de seguimiento que se sincronizan con Outlook y recibe recordatorios por WA.',
+     benefit:{icon:'📅',label:'Beneficio de organización',text:'El asesor nunca olvida una actividad. Tiene el recordatorio en el CRM, en Outlook y en WhatsApp. Todo queda registrado.'},
+     steps:[{t:'K',w:'CRM',x:'Asesor o sistema crea actividad: llamada, visita, cotización, demo'},{t:'B',w:'Bot IA',x:'WA recordatorio al asesor antes de la actividad: "En 30 min: llamada a [cliente]"'},{t:'S',w:'Sistema',x:'Sync automático con Outlook del asesor · Si se modifica en CRM → se actualiza en Outlook'},{t:'V',w:'Asesor de ventas',x:'Realiza la actividad y la marca como completada con notas del resultado'},{t:'F',w:'Resultado',x:'Actividad cerrada · Historial actualizado · Trazabilidad de ventas completa'}]},
+  ],
+  bj:[
+    {n:'Conversación entrante multicanal',
+     desc:'El cliente escribe por cualquier canal y llega al asesor con el historial completo del cliente ya visible.',
+     benefit:{icon:'💬',label:'Beneficio de contexto',text:'El asesor no tiene que preguntar "¿cuál es tu vehículo?" ni buscar el historial. Lo ve todo al instante. Respuesta más rápida y personalizada.'},
+     steps:[{t:'C',w:'Cliente',x:'Escribe por WhatsApp, Facebook, Instagram o Email'},{t:'S',w:'Sistema',x:'El mensaje llega a la bandeja unificada vinculado al expediente del cliente en CRM'},{t:'A',w:'Asesor',x:'Responde desde un solo lugar con todo el historial visible · Sin cambiar de app'},{t:'F',w:'Resultado',x:'Respuesta contextualizada · Conversación registrada en CRM · Historial completo'}]},
+    {n:'Escalación automática 3 niveles',
+     desc:'Si el asesor no actualiza la OT, el sistema escala automáticamente hasta que alguien actúa — y si nadie lo hace, el bot actúa por él.',
+     benefit:{icon:'🛡️',label:'Beneficio de continuidad',text:'El cliente nunca queda sin información. El gerente recibe alertas antes de que el cliente se moleste. El bot es el último recurso — no el primero.'},
+     steps:[{t:'L',w:'4h sin actualizar OT',x:'Nivel 1: bot alerta al asesor por WA y en la app'},{t:'L',w:'+2h sin acción',x:'Nivel 2: alerta al gerente con nombre del asesor y número de expediente'},{t:'B',w:'Bot IA · +1h más',x:'Nivel 3: bot actúa por el asesor · WA al cliente con último estado conocido'},{t:'F',w:'Resultado',x:'El cliente nunca queda sin información · Todo registrado en CRM para auditoría'}]},
+    {n:'Supervisión del Key User',
+     desc:'El gerente ve todas las conversaciones de todos los asesores en tiempo real. Puede intervenir y medir tiempos de respuesta.',
+     benefit:{icon:'👁️',label:'Beneficio de control',text:'El gerente tiene evidencia real de qué se comunicó al cliente y cuándo. Puede intervenir en conversaciones activas y medir el desempeño de su equipo.'},
+     steps:[{t:'G',w:'Key User / Gerente',x:'Accede a la vista de supervisión global en CRM · Ve TODAS las conversaciones'},{t:'S',w:'Sistema',x:'Muestra KPI: tiempo sin respuesta por asesor, por canal y por período'},{t:'G',w:'Gerente',x:'Puede intervenir directamente en cualquier conversación activa'},{t:'F',w:'Resultado',x:'Evidencia real · Auditoría permanente · Datos exportables desde CRM'}]},
+    {n:'Transferencia entre asesores',
+     desc:'Si un asesor sale o se va de vacaciones, el nuevo asesor ve el historial completo. El cliente no nota el cambio.',
+     benefit:{icon:'🤝',label:'Beneficio de continuidad',text:'La relación con el cliente no se interrumpe. El nuevo asesor arranca con todo el contexto. Sin llamar al cliente a preguntar lo que ya dijo antes.'},
+     steps:[{t:'G',w:'Gerente',x:'Selecciona las conversaciones del asesor ausente y las transfiere'},{t:'A',w:'Nuevo asesor',x:'Ve el historial completo + nota de contexto desde el primer mensaje'},{t:'C',w:'Cliente',x:'No nota el cambio · La conversación continúa sin interrupciones'},{t:'F',w:'Resultado',x:'Continuidad sin fricción · Registro de transferencia en CRM para auditoría'}]},
+    {n:'Venta cruzada + alerta garantía',
+     desc:'La IA analiza el historial del vehículo y sugiere al asesor qué vender. Post-servicio, el bot lo hace por WA si el cliente no compró.',
+     benefit:{icon:'📈',label:'Beneficio en ticket',text:'El ticket promedio sube sin que el asesor tenga que memorizar qué necesita cada vehículo. La IA lo hace por él. Y sigue mejorando con cada visita.'},
+     steps:[{t:'I',w:'IA',x:'Analiza historial del vehículo: km, modelo, año, servicios anteriores en CRM'},{t:'A',w:'Asesor',x:'Recibe sugerencia en pantalla al atender: "Este KIA con 48,000km → balatas"'},{t:'B',w:'Bot IA · post-servicio',x:'WA con oferta personalizada al cliente si no compró durante la visita'},{t:'F',w:'Resultado',x:'Ticket promedio más alto · IA mejora sus sugerencias con cada visita'}]},
+  ],
+  crm:[
+    {n:'Perfil único del cliente y vehículo',
+     desc:'Un solo registro por cliente que concentra todo: vehículos, citas, OTs, refacciones, garantías, conversaciones y preferencias.',
+     benefit:{icon:'🎯',label:'Beneficio central',text:'Cualquier asesor en cualquier módulo ve el historial completo al instante. Sin buscar en sistemas separados. Sin preguntar lo que el cliente ya dijo antes.'},
+     steps:[{t:'D',w:'Archivo / DMS / Captura manual',x:'El registro llega por cualquier vía: archivo externo, DMS, captura directa o desde otro módulo'},{t:'K',w:'CRM',x:'Crea un registro único. Si el cliente ya existe por VIN o WA → actualiza, no duplica.'},{t:'K',w:'CRM',x:'Historial del vehículo crece con cada visita: km, servicio, piezas, garantías, asesor'},{t:'F',w:'Resultado',x:'Driver 360 — historial completo disponible en todos los módulos al instante'}]},
+    {n:'Agenda interna + actividades + Outlook',
+     desc:'Cualquier usuario del sistema puede tener actividades asignadas en su agenda del CRM, sincronizadas con Outlook y con recordatorios por WA.',
+     benefit:{icon:'📅',label:'Beneficio de organización',text:'Aplica para todos los usuarios: encargada de citas, asesores, MK, gerencia, ventas. Nadie puede decir que no vio la actividad — la tiene en el CRM, en Outlook y en WhatsApp.'},
+     steps:[{t:'K',w:'CRM',x:'Se crea una actividad y se asigna al usuario: Llamada · Contacto · Seguimiento · Tarea · Reunión'},{t:'B',w:'Bot IA',x:'WA al usuario asignado: "Tienes una actividad pendiente: [descripción] — [hora]"'},{t:'K',w:'CRM',x:'Actividad visible en la agenda personal del usuario con fecha, hora, cliente y descripción'},{t:'S',w:'Sistema',x:'Sync automático con Outlook · Si se modifica o cancela en CRM → se actualiza en Outlook'},{t:'A',w:'Usuario',x:'Realiza la actividad y la marca como completada · Puede agregar notas y resultado'},{t:'F',w:'Resultado',x:'Actividad cerrada · Historial actualizado · Trazabilidad completa de toda la gestión'}]},
+    {n:'Lectura y procesamiento de archivos',
+     desc:'El sistema lee cualquier archivo que le envíen — del DMS, del Drive o de cualquier sistema — y actualiza el CRM automáticamente.',
+     benefit:{icon:'⚙️',label:'Beneficio de integración',text:'Compatible con Salesforce, Seekop, ClearMechanic, Autoline y cualquier sistema que pueda exportar CSV o Excel. Sin necesidad de integración técnica compleja.'},
+     steps:[{t:'D',w:'Archivo externo (Drive / CSV / Excel)',x:'Se recibe el archivo de cualquier sistema: clientes, citas, OTs, encuestas, etc.'},{t:'S',w:'Sistema',x:'Valida: campos obligatorios, duplicados, formato de WA, lada, VIN'},{t:'K',w:'CRM',x:'Procesa registro por registro: crea si no existe, actualiza si ya existe. Sin duplicados.'},{t:'F',w:'Resultado',x:'Datos disponibles en todos los módulos al instante · Sin captura manual doble'}]},
+    {n:'Modelo de actividades vinculadas',
+     desc:'Toda actividad en el CRM — sin importar qué módulo la genera — queda vinculada al usuario, al cliente, al vehículo y a la empresa. El cliente tiene una vista de resumen de toda su historia con el concesionario.',
+     benefit:{icon:'🔗',label:'Beneficio de trazabilidad total',text:'El gerente ve en un solo lugar toda la historia del cliente: citas, OTs, cotizaciones, llamadas, WA, resultados. El asesor nunca tiene que preguntar "¿cuándo fue tu última visita?" El cliente siente que lo conocen.'},
+     steps:[{t:'K',w:'CRM — toda actividad se vincula a',x:'① Usuario asignado → aparece en su agenda y Outlook ② Cliente → queda en su expediente ③ Vehículo → si aplica, trazado en historial del vehículo ④ Empresa → si es flotilla, aparece en el expediente de la empresa'},{t:'B',w:'Bot IA · recordatorio al usuario',x:'WA antes de la actividad: "En 30 min tienes: [tipo] con [cliente] — [descripción]"'},{t:'S',w:'Sistema · Outlook sync',x:'Evento creado/actualizado en el Outlook del usuario asignado · Si se modifica en CRM → se actualiza en Outlook'},{t:'A',w:'Usuario',x:'Realiza la actividad · La marca como completada · Agrega notas y resultado'},{t:'K',w:'CRM · Vista resumen del cliente',x:'Pestaña "Actividades" en el expediente del cliente: cronológica · filtrable por tipo, usuario, fecha y módulo de origen · exportable'},{t:'F',w:'Resultado',x:'Trazabilidad completa de TODA la relación con el cliente · Sin importar qué módulo generó la actividad'}]},
+  ],
+};
+
+// ── PORT HELPER ───────────────────────────────────────────
+function P(id,side){
+  const n=MN[id];const cx=n.x+n.w/2,cy=n.y+n.h/2;
+  if(side==='T')return{x:cx,y:n.y};if(side==='B')return{x:cx,y:n.y+n.h};
+  if(side==='L')return{x:n.x,y:cy};if(side==='R')return{x:n.x+n.w,y:cy};
+  if(side==='TL')return{x:n.x+n.w*.28,y:n.y};if(side==='TR')return{x:n.x+n.w*.72,y:n.y};
+  if(side==='BL')return{x:n.x+n.w*.28,y:n.y+n.h};if(side==='BR')return{x:n.x+n.w*.72,y:n.y+n.h};
+}
+function bez(p1,p2,c1,c2){
+  if(c1&&c2)return`M${p1.x},${p1.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${p2.x},${p2.y}`;
+  const dx=p2.x-p1.x,dy=p2.y-p1.y,ax=Math.abs(dx),ay=Math.abs(dy);
+  let cp1,cp2;
+  if(ax>ay){cp1={x:p1.x+dx*.5,y:p1.y};cp2={x:p2.x-dx*.5,y:p2.y};}
+  else{cp1={x:p1.x,y:p1.y+dy*.5};cp2={x:p2.x,y:p2.y-dy*.5};}
+  return`M${p1.x},${p1.y} C${cp1.x},${cp1.y} ${cp2.x},${cp2.y} ${p2.x},${p2.y}`;
+}
+
+const EDGES=[
+  {f:'ag',fp:'R',t:'crm',tp:'TL',c:MC.ag,d:false,lbl:'Citas → CRM',lx:236,ly:272},
+  {f:'crm',fp:'TL',t:'ag',tp:'R',c:MC.crm,d:true,lbl:'Datos cliente',lx:158,ly:250},
+  {f:'ta',fp:'L',t:'crm',tp:'TR',c:MC.ta,d:false,lbl:'OT → CRM',lx:940,ly:272},
+  {f:'crm',fp:'TR',t:'ta',tp:'L',c:MC.crm,d:true,lbl:'Historial',lx:870,ly:250},
+  {f:'rf',fp:'R',t:'crm',tp:'BL',c:MC.rf,d:false,lbl:'Partes → CRM',lx:256,ly:542},
+  {f:'crm',fp:'BL',t:'rf',tp:'R',c:MC.crm,d:true,lbl:'Maestro',lx:182,ly:568},
+  {f:'ve',fp:'L',t:'crm',tp:'BR',c:MC.ve,d:false,lbl:'Leads → CRM',lx:918,ly:554},
+  {f:'crm',fp:'BR',t:'ve',tp:'L',c:MC.crm,d:true,lbl:'Perfil cliente',lx:904,ly:530},
+  {f:'bj',fp:'T',t:'crm',tp:'B',c:MC.bj,d:false,lbl:'Comunicaciones → CRM',lx:494,ly:568},
+  {f:'crm',fp:'B',t:'bj',tp:'T',c:MC.crm,d:true,lbl:'Bot + bandeja',lx:612,ly:568},
+  {f:'ag',fp:'B',t:'ta',tp:'T',c1:{x:140,y:486},c2:{x:1110,y:108},c:'#2a3548',d:false,lbl:'Vehículo ingresa',lx:350,ly:90},
+  {f:'ta',fp:'B',t:'rf',tp:'T',c1:{x:1110,y:636},c2:{x:140,y:392},c:'#2a3548',d:false,lbl:'Pieza requerida',lx:646,ly:482},
+  {f:'bj',fp:'L',t:'ag',tp:'B',c1:{x:388,y:700},c2:{x:140,y:488},c:MC.bj,d:true,lbl:'Proactivo',lx:210,ly:594},
+  {f:'ta',fp:'B',t:'bj',tp:'R',c1:{x:1110,y:678},c2:{x:748,y:700},c:MC.ta,d:false,lbl:'CSI automático',lx:876,ly:684},
+];
+
+// ── BUILD MAIN NODES ──────────────────────────────────────
+const nl=document.getElementById('nl');
+Object.entries(MN).forEach(([id,n])=>{
+  const d=document.createElement('div');
+  d.className='mnode';d.id='mn-'+id;
+  d.style.cssText=`left:${n.x}px;top:${n.y}px;width:${n.w}px;--mc:${n.c};--mglow:${GLOW[id]}`;
+  const pills=(n.pills||[]).map(p=>p.hi
+    ?`<span class="mn-pill hi" style="--mc:${n.c}">${p.t}</span>`
+    :`<span class="mn-pill">${p.t}</span>`).join('');
+  d.innerHTML=`<div class="mnode-bar" style="background:${n.c}"></div>
+<div class="mnode-inner">
+  <div class="mn-tag"><span class="dot" style="background:${n.c}"></span><span style="color:${n.c}">${n.tag}</span></div>
+  <div class="mn-name">${n.name}</div>
+  ${n.subs.map(s=>`<div class="mn-sub">${s}</div>`).join('')}
+  ${pills?`<div class="mn-pills">${pills}</div>`:''}
+</div>`;
+  d.addEventListener('click',()=>zoomModule(id));
+  nl.appendChild(d);
+});
+
+// ── BUILD MAIN SVG EDGES ──────────────────────────────────
+const svg=document.getElementById('svgl');
+let defs='<defs>';
+Object.entries(MC).forEach(([k,v])=>{
+  defs+=`<marker id="m${k}" markerWidth="7" markerHeight="5" refX="6.5" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="${v}" opacity=".8"/></marker>`;
+});
+defs+=`<marker id="mgray" markerWidth="7" markerHeight="5" refX="6.5" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#3a4556"/></marker></defs>`;
+svg.innerHTML=defs;
+const elblLayer=nl;
+EDGES.forEach(e=>{
+  const p1=P(e.f,e.fp),p2=P(e.t,e.tp);if(!p1||!p2)return;
+  const path=e.c1?bez(p1,p2,e.c1,e.c2):bez(p1,p2);
+  const gray=e.c==='#2a3548';
+  const mk=gray?'mgray':'m'+e.t;
+  const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.className='main-edge';
+  g.innerHTML=`<path d="${path}" fill="none" stroke="${e.c}" stroke-width="${e.d?1:1.5}" ${e.d?'stroke-dasharray="6 4"':''} marker-end="url(#${mk})" opacity="${e.d?.4:.7}"/>`;
+  svg.appendChild(g);
+  if(!e.d&&e.lbl){
+    const div=document.createElement('div');
+    div.className='elbl main-elbl';
+    div.style.cssText=`left:${e.lx||0}px;top:${e.ly||0}px`;
+    div.textContent=e.lbl;
+    elblLayer.appendChild(div);
+  }
+});
+
+// ── ZOOM INTO MODULE ──────────────────────────────────────
+let currentModule=null;
+let tx=28,ty=18,sc=.80;
+
+function zoomModule(id){
+  currentModule=id;
+  const n=MN[id];
+  const cw=document.getElementById('cw');
+  const cwW=cw.clientWidth, cwH=cw.clientHeight;
+
+  // highlight selected, dim others
+  document.querySelectorAll('.mnode').forEach(el=>{
+    const eid=el.id.replace('mn-','');
+    el.classList.toggle('dimmed',eid!==id);
+    el.classList.toggle('highlighted',eid===id);
+  });
+  document.querySelectorAll('.main-edge,.main-elbl').forEach(el=>el.style.opacity='0.06');
+
+  // compute target transform to center the selected node
+  const targetSc=Math.min(cwW/(n.w+320), cwH/(n.h+120), 1.05);
+  const targetTx=cwW/2-(n.x+n.w/2)*targetSc;
+  const targetTy=cwH/2-(n.y+n.h/2)*targetSc - 60;
+
+  // animate pan+scale
+  animateTo(targetTx, targetTy, targetSc, 500, ()=>{
+    buildFlowLayer(id, n);
+    document.getElementById('flow-layer').classList.add('vis');
+  });
+
+  // toolbar
+  document.getElementById('btn-back').classList.add('vis');
+  document.getElementById('breadcrumb').innerHTML=`Mapa general &rsaquo; <span>${n.name}</span>`;
+  document.getElementById('mod-hint').classList.add('hidden');
+  document.getElementById('cw').classList.add('browse');
+}
+
+function goBack(){
+  currentModule=null;
+  document.getElementById('flow-layer').classList.remove('vis');
+  document.querySelectorAll('.mnode').forEach(el=>{el.classList.remove('dimmed','highlighted');});
+  document.querySelectorAll('.main-edge,.main-elbl').forEach(el=>el.style.opacity='');
+  animateTo(28,18,.80,400);
+  document.getElementById('btn-back').classList.remove('vis');
+  document.getElementById('breadcrumb').textContent='Mapa general';
+  document.getElementById('mod-hint').classList.remove('hidden');
+  document.getElementById('cw').classList.remove('browse');
+  setTimeout(()=>{
+    document.getElementById('flow-nodes').innerHTML='';
+    document.getElementById('flow-svg').innerHTML='';
+  },420);
+}
+
+// ── BUILD FLOW CARDS LAYER ────────────────────────────────
+function buildFlowLayer(id, mnode){
+  const flowSvg=document.getElementById('flow-svg');
+  const flowNodes=document.getElementById('flow-nodes');
+  flowNodes.innerHTML=''; flowSvg.innerHTML='';
+
+  const flows=FLOWS[id]||[];
+  const color=MC[id];
+  const cw=document.getElementById('cw');
+  const cwW=cw.clientWidth, cwH=cw.clientHeight;
+  const sc2=parseFloat(document.getElementById('canvas').style.transform.match(/scale\(([^)]+)\)/)?.[1]||0.8);
+
+  // Module node center in screen coords
+  const nx=(mnode.x+mnode.w/2)*sc2+parseFloat(document.getElementById('canvas').style.transform.match(/translate\(([^,]+)/)?.[1]||28);
+  const ny=(mnode.y+mnode.h/2)*sc2+parseFloat(document.getElementById('canvas').style.transform.match(/,([^p]+)px/)?.[1]||18);
+
+  // Flow card dimensions
+  const CARD_W=310;
+  const cols=Math.min(3, flows.length);
+  const totalW=cols*CARD_W+(cols-1)*24;
+  const startX=(cwW-totalW)/2;
+
+  // SVG for connectors
+  const svgEl=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svgEl.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none';
+  const defs2=document.createElementNS('http://www.w3.org/2000/svg','defs');
+  const mk=document.createElementNS('http://www.w3.org/2000/svg','marker');
+  mk.setAttribute('id','flarr');mk.setAttribute('markerWidth','7');mk.setAttribute('markerHeight','5');
+  mk.setAttribute('refX','6.5');mk.setAttribute('refY','2.5');mk.setAttribute('orient','auto');
+  const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  poly.setAttribute('points','0 0,7 2.5,0 5');poly.setAttribute('fill',color);poly.setAttribute('opacity','.7');
+  mk.appendChild(poly);defs2.appendChild(mk);svgEl.appendChild(defs2);
+  flowSvg.appendChild(svgEl);
+
+  flows.forEach((f,i)=>{
+    const col=i%cols, row=Math.floor(i/cols);
+    const cx=startX+col*(CARD_W+24);
+    const baseY=cwH*.14;
+    const cy=baseY+row*(cwH*.53);
+
+    // Draw connector from module center to card
+    const cardCenterX=cx+CARD_W/2;
+    const cardTopY=cy;
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    const dy=cardTopY-ny;
+    const pathD=`M${nx},${ny} C${nx},${ny+dy*.4} ${cardCenterX},${cardTopY-dy*.3} ${cardCenterX},${cardTopY}`;
+    path.setAttribute('d',pathD);
+    path.setAttribute('fill','none');
+    path.setAttribute('stroke',color);
+    path.setAttribute('stroke-width','1.5');
+    path.setAttribute('stroke-dasharray','6 4');
+    path.setAttribute('opacity','0.5');
+    path.setAttribute('marker-end','url(#flarr)');
+    svgEl.appendChild(path);
+
+    // Build card
+    const card=document.createElement('div');
+    card.className='fcard';
+    card.style.cssText=`left:${cx}px;top:${cy}px;width:${CARD_W}px;max-height:${cwH*.48}px;overflow-y:auto`;
+    card.style.setProperty('--bc',color+'40');
+    card.style.setProperty('--bbg',color+'0d');
+    card.style.setProperty('--btc',color);
+
+    // steps
+    const allSteps=[...(f.steps||[]),...(f.steps2||[])];
+    const stepsHtml=allSteps.map(s=>{
+      const ts=ST[s.t]||ST.A;
+      return`<div class="fstep">
+<div class="fstep-dot" style="background:${ts.c}">${s.t}</div>
+<div>
+  <div class="fstep-who" style="color:${ts.c}">${s.w||ts.n}</div>
+  <div class="fstep-what">${s.x}</div>
+</div></div>`;
+    }).join('');
+
+    // branch
+    let branchHtml='';
+    if(f.branch){
+      branchHtml=`<div class="fcard-branch">
+<div class="fcard-branch-lbl">${f.branch.lbl}</div>
+<div class="fcard-branch-row">${f.branch.cols.map(c=>`<div class="fcard-bcard" style="border-color:${c.bc}40;background:${c.bc}08"><div class="fcard-bcard-h" style="color:${c.bc}">${c.h}</div><div class="fcard-bcard-b">${c.b}</div></div>`).join('')}</div>
+</div>`;
+    }
+
+    card.innerHTML=`<div class="fcard-bar" style="background:${color}"></div>
+<div class="fcard-head">
+  <div class="fcard-num" style="color:${color}">F${String(i+1).padStart(2,'0')} · ${id.toUpperCase()}</div>
+  <div class="fcard-title">${f.n}</div>
+  <div class="fcard-desc">${f.desc}</div>
+</div>
+<div class="fcard-steps">${stepsHtml}</div>
+${branchHtml}
+<div class="fcard-benefit">
+  <span class="fcard-benefit-icon">${f.benefit.icon}</span>
+  <div>
+    <div class="fcard-benefit-label" style="color:${color}">${f.benefit.label}</div>
+    <div class="fcard-benefit-text">${f.benefit.text}</div>
+  </div>
+</div>`;
+
+    card.style.scrollbarWidth='thin';
+    card.style.scrollbarColor=`${color}40 transparent`;
+    flowNodes.appendChild(card);
+  });
+}
+
+// ── PAN / ZOOM ────────────────────────────────────────────
+let drag=false,sx=0,sy=0,ox=0,oy=0;
+const cw=document.getElementById('cw');
+const cv=document.getElementById('canvas');
+const applyT=()=>cv.style.transform=`translate(${tx}px,${ty}px) scale(${sc})`;
+applyT();
+
+cw.addEventListener('mousedown',e=>{
+  if(currentModule)return;
+  if(!e.target.closest('.mnode')){drag=true;sx=e.clientX;sy=e.clientY;ox=tx;oy=ty;cw.classList.add('drag');}
+});
+window.addEventListener('mousemove',e=>{if(!drag)return;tx=ox+(e.clientX-sx);ty=oy+(e.clientY-sy);applyT();});
+window.addEventListener('mouseup',()=>{drag=false;cw.classList.remove('drag');});
+cw.addEventListener('wheel',e=>{
+  if(currentModule)return;
+  e.preventDefault();sc=Math.max(.3,Math.min(1.8,sc+(e.deltaY<0?.08:-.08)));applyT();
+},{passive:false});
+function zoom(d){if(currentModule)return;sc=Math.max(.3,Math.min(1.8,sc+d));applyT();}
+function resetV(){if(currentModule)goBack();tx=28;ty=18;sc=.80;applyT();}
+
+// smooth animation
+function animateTo(ttx,tty,tsc,dur,cb){
+  const startTx=tx,startTy=ty,startSc=sc;
+  const t0=performance.now();
+  function step(now){
+    const p=Math.min((now-t0)/dur,1);
+    const e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2; // ease in-out
+    tx=startTx+(ttx-startTx)*e;
+    ty=startTy+(tty-startTy)*e;
+    sc=startSc+(tsc-startSc)*e;
+    applyT();
+    if(p<1)requestAnimationFrame(step);
+    else if(cb)cb();
+  }
+  requestAnimationFrame(step);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import pdfplumber; pdf = pdfplumber.open\\(''''000CRM_022_Escritorio Avanzado en Autoline.pdf''''\\); print\\(pdf.pages[0].extract_text\\(\\)[:500]\\)\")",
+      "Bash(node -e \"console.log\\(''ok''\\)\")",
+      "Bash(node -e \"const fs = require\\(''''fs''''\\); const path = ''''Documentos Otrso DMS/000CRM_022_Escritorio Avanzado en Autoline.pdf''''; const buf = fs.readFileSync\\(path\\); const text = buf.toString\\(''''latin1''''\\).replace\\(/[^\\\\x20-\\\\x7E\\\\n\\\\r]/g, '''' ''''\\).replace\\(/ {3,}/g, '''' ''''\\); const lines = text.split\\(''''\\\\n''''\\).filter\\(l => l.trim\\(\\).length > 5\\).slice\\(0,100\\); console.log\\(lines.join\\(''''\\\\n''''\\)\\);\")",
+      "Bash(node -e \"try { require\\(''pdf-parse''\\); console.log\\(''ok''\\); } catch\\(e\\) { console.log\\(''not found''\\); }\")",
+      "Bash(where pdftotext:*)",
+      "Bash(where mutool:*)",
+      "Bash('BASE=C:/Users/Miguel Abascal/Documents/Proyectos/ServiceTrack/Documentos Otrso DMS')",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(pdftotext $BASE/$f -)",
+      "Bash(done)",
+      "Bash(pdftotext \"$BASE/Extended insurance section \\(Español\\).pdf\" -)",
+      "Bash(pdftotext '$BASE/000CRM_022_Escritorio Avanzado en Autoline.pdf' -)",
+      "Bash(pdftotext '$BASE/000CRM_027_Datos extra de clientes.pdf' -)",
+      "Bash(pdftotext '$BASE/000CRM_030_Plantillas de cartas a clientes.pdf' -)",
+      "Bash(grep -v \"^$\")",
+      "Bash(pdftotext $BASE/000_CRM008_Creacion_de_encuestas.pdf -)",
+      "Bash(pdftotext $BASE/000_CRM009_CRM_MI_ESCRITORIO.pdf -)",
+      "Bash(pdftotext '$BASE/000RAP_CRM001_Mi Escritorio.docx.pdf' -)",
+      "Bash(pdftotext '$BASE/000_CRM012_Evaluación de Usuarios - CRM  SR SureStart RESPUESTAS.pdf' -)",
+      "Bash(pdftotext '$BASE/000SER_002_Nueva funcionalidad  de departamentos-Usuarios.pdf' -)"
+    ]
+  }
+}
+
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
+    "ANTHROPIC_AUTH_TOKEN": "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",
+    "ANTHROPIC_API_KEY": "",
+    "ANTHROPIC_MODEL": "openrouter/free"
+  }
+}

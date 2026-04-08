@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>ServiceTrack — Schema v2.0</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 32px;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    color: #58a6ff;
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #8b949e;
+    font-size: 13px;
+    margin-bottom: 40px;
+  }
+
+  /* ── LAYOUT ── */
+  .diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* ── TIER ROWS ── */
+  .tier {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    position: relative;
+  }
+  .tier-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #8b949e;
+    text-transform: uppercase;
+    width: 24px;
+    flex-shrink: 0;
+    align-self: center;
+    margin-right: 12px;
+  }
+  .tier-tables {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    flex: 1;
+    align-items: flex-start;
+  }
+
+  /* ── TABLE CARDS ── */
+  .table-card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    min-width: 220px;
+    overflow: hidden;
+    position: relative;
+  }
+  .table-card .header {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .table-card .header .icon { font-size: 15px; }
+  .table-card .fields {
+    padding: 6px 0 10px;
+  }
+  .field {
+    padding: 3px 14px;
+    font-size: 11.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #c9d1d9;
+    line-height: 1.5;
+  }
+  .field.pk { color: #f1c40f; font-weight: 600; }
+  .field.fk { color: #58a6ff; }
+  .field.unique { color: #7ee787; }
+  .field.important { color: #e6edf3; font-weight: 500; }
+  .field.new { color: #79c0ff; }
+  .badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+  .badge.pk { background: #3d2e00; color: #f1c40f; }
+  .badge.fk { background: #0d2044; color: #79c0ff; }
+  .badge.uq { background: #0d3318; color: #7ee787; }
+  .badge.new { background: #1a3a1a; color: #7ee787; }
+  .badge.changed { background: #2a1a00; color: #f0883e; }
+
+  /* ── COLORS PER MODULE ── */
+  .tier-tenant .table-card .header { background: #1c2128; border-bottom: 2px solid #388bfd; }
+  .tier-tenant .table-card { border-color: #21262d; }
+
+  .c-grupos .header { background: linear-gradient(135deg, #1a2a4a, #162032); border-bottom: 2px solid #388bfd !important; }
+  .c-rs .header { background: linear-gradient(135deg, #192032, #12192c); border-bottom: 2px solid #58a6ff !important; }
+  .c-visibilidad .header { background: linear-gradient(135deg, #1c1a2e, #14121e); border-bottom: 2px solid #8957e5 !important; }
+
+  .c-sucursales .header { background: linear-gradient(135deg, #1b2a1b, #141e14); border-bottom: 2px solid #3fb950 !important; }
+  .c-usuarios .header { background: linear-gradient(135deg, #1e1e28, #161620); border-bottom: 2px solid #6e7681 !important; }
+
+  .c-clientes .header { background: linear-gradient(135deg, #1e2a1a, #162012); border-bottom: 2px solid #1db870 !important; }
+  .c-empresas .header { background: linear-gradient(135deg, #1e251a, #16201a); border-bottom: 2px solid #56d364 !important; }
+  .c-vehiculos .header { background: linear-gradient(135deg, #1c201a, #141812); border-bottom: 2px solid #adbac7 !important; }
+
+  .c-citas .header { background: linear-gradient(135deg, #1a2e1a, #122212); border-bottom: 2px solid #1db870 !important; }
+  .c-ot .header { background: linear-gradient(135deg, #241828, #1a1020); border-bottom: 2px solid #8b5cf6 !important; }
+  .c-piezas .header { background: linear-gradient(135deg, #2a2210, #1e1a0c); border-bottom: 2px solid #f59e0b !important; }
+  .c-ventas .header { background: linear-gradient(135deg, #2a1418, #201010); border-bottom: 2px solid #f43f5e !important; }
+  .c-cotizaciones .header { background: linear-gradient(135deg, #2a1e10, #1e1808); border-bottom: 2px solid #fb923c !important; }
+
+  .c-actividades .header { background: linear-gradient(135deg, #101e2a, #0c1620); border-bottom: 2px solid #06b6d4 !important; }
+  .c-mensajes .header { background: linear-gradient(135deg, #101c2a, #0c1420); border-bottom: 2px solid #38bdf8 !important; }
+  .c-leads .header { background: linear-gradient(135deg, #2a1014, #200c10); border-bottom: 2px solid #fb7185 !important; }
+
+  .c-archivos .header { background: linear-gradient(135deg, #1c1c1c, #141414); border-bottom: 2px solid #6e7681 !important; }
+  .c-notif .header { background: linear-gradient(135deg, #1c1c1c, #141414); border-bottom: 2px solid #484f58 !important; }
+  .c-maestro .header { background: linear-gradient(135deg, #2a221a, #1e1814); border-bottom: 2px solid #d4a72c !important; }
+
+  /* ── ARROWS / CONNECTORS ── */
+  .connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0 4px;
+    color: #484f58;
+    font-size: 18px;
+    align-self: center;
+  }
+  .arrow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin: -16px 0;
+    position: relative;
+    z-index: 1;
+  }
+  .arrow-down {
+    color: #484f58;
+    font-size: 22px;
+    text-align: center;
+  }
+
+  /* ── SECTION DIVIDERS ── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0 4px;
+  }
+  .section-header h2 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #484f58;
+    white-space: nowrap;
+  }
+  .section-line {
+    flex: 1;
+    height: 1px;
+    background: #21262d;
+  }
+
+  /* ── LEGEND ── */
+  .legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 32px auto 0;
+    padding: 16px 24px;
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    max-width: 700px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #8b949e;
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ── CHANGE NOTES ── */
+  .changes {
+    max-width: 700px;
+    margin: 24px auto 0;
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .changes h3 {
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #f0883e;
+    margin-bottom: 10px;
+  }
+  .change-item {
+    font-size: 12px;
+    color: #8b949e;
+    padding: 4px 0;
+    border-bottom: 1px solid #21262d;
+    display: flex;
+    gap: 8px;
+  }
+  .change-item:last-child { border-bottom: none; }
+  .change-item .tag {
+    background: #2a1a00;
+    color: #f0883e;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 700;
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin-top: 1px;
+  }
+  .change-item .tag.add { background: #0d3318; color: #7ee787; }
+
+  /* ── FLOW ARROWS (SVG) ── */
+  .flow-line {
+    width: 100%;
+    height: 32px;
+    overflow: visible;
+    display: block;
+  }
+  .mid-connector {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 28px;
+    color: #30363d;
+    font-size: 20px;
+  }
+</style>
+</head>
+<body>
+
+<h1>ServiceTrack — Schema v2.0</h1>
+<p class="subtitle">Multi-tenant: Grupo → Razón Social → Sucursal · Clientes universales por Grupo · RLS por visibilidad</p>
+
+<div class="diagram">
+
+  <!-- ══ TIER: MULTI-TENANT ══ -->
+  <div>
+    <div class="section-header">
+      <div class="section-line"></div>
+      <h2>Jerarquía Multi-Tenant</h2>
+      <div class="section-line"></div>
+    </div>
+    <div class="tier tier-tenant">
+      <div class="tier-label">Tenant</div>
+      <div class="tier-tables">
+
+        <!-- GRUPOS -->
+        <div class="table-card c-grupos">
+          <div class="header"><span class="icon">🏢</span> grupos <span class="badge new">NEW</span></div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field important">nombre</div>
+            <div class="field">logo_url</div>
+            <div class="field">activo</div>
+          </div>
+        </div>
+
+        <div class="connector">→</div>
+
+        <!-- RAZONES SOCIALES -->
+        <div class="table-card c-rs">
+          <div class="header"><span class="icon">🏛</span> razones_sociales <span class="badge new">NEW</span></div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> grupo_id → grupos</div>
+            <div class="field important">nombre</div>
+            <div class="field important">razon_social (fiscal)</div>
+            <div class="field">rfc</div>
+            <div class="field">activa</div>
+          </div>
+        </div>
+
+        <div class="connector">→</div>
+
+        <!-- SUCURSALES -->
+        <div class="table-card c-sucursales">
+          <div class="header"><span class="icon">🏪</span> sucursales <span class="badge changed">CHANGED</span></div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk new"><span class="badge fk">FK</span> razon_social_id → rs <span class="badge new">NEW</span></div>
+            <div class="field important">nombre</div>
+            <div class="field new">codigo (MB1, H2…) <span class="badge new">NEW</span></div>
+            <div class="field">marca</div>
+            <div class="field">maps_url</div>
+            <div class="field">horario_bot 08:00–19:30</div>
+          </div>
+        </div>
+
+        <div class="connector" style="color:#8957e5; font-size:14px; writing-mode:horizontal-tb">↕</div>
+
+        <!-- CONFIGURACION VISIBILIDAD -->
+        <div class="table-card c-visibilidad">
+          <div class="header"><span class="icon">🔐</span> configuracion_visibilidad <span class="badge new">NEW</span></div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> grupo_id → grupos</div>
+            <div class="field fk"><span class="badge fk">FK</span> rs_origen_id → razones_sociales</div>
+            <div class="field fk"><span class="badge fk">FK</span> rs_destino_id → razones_sociales</div>
+            <div class="field unique"><span class="badge uq">UQ</span> (rs_origen, rs_destino)</div>
+            <div class="field">puede_ver_clientes BOOL</div>
+            <div class="field">puede_ver_actividades BOOL</div>
+            <div class="field">puede_ver_citas BOOL</div>
+            <div class="field">puede_ver_ots BOOL</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="mid-connector">↓</div>
+
+  <!-- ══ TIER: USUARIOS ══ -->
+  <div>
+    <div class="section-header">
+      <div class="section-line"></div>
+      <h2>Acceso y Usuarios</h2>
+      <div class="section-line"></div>
+    </div>
+    <div class="tier">
+      <div class="tier-label">Auth</div>
+      <div class="tier-tables">
+        <div class="table-card c-usuarios">
+          <div class="header"><span class="icon">👤</span> usuarios</div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id → auth.users</div>
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id → sucursales</div>
+            <div class="field important">nombre, apellido, email</div>
+            <div class="field important">rol (admin|gerente|asesor…)</div>
+            <div class="field">outlook_refresh_token</div>
+            <div class="field">outlook_calendar_id</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mid-connector">↓</div>
+
+  <!-- ══ TIER: CRM BASE ══ -->
+  <div>
+    <div class="section-header">
+      <div class="section-line"></div>
+      <h2>CRM — Driver 360 (universales por Grupo)</h2>
+      <div class="section-line"></div>
+    </div>
+    <div class="tier">
+      <div class="tier-label">CRM</div>
+      <div class="tier-tables">
+
+        <!-- EMPRESAS -->
+        <div class="table-card c-empresas">
+          <div class="header"><span class="icon">🏭</span> empresas <span class="badge changed">CHANGED</span></div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk new"><span class="badge fk">FK</span> grupo_id → grupos <span class="badge changed">CHANGED</span></div>
+            <div class="field fk new"><span class="badge fk">FK</span> sucursal_origen_id <span class="badge new">NEW</span></div>
+            <div class="field">razon_social, rfc</div>
+            <div class="field">contacto_nombre, cargo</div>
+          </div>
+        </div>
+
+        <!-- CLIENTES -->
+        <div class="table-card c-clientes">
+          <div class="header"><span class="icon">🧑‍💼</span> clientes <span class="badge changed">CHANGED</span></div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk new"><span class="badge fk">FK</span> grupo_id → grupos <span class="badge changed">CHANGED</span></div>
+            <div class="field fk new"><span class="badge fk">FK</span> sucursal_origen_id <span class="badge new">NEW</span></div>
+            <div class="field fk"><span class="badge fk">FK</span> empresa_id → empresas</div>
+            <div class="field fk"><span class="badge fk">FK</span> asesor_asignado_id → usuarios</div>
+            <div class="field important">nombre, apellido</div>
+            <div class="field important">whatsapp (campo clave)</div>
+            <div class="field unique"><span class="badge uq">UQ</span> (grupo_id, whatsapp) <span class="badge changed">CHANGED</span></div>
+            <div class="field">tipo, canal_preferido, rfc</div>
+            <div class="field">id_dms (Autoline)</div>
+          </div>
+        </div>
+
+        <!-- VEHÍCULOS -->
+        <div class="table-card c-vehiculos">
+          <div class="header"><span class="icon">🚗</span> vehiculos</div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> cliente_id → clientes</div>
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id → sucursales</div>
+            <div class="field important">vin, placa</div>
+            <div class="field unique"><span class="badge uq">UQ</span> vin (global)</div>
+            <div class="field">marca, modelo, anio</div>
+            <div class="field">km_actuales, garantia</div>
+            <div class="field">id_dms (Autoline)</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="mid-connector">↓</div>
+
+  <!-- ══ TIER: OPERACIONES ══ -->
+  <div>
+    <div class="section-header">
+      <div class="section-line"></div>
+      <h2>Operaciones (por Sucursal)</h2>
+      <div class="section-line"></div>
+    </div>
+    <div class="tier">
+      <div class="tier-label">Ops</div>
+      <div class="tier-tables">
+
+        <!-- CITAS -->
+        <div class="table-card c-citas">
+          <div class="header"><span class="icon">📅</span> citas — KANBAN ⭐</div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id → sucursales</div>
+            <div class="field fk"><span class="badge fk">FK</span> cliente_id → clientes</div>
+            <div class="field fk"><span class="badge fk">FK</span> vehiculo_id → vehiculos</div>
+            <div class="field fk"><span class="badge fk">FK</span> encargada_citas_id → usuarios</div>
+            <div class="field important">estado (5 columnas Kanban)</div>
+            <div class="field important">fecha_cita</div>
+            <div class="field" style="color:#f59e0b">⏱ contacto_asignado_at</div>
+            <div class="field" style="color:#f59e0b">⏱ contacto_limite_at (+15 min)</div>
+            <div class="field">contacto_bot BOOL</div>
+            <div class="field">recordatorio_24h / 2h</div>
+            <div class="field">confirmacion_cliente</div>
+          </div>
+        </div>
+
+        <!-- OT -->
+        <div class="table-card c-ot">
+          <div class="header"><span class="icon">🔧</span> ordenes_trabajo</div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id → sucursales</div>
+            <div class="field fk"><span class="badge fk">FK</span> cliente_id → clientes</div>
+            <div class="field fk"><span class="badge fk">FK</span> cita_id → citas</div>
+            <div class="field important">numero_ot</div>
+            <div class="field unique"><span class="badge uq">UQ</span> numero_ot</div>
+            <div class="field important">estado (recibido → entregado)</div>
+            <div class="field">nivel_escalacion (0→3)</div>
+            <div class="field" style="color:#06b6d4">token_seguimiento (público)</div>
+            <div class="field">csi_calificacion 1-10</div>
+            <div class="field">condicion_csi</div>
+          </div>
+        </div>
+
+        <!-- PIEZAS -->
+        <div class="table-card c-piezas">
+          <div class="header"><span class="icon">🔩</span> piezas_ot</div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> ot_id → ordenes_trabajo</div>
+            <div class="field fk"><span class="badge fk">FK</span> cliente_id → clientes</div>
+            <div class="field important">numero_parte, descripcion</div>
+            <div class="field important">estado (pendiente→instalada)</div>
+            <div class="field">eta (fecha llegada)</div>
+            <div class="field">wa_llegada_enviado BOOL</div>
+            <div class="field">cliente_respondio_agendar</div>
+          </div>
+        </div>
+
+        <!-- VENTAS PERDIDAS -->
+        <div class="table-card c-ventas">
+          <div class="header"><span class="icon">💸</span> ventas_perdidas</div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id → sucursales</div>
+            <div class="field fk"><span class="badge fk">FK</span> ot_id → ordenes_trabajo</div>
+            <div class="field fk"><span class="badge fk">FK</span> cliente_id → clientes</div>
+            <div class="field important">descripcion_reparacion</div>
+            <div class="field important">monto_rechazado</div>
+            <div class="field">estado (detectada→cerrada)</div>
+            <div class="field">cliente_interesado BOOL</div>
+            <div class="field">cita_recuperacion_id</div>
+          </div>
+        </div>
+
+        <!-- COTIZACIONES -->
+        <div class="table-card c-cotizaciones">
+          <div class="header"><span class="icon">📋</span> cotizaciones</div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id → sucursales</div>
+            <div class="field fk"><span class="badge fk">FK</span> cliente_id → clientes</div>
+            <div class="field fk"><span class="badge fk">FK</span> ot_id → ordenes_trabajo</div>
+            <div class="field important">numero_cotizacion</div>
+            <div class="field important">estado (borrador→aprobada)</div>
+            <div class="field">total, moneda</div>
+            <div class="field">abierta_por_cliente BOOL</div>
+            <div class="field">seguimiento_24h/48h/72h</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="mid-connector">↓</div>
+
+  <!-- ══ TIER: HUB / COMUNICACIONES ══ -->
+  <div>
+    <div class="section-header">
+      <div class="section-line"></div>
+      <h2>Hub Universal — Actividades + Comunicaciones + Pipeline</h2>
+      <div class="section-line"></div>
+    </div>
+    <div class="tier">
+      <div class="tier-label">Hub</div>
+      <div class="tier-tables">
+
+        <!-- ACTIVIDADES -->
+        <div class="table-card c-actividades" style="min-width:260px">
+          <div class="header"><span class="icon">⚡</span> actividades <span class="badge changed">CHANGED</span></div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id → sucursales</div>
+            <div class="field fk"><span class="badge fk">FK</span> usuario_asignado_id → usuarios</div>
+            <div class="field fk"><span class="badge fk">FK</span> cliente_id → clientes</div>
+            <div class="field fk">+ vehiculo, empresa, ot, cita…</div>
+            <div class="field new" style="color:#7ee787"><span class="badge new">NEW</span> entidad_tipo (cita|ot|lead…)</div>
+            <div class="field new" style="color:#7ee787"><span class="badge new">NEW</span> entidad_id (UUID lookup)</div>
+            <div class="field important">tipo (llamada|wa|tarea…)</div>
+            <div class="field important">estado, prioridad</div>
+            <div class="field">modulo_origen</div>
+            <div class="field">outlook_event_id</div>
+            <div class="field">wa_enviado, email_enviado</div>
+          </div>
+        </div>
+
+        <!-- MENSAJES -->
+        <div class="table-card c-mensajes">
+          <div class="header"><span class="icon">💬</span> mensajes</div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id → sucursales</div>
+            <div class="field fk"><span class="badge fk">FK</span> cliente_id → clientes</div>
+            <div class="field fk"><span class="badge fk">FK</span> usuario_asesor_id → usuarios</div>
+            <div class="field important">canal (WA|FB|IG|email)</div>
+            <div class="field important">direccion (entrante|saliente)</div>
+            <div class="field">enviado_por_bot BOOL</div>
+            <div class="field">estado_entrega</div>
+          </div>
+        </div>
+
+        <!-- LEADS -->
+        <div class="table-card c-leads">
+          <div class="header"><span class="icon">🎯</span> leads</div>
+          <div class="fields">
+            <div class="field pk"><span class="badge pk">PK</span> id (UUID)</div>
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id → sucursales</div>
+            <div class="field fk"><span class="badge fk">FK</span> cliente_id → clientes</div>
+            <div class="field fk"><span class="badge fk">FK</span> asesor_id → usuarios</div>
+            <div class="field important">estado (nuevo→cerrado)</div>
+            <div class="field">necesidad, vehiculo_interes</div>
+            <div class="field">horas_sin_actualizar</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="mid-connector">↓</div>
+
+  <!-- ══ TIER: SOPORTE / SISTEMA ══ -->
+  <div>
+    <div class="section-header">
+      <div class="section-line"></div>
+      <h2>Sistema — Importaciones, Partes, Notificaciones</h2>
+      <div class="section-line"></div>
+    </div>
+    <div class="tier">
+      <div class="tier-label">Sys</div>
+      <div class="tier-tables">
+
+        <div class="table-card c-archivos">
+          <div class="header"><span class="icon">📂</span> archivos_importados</div>
+          <div class="fields">
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id, usuario_id</div>
+            <div class="field">tipo (citas|ot|csi|clientes)</div>
+            <div class="field">fuente (csv|excel|autoline)</div>
+            <div class="field">creados / actualizados / errores</div>
+          </div>
+        </div>
+
+        <div class="table-card c-maestro">
+          <div class="header"><span class="icon">📦</span> maestro_partes</div>
+          <div class="fields">
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id</div>
+            <div class="field unique"><span class="badge uq">UQ</span> (sucursal, numero_parte)</div>
+            <div class="field">descripcion, precio_lista</div>
+            <div class="field">imagen_oem_url</div>
+          </div>
+        </div>
+
+        <div class="table-card c-notif">
+          <div class="header"><span class="icon">⏰</span> notificaciones_encoladas</div>
+          <div class="fields">
+            <div class="field fk"><span class="badge fk">FK</span> sucursal_id, cliente_id</div>
+            <div class="field">tipo (wa|email)</div>
+            <div class="field">enviar_at (8am día siguiente)</div>
+            <div class="field">estado (encolada|enviada)</div>
+          </div>
+        </div>
+
+        <div class="table-card c-cotizaciones" style="min-width:190px">
+          <div class="header"><span class="icon">📝</span> cotizacion_items</div>
+          <div class="fields">
+            <div class="field fk"><span class="badge fk">FK</span> cotizacion_id</div>
+            <div class="field">numero_parte, descripcion</div>
+            <div class="field">cantidad, precio_unitario</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- /diagram -->
+
+<!-- ══ LEGEND ══ -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#f1c40f"></div>PK — Primary Key</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>FK — Foreign Key</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#7ee787"></div>UQ — Unique Constraint</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#7ee787; opacity:.5"></div>NEW — Tabla/campo nuevo en v2.0</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f0883e"></div>CHANGED — Campo modificado en v2.0</div>
+</div>
+
+<!-- ══ CAMBIOS V2 ══ -->
+<div class="changes">
+  <h3>⚡ Cambios clave v1.0 → v2.0</h3>
+  <div class="change-item"><span class="tag add">ADD</span> <span>Tablas <b>grupos</b> y <b>razones_sociales</b>: jerarquía multi-tenant completa</span></div>
+  <div class="change-item"><span class="tag add">ADD</span> <span>Tabla <b>configuracion_visibilidad</b>: visibilidad cruzada entre RS configurable por grupo</span></div>
+  <div class="change-item"><span class="tag">CHG</span> <span><b>sucursales</b>: ahora dependen de <code>razon_social_id</code>, campo <code>codigo</code> (MB1, H2…)</span></div>
+  <div class="change-item"><span class="tag">CHG</span> <span><b>clientes</b>: <code>sucursal_id → grupo_id</code>. UNIQUE cambia a <code>(grupo_id, whatsapp)</code>. Un cliente por grupo, sin duplicados.</span></div>
+  <div class="change-item"><span class="tag">CHG</span> <span><b>empresas</b>: <code>sucursal_id → grupo_id</code>. Empresas únicas a nivel grupo.</span></div>
+  <div class="change-item"><span class="tag add">ADD</span> <span><b>actividades</b>: campos <code>entidad_tipo</code> + <code>entidad_id</code> para lookup universal cross-módulo en reportes.</span></div>
+  <div class="change-item"><span class="tag">CHG</span> <span><b>RLS</b>: políticas actualizadas con helpers <code>get_mi_grupo_id()</code>, <code>get_mi_rs_id()</code>, <code>get_mi_sucursal_id()</code>.</span></div>
+  <div class="change-item"><span class="tag add">ADD</span> <span>Índice <code>idx_citas_limite</code> (parcial, solo <code>pendiente_contactar</code>) para optimizar el timer 15 min.</span></div>
+</div>
+
+</body>
+</html>
