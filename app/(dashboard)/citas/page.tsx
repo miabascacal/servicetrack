@@ -10,12 +10,11 @@ export default async function CitasPage() {
   const { data: citas } = await supabase
     .from('citas')
     .select(`
-      id, fecha_cita, hora_cita, estado, motivo, notas_previas, activa,
+      id, fecha_cita, hora_cita, estado, motivo, notas_previas,
       cliente:clientes ( id, nombre, apellido, whatsapp ),
       vehiculo:vehiculos ( id, marca, modelo, anio, placa ),
       asesor:usuarios ( id, nombre, apellido )
     `)
-    .eq('activa', true)
     .order('fecha_cita', { ascending: true })
     .order('hora_cita', { ascending: true })
 
@@ -26,7 +25,6 @@ export default async function CitasPage() {
     estado: EstadoCita
     motivo: string | null
     notas_previas: string | null
-    activa: boolean
     cliente: { id: string; nombre: string; apellido: string; whatsapp: string } | null
     vehiculo: { id: string; marca: string; modelo: string; anio: number; placa: string | null } | null
     asesor: { id: string; nombre: string; apellido: string } | null

@@ -38,7 +38,6 @@ export async function createCitaAction(formData: FormData) {
       motivo: motivo || null,
       notas_previas: notas_previas || null,
       estado: 'pendiente_contactar' as unknown as EstadoCita,
-      activa: true,
     })
     .select('id')
     .single()

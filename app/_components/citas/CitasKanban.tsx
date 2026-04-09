@@ -14,7 +14,6 @@ type CitaData = {
   estado: EstadoCita
   motivo: string | null
   notas_previas: string | null
-  activa: boolean
   cliente: { id: string; nombre: string; apellido: string; whatsapp: string } | null
   vehiculo: { id: string; marca: string; modelo: string; anio: number; placa: string | null } | null
   asesor: { id: string; nombre: string; apellido: string } | null
