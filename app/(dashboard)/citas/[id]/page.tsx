@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { formatDate, formatDateTime } from '@/lib/utils'
-import { ChevronLeft, Car, Phone, Clock, User, Calendar, Wrench, AlertCircle } from 'lucide-react'
+import { ChevronLeft, Car, Phone, User } from 'lucide-react'
 import type { EstadoCita } from '@/types/database'
 import { CambiarEstadoCita } from '@/app/_components/citas/CambiarEstadoCita'
 
@@ -44,31 +44,28 @@ export default async function CitaDetailPage({ params }: PageProps) {
   const { id } = await params
   const supabase = createAdminClient()
 
-  const { data: cita } = await supabase
+  const { data: cita, error: citaError } = await supabase
     .from('citas')
     .select(`
       id, fecha_cita, hora_cita, estado, servicio, notas, creado_at,
       cliente:clientes ( id, nombre, apellido, apellido_2, whatsapp, email ),
-      vehiculo:vehiculos ( id, marca, modelo, anio, color, placa, vin, km_actual, proxima_servicio ),
-      asesor:usuarios ( id, nombre, apellido ),
-      ordenes_trabajo ( id, estado, created_at, diagnostico )
+      vehiculo:vehiculos ( id, marca, modelo, anio, color, placa, km_actual ),
+      asesor:usuarios ( id, nombre, apellido )
     `)
     .eq('id', id)
     .single()
 
-  if (!cita) notFound()
+  if (citaError || !cita) notFound()
 
   type CitaFull = typeof cita & {
     cliente: { id: string; nombre: string; apellido: string; apellido_2: string | null; whatsapp: string; email: string | null } | null
-    vehiculo: { id: string; marca: string; modelo: string; anio: number; color: string | null; placa: string | null; vin: string | null; km_actual: number | null; proxima_servicio: string | null } | null
+    vehiculo: { id: string; marca: string; modelo: string; anio: number; color: string | null; placa: string | null; km_actual: number | null } | null
     asesor: { id: string; nombre: string; apellido: string } | null
-    ordenes_trabajo: { id: string; estado: string; created_at: string; diagnostico: string | null }[]
   }
 
   const c = cita as unknown as CitaFull
   const estado = c.estado as EstadoCita
-  const transitions = ALLOWED_TRANSITIONS[estado]
-  const hasOT = Array.isArray(c.ordenes_trabajo) && c.ordenes_trabajo.length > 0
+  const transitions = ALLOWED_TRANSITIONS[estado] ?? []
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -92,7 +89,7 @@ export default async function CitaDetailPage({ params }: PageProps) {
         </div>
         {/* Actions */}
         <div className="flex gap-2 shrink-0">
-          {estado === 'show' && !hasOT && (
+          {estado === 'show' && (
             <Link
               href={`/taller/nuevo?cita_id=${c.id}`}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
@@ -175,12 +172,6 @@ export default async function CitaDetailPage({ params }: PageProps) {
                   KM actuales: {c.vehiculo.km_actual.toLocaleString('es-MX')}
                 </p>
               )}
-              {c.vehiculo.proxima_servicio && (
-                <div className="flex items-center gap-1.5 text-xs text-orange-600">
-                  <AlertCircle size={11} />
-                  Próx. servicio: {formatDate(c.vehiculo.proxima_servicio)}
-                </div>
-              )}
             </div>
           )}
 
@@ -215,31 +206,6 @@ export default async function CitaDetailPage({ params }: PageProps) {
             <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-2">
               <h2 className="text-sm font-semibold text-gray-900">Notas</h2>
               <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.notas}</p>
-            </div>
-          )}
-
-          {/* Linked OT */}
-          {hasOT && (
-            <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-3">
-              <h2 className="text-sm font-semibold text-gray-900">Órdenes de trabajo</h2>
-              {c.ordenes_trabajo.map((ot) => (
-                <Link
-                  key={ot.id}
-                  href={`/taller/${ot.id}`}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
-                    <Wrench size={14} className="text-orange-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{ot.diagnostico ?? 'Sin diagnóstico'}</p>
-                    <p className="text-xs text-gray-500">{formatDateTime(ot.created_at)}</p>
-                  </div>
-                  <span className="text-xs text-gray-500 capitalize">
-                    {ot.estado.replace(/_/g, ' ')}
-                  </span>
-                </Link>
-              ))}
             </div>
           )}
 
