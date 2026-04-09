@@ -146,6 +146,8 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
           to: c.cliente.email,
           tipo: 'confirmacion_cita',
           datos: datosMensaje,
+          sucursal_id: c.sucursal_id,
+          modulo: 'citas',
         })
       }
     }
@@ -170,6 +172,8 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
           to: c.cliente.email,
           tipo: 'cita_cancelada',
           datos: datosMensaje,
+          sucursal_id: c.sucursal_id,
+          modulo: 'citas',
         })
       }
     }

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Settings, Users, ClipboardList, Building2, AlertTriangle, MessageCircle } from 'lucide-react'
+import { Settings, Users, ClipboardList, Building2, AlertTriangle, MessageCircle, Mail } from 'lucide-react'
 
 const MODULOS = [
   {
@@ -16,6 +16,14 @@ const MODULOS = [
     color: 'bg-green-100 text-green-600',
     titulo: 'WhatsApp',
     descripcion: 'Números de WhatsApp Business API por módulo',
+    disponible: true,
+  },
+  {
+    href: '/configuracion/email',
+    icon: Mail,
+    color: 'bg-sky-100 text-sky-600',
+    titulo: 'Correo electrónico',
+    descripcion: 'Remitentes de email por módulo y sucursal',
     disponible: true,
   },
   {

@@ -6,15 +6,18 @@
  */
 
 import { Resend } from 'resend'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-const FROM = process.env.EMAIL_FROM ?? 'ServiceTrack <onboarding@resend.dev>'
+const SYSTEM_FROM = process.env.EMAIL_FROM ?? 'ServiceTrack <onboarding@resend.dev>'
 
 export type EmailTipo =
   | 'confirmacion_cita'
   | 'recordatorio_cita'
   | 'cita_cancelada'
+
+export type EmailModulo = 'citas' | 'taller' | 'ventas' | 'refacciones' | 'general'
 
 interface EnviarEmailParams {
   to: string
@@ -27,19 +30,52 @@ interface EnviarEmailParams {
     direccion?: string
     servicio?: string
   }
+  // Opcional — si se pasa busca config de la sucursal
+  sucursal_id?: string
+  modulo?: EmailModulo
+}
+
+async function getFromAddress(sucursal_id?: string, modulo?: EmailModulo): Promise<{ from: string; replyTo?: string }> {
+  if (!sucursal_id) return { from: SYSTEM_FROM }
+
+  const supabase = createAdminClient()
+
+  // Intentar módulo específico primero, luego 'general'
+  const modulosABuscar = modulo && modulo !== 'general' ? [modulo, 'general'] : ['general']
+
+  for (const mod of modulosABuscar) {
+    const { data } = await supabase
+      .from('email_config')
+      .select('from_name, from_email, reply_to')
+      .eq('sucursal_id', sucursal_id)
+      .eq('modulo', mod)
+      .eq('activo', true)
+      .single()
+
+    if (data) {
+      return {
+        from: `${data.from_name} <${data.from_email}>`,
+        replyTo: data.reply_to ?? undefined,
+      }
+    }
+  }
+
+  return { from: SYSTEM_FROM }
 }
 
 export async function enviarEmail(params: EnviarEmailParams): Promise<boolean> {
   if (!process.env.RESEND_API_KEY) return false
 
   const { subject, html } = buildEmail(params.tipo, params.datos)
+  const { from, replyTo } = await getFromAddress(params.sucursal_id, params.modulo)
 
   try {
     const { error } = await resend.emails.send({
-      from: FROM,
+      from,
       to: params.to,
       subject,
       html,
+      ...(replyTo ? { replyTo } : {}),
     })
     return !error
   } catch {
