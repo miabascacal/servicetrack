@@ -10,6 +10,7 @@ import {
   mensajeConfirmacionCita,
   mensajeCitaCancelada,
 } from '@/lib/whatsapp'
+import { enviarEmail } from '@/lib/email'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -82,13 +83,13 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
     cancelada:           [],
   }
 
-  // Traer cita con datos del cliente y sucursal para WA
+  // Traer cita con datos del cliente y sucursal para WA + Email
   const adminSupabase = createAdminClient()
   const { data: cita } = await adminSupabase
     .from('citas')
     .select(`
-      estado, sucursal_id, fecha_cita, hora_cita,
-      cliente:clientes ( id, nombre, whatsapp ),
+      estado, sucursal_id, fecha_cita, hora_cita, servicio,
+      cliente:clientes ( id, nombre, whatsapp, email ),
       sucursal:sucursales ( nombre, direccion )
     `)
     .eq('id', citaId)
@@ -110,49 +111,67 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
 
   // ── Enviar WhatsApp según el nuevo estado ──────────────────────────────
   type CitaConRelaciones = typeof cita & {
-    cliente: { id: string; nombre: string; whatsapp: string } | null
+    cliente: { id: string; nombre: string; whatsapp: string; email: string | null } | null
     sucursal: { nombre: string; direccion: string | null } | null
   }
   const c = cita as unknown as CitaConRelaciones
 
-  if (c.cliente?.whatsapp && c.sucursal_id) {
+  if (c.cliente && c.sucursal_id) {
+    const datosMensaje = {
+      nombre: c.cliente.nombre,
+      fecha: formatearFecha(c.fecha_cita),
+      hora: c.hora_cita.slice(0, 5),
+      agencia: c.sucursal?.nombre ?? 'la agencia',
+      direccion: c.sucursal?.direccion ?? undefined,
+      servicio: (cita as unknown as { servicio: string | null }).servicio ?? undefined,
+    }
+
     if (nuevoEstado === 'confirmada') {
-      const mensaje = mensajeConfirmacionCita({
-        nombre: c.cliente.nombre,
-        fecha: formatearFecha(c.fecha_cita),
-        hora: c.hora_cita.slice(0, 5),
-        agencia: c.sucursal?.nombre ?? 'la agencia',
-        direccion: c.sucursal?.direccion ?? undefined,
-      })
-      // No awaited — no bloquea la respuesta al usuario
-      void enviarMensajeWA({
-        sucursal_id: c.sucursal_id,
-        modulo: 'citas',
-        telefono: c.cliente.whatsapp,
-        mensaje,
-        tipo: 'confirmacion_cita',
-        entidad_tipo: 'cita',
-        entidad_id: citaId,
-        cliente_id: c.cliente.id,
-      })
+      // WhatsApp
+      if (c.cliente.whatsapp) {
+        void enviarMensajeWA({
+          sucursal_id: c.sucursal_id,
+          modulo: 'citas',
+          telefono: c.cliente.whatsapp,
+          mensaje: mensajeConfirmacionCita(datosMensaje),
+          tipo: 'confirmacion_cita',
+          entidad_tipo: 'cita',
+          entidad_id: citaId,
+          cliente_id: c.cliente.id,
+        })
+      }
+      // Email
+      if (c.cliente.email) {
+        void enviarEmail({
+          to: c.cliente.email,
+          tipo: 'confirmacion_cita',
+          datos: datosMensaje,
+        })
+      }
     }
 
     if (nuevoEstado === 'cancelada') {
-      const mensaje = mensajeCitaCancelada({
-        nombre: c.cliente.nombre,
-        fecha: formatearFecha(c.fecha_cita),
-        agencia: c.sucursal?.nombre ?? 'la agencia',
-      })
-      void enviarMensajeWA({
-        sucursal_id: c.sucursal_id,
-        modulo: 'citas',
-        telefono: c.cliente.whatsapp,
-        mensaje,
-        tipo: 'cita_cancelada',
-        entidad_tipo: 'cita',
-        entidad_id: citaId,
-        cliente_id: c.cliente.id,
-      })
+      // WhatsApp
+      if (c.cliente.whatsapp) {
+        void enviarMensajeWA({
+          sucursal_id: c.sucursal_id,
+          modulo: 'citas',
+          telefono: c.cliente.whatsapp,
+          mensaje: mensajeCitaCancelada(datosMensaje),
+          tipo: 'cita_cancelada',
+          entidad_tipo: 'cita',
+          entidad_id: citaId,
+          cliente_id: c.cliente.id,
+        })
+      }
+      // Email
+      if (c.cliente.email) {
+        void enviarEmail({
+          to: c.cliente.email,
+          tipo: 'cita_cancelada',
+          datos: datosMensaje,
+        })
+      }
     }
   }
 

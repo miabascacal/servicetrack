@@ -10,6 +10,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarMensajeWA, mensajeRecordatorioCita } from '@/lib/whatsapp'
+import { enviarEmail } from '@/lib/email'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -32,8 +33,8 @@ export async function GET(request: Request) {
   const { data: citas, error } = await supabase
     .from('citas')
     .select(`
-      id, hora_cita, sucursal_id,
-      cliente:clientes ( id, nombre, whatsapp ),
+      id, hora_cita, fecha_cita, sucursal_id,
+      cliente:clientes ( id, nombre, whatsapp, email ),
       sucursal:sucursales ( nombre )
     `)
     .eq('fecha_cita', fechaManana)
@@ -47,8 +48,9 @@ export async function GET(request: Request) {
   type CitaRow = {
     id: string
     hora_cita: string
+    fecha_cita: string
     sucursal_id: string
-    cliente: { id: string; nombre: string; whatsapp: string } | null
+    cliente: { id: string; nombre: string; whatsapp: string; email: string | null } | null
     sucursal: { nombre: string } | null
   }
 
@@ -57,24 +59,40 @@ export async function GET(request: Request) {
   let errores = 0
 
   for (const cita of rows) {
-    if (!cita.cliente?.whatsapp) continue
+    if (!cita.cliente) continue
 
-    const mensaje = mensajeRecordatorioCita({
+    const datosMensaje = {
       nombre: cita.cliente.nombre,
+      fecha: new Date(cita.fecha_cita + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }),
       hora: cita.hora_cita.slice(0, 5),
       agencia: cita.sucursal?.nombre ?? 'la agencia',
-    })
+    }
 
-    const ok = await enviarMensajeWA({
-      sucursal_id: cita.sucursal_id,
-      modulo: 'citas',
-      telefono: cita.cliente.whatsapp,
-      mensaje,
-      tipo: 'recordatorio_cita',
-      entidad_tipo: 'cita',
-      entidad_id: cita.id,
-      cliente_id: cita.cliente.id,
-    })
+    let ok = false
+
+    // WhatsApp
+    if (cita.cliente.whatsapp) {
+      ok = await enviarMensajeWA({
+        sucursal_id: cita.sucursal_id,
+        modulo: 'citas',
+        telefono: cita.cliente.whatsapp,
+        mensaje: mensajeRecordatorioCita(datosMensaje),
+        tipo: 'recordatorio_cita',
+        entidad_tipo: 'cita',
+        entidad_id: cita.id,
+        cliente_id: cita.cliente.id,
+      })
+    }
+
+    // Email
+    if (cita.cliente.email) {
+      const emailOk = await enviarEmail({
+        to: cita.cliente.email,
+        tipo: 'recordatorio_cita',
+        datos: datosMensaje,
+      })
+      ok = ok || emailOk
+    }
 
     if (ok) { enviados++ } else { errores++ }
   }
