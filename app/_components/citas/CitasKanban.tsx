@@ -2,7 +2,7 @@
 
 import { useState, useOptimistic } from 'react'
 import Link from 'next/link'
-import { Car, Phone, Clock, User } from 'lucide-react'
+import { Car, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { EstadoCita } from '@/types/database'
 import { updateCitaEstadoAction } from '@/app/actions/citas'
@@ -16,7 +16,7 @@ type CitaData = {
   notas: string | null
   cliente: { id: string; nombre: string; apellido: string; whatsapp: string } | null
   vehiculo: { id: string; marca: string; modelo: string; anio: number; placa: string | null } | null
-  asesor: { id: string; nombre: string; apellido: string } | null
+  asesor?: null
 }
 
 type Column = {
@@ -254,16 +254,6 @@ function CitaCard({
       {/* Servicio */}
       {cita.servicio && (
         <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{cita.servicio}</p>
-      )}
-
-      {/* Asesor */}
-      {cita.asesor && (
-        <div className="flex items-center gap-1 mt-2 pt-2 border-t border-gray-100">
-          <User size={10} className="text-gray-300 shrink-0" />
-          <span className="text-xs text-gray-400 truncate">
-            {cita.asesor.nombre} {cita.asesor.apellido}
-          </span>
-        </div>
       )}
 
       {/* WhatsApp link */}

@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { formatDate, formatDateTime } from '@/lib/utils'
-import { ChevronLeft, Car, Phone, User } from 'lucide-react'
+import { ChevronLeft, Car, Phone } from 'lucide-react'
 import type { EstadoCita } from '@/types/database'
 import { CambiarEstadoCita } from '@/app/_components/citas/CambiarEstadoCita'
 
@@ -49,8 +49,7 @@ export default async function CitaDetailPage({ params }: PageProps) {
     .select(`
       id, fecha_cita, hora_cita, estado, servicio, notas, creado_at,
       cliente:clientes ( id, nombre, apellido, apellido_2, whatsapp, email ),
-      vehiculo:vehiculos ( id, marca, modelo, anio, color, placa, km_actual ),
-      asesor:usuarios ( id, nombre, apellido )
+      vehiculo:vehiculos ( id, marca, modelo, anio, color, placa, km_actual )
     `)
     .eq('id', id)
     .single()
@@ -60,7 +59,6 @@ export default async function CitaDetailPage({ params }: PageProps) {
   type CitaFull = typeof cita & {
     cliente: { id: string; nombre: string; apellido: string; apellido_2: string | null; whatsapp: string; email: string | null } | null
     vehiculo: { id: string; marca: string; modelo: string; anio: number; color: string | null; placa: string | null; km_actual: number | null } | null
-    asesor: { id: string; nombre: string; apellido: string } | null
   }
 
   const c = cita as unknown as CitaFull
@@ -175,18 +173,6 @@ export default async function CitaDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Asesor */}
-          {c.asesor && (
-            <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-2">
-              <h2 className="text-sm font-semibold text-gray-900">Asesor asignado</h2>
-              <div className="flex items-center gap-2">
-                <User size={14} className="text-gray-400" />
-                <span className="text-sm text-gray-700">
-                  {c.asesor.nombre} {c.asesor.apellido}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right column */}
