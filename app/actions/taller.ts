@@ -45,7 +45,7 @@ export async function createOTAction(formData: FormData) {
       cita_id,
       asesor_id: user.id,
       numero_ot: generarNumeroOT(),
-      estado: 'abierta' as EstadoOT,
+      estado: 'recibido' as EstadoOT,
       km_ingreso,
       diagnostico,
       notas_internas,
@@ -62,12 +62,12 @@ export async function createOTAction(formData: FormData) {
 
 // ── Cambiar estado OT ──────────────────────────────────────────────────────
 const ALLOWED_TRANSITIONS: Record<EstadoOT, EstadoOT[]> = {
-  abierta:           ['en_proceso', 'cancelada'],
-  en_proceso:        ['en_espera_partes', 'lista', 'cancelada'],
-  en_espera_partes:  ['en_proceso', 'lista', 'cancelada'],
-  lista:             ['entregada'],
-  entregada:         [],
-  cancelada:         [],
+  recibido:     ['diagnostico', 'en_reparacion', 'cancelado'],
+  diagnostico:  ['en_reparacion', 'cancelado'],
+  en_reparacion: ['listo', 'cancelado'],
+  listo:        ['entregado'],
+  entregado:    [],
+  cancelado:    [],
 }
 
 export async function updateEstadoOTAction(otId: string, nuevoEstado: EstadoOT) {
@@ -91,9 +91,8 @@ export async function updateEstadoOTAction(otId: string, nuevoEstado: EstadoOT) 
 
   const updateData: Record<string, unknown> = {
     estado: nuevoEstado,
-    updated_at: new Date().toISOString(),
   }
-  if (nuevoEstado === 'entregada') {
+  if (nuevoEstado === 'entregado') {
     updateData.fecha_entrega = new Date().toISOString()
   }
 

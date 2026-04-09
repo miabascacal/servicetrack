@@ -229,16 +229,16 @@ export default function NuevaCitaPage() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Motivo de la cita</label>
           <input
-            name="motivo"
+            name="servicio"
             type="text"
             placeholder="Ej: Servicio de 10,000 km, revisión de frenos..."
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Notas previas</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
           <textarea
-            name="notas_previas"
+            name="notas"
             rows={3}
             placeholder="Información adicional, síntomas reportados por el cliente..."
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"

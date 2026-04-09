@@ -12,8 +12,8 @@ type CitaData = {
   fecha_cita: string
   hora_cita: string
   estado: EstadoCita
-  motivo: string | null
-  notas_previas: string | null
+  servicio: string | null
+  notas: string | null
   cliente: { id: string; nombre: string; apellido: string; whatsapp: string } | null
   vehiculo: { id: string; marca: string; modelo: string; anio: number; placa: string | null } | null
   asesor: { id: string; nombre: string; apellido: string } | null
@@ -28,21 +28,22 @@ type Column = {
 }
 
 const COLUMNS: Column[] = [
-  { id: 'pendiente_contactar' as EstadoCita, label: 'Por contactar', color: 'border-yellow-300', headerBg: 'bg-yellow-50',  dotColor: 'bg-yellow-400' },
-  { id: 'confirmada',  label: 'Confirmada',  color: 'border-blue-300',   headerBg: 'bg-blue-50',    dotColor: 'bg-blue-500' },
-  { id: 'en_agencia' as EstadoCita,   label: 'En agencia',  color: 'border-indigo-300', headerBg: 'bg-indigo-50',  dotColor: 'bg-indigo-500' },
-  { id: 'terminada',   label: 'Terminada',   color: 'border-green-300',  headerBg: 'bg-green-50',   dotColor: 'bg-green-500' },
-  { id: 'no-show',     label: 'No show',     color: 'border-red-300',    headerBg: 'bg-red-50',     dotColor: 'bg-red-500' },
+  { id: 'pendiente_contactar', label: 'Por contactar', color: 'border-yellow-300', headerBg: 'bg-yellow-50',  dotColor: 'bg-yellow-400' },
+  { id: 'contactada',          label: 'Contactada',    color: 'border-sky-300',    headerBg: 'bg-sky-50',     dotColor: 'bg-sky-500' },
+  { id: 'confirmada',          label: 'Confirmada',    color: 'border-blue-300',   headerBg: 'bg-blue-50',    dotColor: 'bg-blue-500' },
+  { id: 'en_agencia',          label: 'En agencia',    color: 'border-indigo-300', headerBg: 'bg-indigo-50',  dotColor: 'bg-indigo-500' },
+  { id: 'no_show',             label: 'No show',       color: 'border-red-300',    headerBg: 'bg-red-50',     dotColor: 'bg-red-500' },
 ]
 
 // Which estado can move to which
 const ALLOWED_TRANSITIONS: Record<string, EstadoCita[]> = {
-  pendiente_contactar: ['confirmada', 'no-show', 'cancelada'],
-  confirmada:  ['en_agencia' as EstadoCita, 'no-show', 'cancelada'],
-  en_agencia:  ['terminada', 'cancelada'],
-  terminada:   [],
-  'no-show':   ['confirmada'],
-  cancelada:   [],
+  pendiente_contactar: ['contactada', 'confirmada', 'no_show', 'cancelada'],
+  contactada:          ['confirmada', 'no_show', 'cancelada'],
+  confirmada:          ['en_agencia', 'no_show', 'cancelada'],
+  en_agencia:          ['show', 'no_show', 'cancelada'],
+  show:                [],
+  no_show:             ['confirmada'],
+  cancelada:           [],
 }
 
 interface CitasKanbanProps {
@@ -250,9 +251,9 @@ function CitaCard({
         </div>
       )}
 
-      {/* Motivo */}
-      {cita.motivo && (
-        <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{cita.motivo}</p>
+      {/* Servicio */}
+      {cita.servicio && (
+        <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{cita.servicio}</p>
       )}
 
       {/* Asesor */}

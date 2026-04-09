@@ -5,15 +5,15 @@ import { formatDate, formatDateTime, cn } from '@/lib/utils'
 import type { EstadoOT } from '@/types/database'
 
 const ESTADO_CONFIG: Record<EstadoOT, { label: string; color: string; dot: string }> = {
-  abierta:          { label: 'Abierta',           color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500' },
-  en_proceso:       { label: 'En proceso',         color: 'bg-purple-100 text-purple-700', dot: 'bg-purple-500' },
-  en_espera_partes: { label: 'Espera partes',      color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
-  lista:            { label: 'Lista',              color: 'bg-green-100 text-green-700',  dot: 'bg-green-500' },
-  entregada:        { label: 'Entregada',          color: 'bg-gray-100 text-gray-600',    dot: 'bg-gray-400' },
-  cancelada:        { label: 'Cancelada',          color: 'bg-red-100 text-red-600',      dot: 'bg-red-400' },
+  recibido:     { label: 'Recibido',    color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500' },
+  diagnostico:  { label: 'Diagnóstico', color: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500' },
+  en_reparacion: { label: 'En reparación', color: 'bg-purple-100 text-purple-700', dot: 'bg-purple-500' },
+  listo:        { label: 'Listo',       color: 'bg-green-100 text-green-700',  dot: 'bg-green-500' },
+  entregado:    { label: 'Entregado',   color: 'bg-gray-100 text-gray-600',    dot: 'bg-gray-400' },
+  cancelado:    { label: 'Cancelado',   color: 'bg-red-100 text-red-600',      dot: 'bg-red-400' },
 }
 
-const ESTADO_ORDEN: EstadoOT[] = ['abierta', 'en_proceso', 'en_espera_partes', 'lista', 'entregada', 'cancelada']
+const ESTADO_ORDEN: EstadoOT[] = ['recibido', 'diagnostico', 'en_reparacion', 'listo', 'entregado', 'cancelado']
 
 interface PageProps {
   searchParams: Promise<{ estado?: string; q?: string }>
@@ -38,7 +38,7 @@ export default async function TallerPage({ searchParams }: PageProps) {
     query = query.eq('estado', estado)
   } else if (!estado) {
     // Default: exclude finalized
-    query = query.not('estado', 'in', '("entregada","cancelada")')
+    query = query.not('estado', 'in', '("entregado","cancelado")')
   }
 
   if (q) {
@@ -51,7 +51,7 @@ export default async function TallerPage({ searchParams }: PageProps) {
   const { data: countsData } = await supabase
     .from('ordenes_trabajo')
     .select('estado')
-    .not('estado', 'in', '("entregada","cancelada")')
+    .not('estado', 'in', '("entregado","cancelado")')
 
   const activeCount = countsData?.length ?? 0
 

@@ -7,21 +7,21 @@ import type { EstadoOT } from '@/types/database'
 import { updateEstadoOTAction } from '@/app/actions/taller'
 
 const ESTADO_CONFIG: Record<EstadoOT, { label: string; color: string; bg: string }> = {
-  abierta:          { label: 'Abierta',        color: 'text-blue-700',    bg: 'bg-blue-100 border-blue-300' },
-  en_proceso:       { label: 'En proceso',      color: 'text-purple-700',  bg: 'bg-purple-100 border-purple-300' },
-  en_espera_partes: { label: 'Espera partes',   color: 'text-orange-700',  bg: 'bg-orange-100 border-orange-300' },
-  lista:            { label: 'Lista',           color: 'text-green-700',   bg: 'bg-green-100 border-green-300' },
-  entregada:        { label: 'Entregada',       color: 'text-gray-600',    bg: 'bg-gray-100 border-gray-300' },
-  cancelada:        { label: 'Cancelada',       color: 'text-red-600',     bg: 'bg-red-100 border-red-300' },
+  recibido:      { label: 'Recibido',       color: 'text-blue-700',    bg: 'bg-blue-100 border-blue-300' },
+  diagnostico:   { label: 'Diagnóstico',    color: 'text-yellow-700',  bg: 'bg-yellow-100 border-yellow-300' },
+  en_reparacion: { label: 'En reparación',  color: 'text-purple-700',  bg: 'bg-purple-100 border-purple-300' },
+  listo:         { label: 'Listo',          color: 'text-green-700',   bg: 'bg-green-100 border-green-300' },
+  entregado:     { label: 'Entregado',      color: 'text-gray-600',    bg: 'bg-gray-100 border-gray-300' },
+  cancelado:     { label: 'Cancelado',      color: 'text-red-600',     bg: 'bg-red-100 border-red-300' },
 }
 
 const ALLOWED_TRANSITIONS: Record<EstadoOT, EstadoOT[]> = {
-  abierta:          ['en_proceso', 'cancelada'],
-  en_proceso:       ['en_espera_partes', 'lista', 'cancelada'],
-  en_espera_partes: ['en_proceso', 'lista', 'cancelada'],
-  lista:            ['entregada'],
-  entregada:        [],
-  cancelada:        [],
+  recibido:      ['diagnostico', 'en_reparacion', 'cancelado'],
+  diagnostico:   ['en_reparacion', 'cancelado'],
+  en_reparacion: ['listo', 'cancelado'],
+  listo:         ['entregado'],
+  entregado:     [],
+  cancelado:     [],
 }
 
 interface CambiarEstadoOTProps {

@@ -11,33 +11,33 @@ interface PageProps {
 }
 
 const ESTADO_LABELS: Record<EstadoCita, string> = {
-  pendiente: 'Pendiente',
-  confirmada: 'Confirmada',
-  llegada: 'Llegó',
-  en_proceso: 'En proceso',
-  terminada: 'Terminada',
-  'no-show': 'No show',
-  cancelada: 'Cancelada',
+  pendiente_contactar: 'Por contactar',
+  contactada:          'Contactada',
+  confirmada:          'Confirmada',
+  en_agencia:          'En agencia',
+  show:                'Show',
+  no_show:             'No show',
+  cancelada:           'Cancelada',
 }
 
 const ESTADO_COLORS: Record<EstadoCita, string> = {
-  pendiente: 'bg-yellow-100 text-yellow-700',
-  confirmada: 'bg-blue-100 text-blue-700',
-  llegada: 'bg-indigo-100 text-indigo-700',
-  en_proceso: 'bg-purple-100 text-purple-700',
-  terminada: 'bg-green-100 text-green-700',
-  'no-show': 'bg-red-100 text-red-700',
-  cancelada: 'bg-gray-100 text-gray-500',
+  pendiente_contactar: 'bg-yellow-100 text-yellow-700',
+  contactada:          'bg-sky-100 text-sky-700',
+  confirmada:          'bg-blue-100 text-blue-700',
+  en_agencia:          'bg-indigo-100 text-indigo-700',
+  show:                'bg-purple-100 text-purple-700',
+  no_show:             'bg-red-100 text-red-700',
+  cancelada:           'bg-gray-100 text-gray-500',
 }
 
 const ALLOWED_TRANSITIONS: Record<EstadoCita, EstadoCita[]> = {
-  pendiente:   ['confirmada', 'no-show', 'cancelada'],
-  confirmada:  ['llegada', 'no-show', 'cancelada'],
-  llegada:     ['en_proceso', 'cancelada'],
-  en_proceso:  ['terminada', 'cancelada'],
-  terminada:   [],
-  'no-show':   ['confirmada'],
-  cancelada:   [],
+  pendiente_contactar: ['contactada', 'confirmada', 'no_show', 'cancelada'],
+  contactada:          ['confirmada', 'no_show', 'cancelada'],
+  confirmada:          ['en_agencia', 'no_show', 'cancelada'],
+  en_agencia:          ['show', 'no_show', 'cancelada'],
+  show:                [],
+  no_show:             ['confirmada'],
+  cancelada:           [],
 }
 
 export default async function CitaDetailPage({ params }: PageProps) {
@@ -47,7 +47,7 @@ export default async function CitaDetailPage({ params }: PageProps) {
   const { data: cita } = await supabase
     .from('citas')
     .select(`
-      id, fecha_cita, hora_cita, estado, motivo, notas_previas, activa, created_at,
+      id, fecha_cita, hora_cita, estado, servicio, notas, creado_at,
       cliente:clientes ( id, nombre, apellido, apellido_2, whatsapp, email ),
       vehiculo:vehiculos ( id, marca, modelo, anio, color, placa, vin, km_actual, proxima_servicio ),
       asesor:usuarios ( id, nombre, apellido ),
@@ -87,12 +87,12 @@ export default async function CitaDetailPage({ params }: PageProps) {
                 {ESTADO_LABELS[estado]}
               </span>
             </div>
-            <p className="text-sm text-gray-500 mt-0.5">{c.motivo ?? 'Sin motivo especificado'}</p>
+            <p className="text-sm text-gray-500 mt-0.5">{c.servicio ?? 'Sin servicio especificado'}</p>
           </div>
         </div>
         {/* Actions */}
         <div className="flex gap-2 shrink-0">
-          {estado === 'llegada' && !hasOT && (
+          {estado === 'show' && !hasOT && (
             <Link
               href={`/taller/nuevo?cita_id=${c.id}`}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
@@ -211,10 +211,10 @@ export default async function CitaDetailPage({ params }: PageProps) {
           </div>
 
           {/* Notes */}
-          {c.notas_previas && (
+          {c.notas && (
             <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-2">
-              <h2 className="text-sm font-semibold text-gray-900">Notas previas</h2>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.notas_previas}</p>
+              <h2 className="text-sm font-semibold text-gray-900">Notas</h2>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.notas}</p>
             </div>
           )}
 
@@ -252,7 +252,7 @@ export default async function CitaDetailPage({ params }: PageProps) {
               </div>
               <div>
                 <p className="font-medium text-gray-700">Creada</p>
-                <p>{formatDateTime(c.created_at)}</p>
+                <p>{formatDateTime(c.creado_at)}</p>
               </div>
             </div>
           </div>

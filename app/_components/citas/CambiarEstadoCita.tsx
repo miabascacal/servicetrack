@@ -13,13 +13,7 @@ const ESTADO_CONFIG: Record<string, { label: string; color: string; bg: string }
   en_agencia:          { label: 'En agencia',    color: 'text-indigo-700', bg: 'bg-indigo-100 border-indigo-300' },
   show:                { label: 'Show',          color: 'text-purple-700', bg: 'bg-purple-100 border-purple-300' },
   no_show:             { label: 'No show',       color: 'text-red-700',    bg: 'bg-red-100 border-red-300' },
-  terminada:           { label: 'Terminada',     color: 'text-green-700',  bg: 'bg-green-100 border-green-300' },
   cancelada:           { label: 'Cancelada',     color: 'text-gray-600',   bg: 'bg-gray-100 border-gray-300' },
-  // legacy values kept for compatibility
-  pendiente:   { label: 'Pendiente',   color: 'text-yellow-700', bg: 'bg-yellow-100 border-yellow-300' },
-  llegada:     { label: 'Llegó',       color: 'text-indigo-700', bg: 'bg-indigo-100 border-indigo-300' },
-  en_proceso:  { label: 'En proceso',  color: 'text-purple-700', bg: 'bg-purple-100 border-purple-300' },
-  'no-show':   { label: 'No show',     color: 'text-red-700',    bg: 'bg-red-100 border-red-300' },
 }
 
 interface CambiarEstadoCitaProps {

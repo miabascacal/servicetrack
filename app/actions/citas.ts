@@ -24,8 +24,8 @@ export async function createCitaAction(formData: FormData) {
   }
 
   const vehiculo_id = (formData.get('vehiculo_id') as string) || null
-  const motivo = (formData.get('motivo') as string)?.trim() || null
-  const notas_previas = (formData.get('notas_previas') as string)?.trim() || null
+  const servicio = (formData.get('servicio') as string)?.trim() || null
+  const notas = (formData.get('notas') as string)?.trim() || null
 
   const { data, error } = await supabase
     .from('citas')
@@ -35,8 +35,8 @@ export async function createCitaAction(formData: FormData) {
       vehiculo_id: vehiculo_id || null,
       fecha_cita,
       hora_cita,
-      motivo: motivo || null,
-      notas_previas: notas_previas || null,
+      servicio: servicio || null,
+      notas: notas || null,
       estado: 'pendiente_contactar' as unknown as EstadoCita,
     })
     .select('id')
@@ -57,18 +57,12 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
   // Verify valid transition server-side
   const ALLOWED_TRANSITIONS: Record<string, string[]> = {
     pendiente_contactar: ['contactada', 'confirmada', 'no_show', 'cancelada'],
-    contactada:  ['confirmada', 'no_show', 'cancelada'],
-    confirmada:  ['en_agencia', 'no_show', 'cancelada'],
-    en_agencia:  ['show', 'no_show', 'cancelada'],
-    show:        ['terminada'],
-    terminada:   [],
-    no_show:     ['confirmada'],
-    cancelada:   [],
-    // legacy
-    pendiente:   ['confirmada', 'cancelada'],
-    llegada:     ['en_proceso', 'cancelada'],
-    en_proceso:  ['terminada', 'cancelada'],
-    'no-show':   ['confirmada'],
+    contactada:          ['confirmada', 'no_show', 'cancelada'],
+    confirmada:          ['en_agencia', 'no_show', 'cancelada'],
+    en_agencia:          ['show', 'no_show', 'cancelada'],
+    show:                [],
+    no_show:             ['confirmada'],
+    cancelada:           [],
   }
 
   const { data: cita } = await supabase
@@ -85,11 +79,6 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
   }
 
   const updateData: Record<string, unknown> = { estado: nuevoEstado }
-
-  // When terminada, mark activa = false (remove from kanban)
-  if (['terminada', 'cancelada', 'no_show'].includes(nuevoEstado)) {
-    updateData.activa = false
-  }
 
   const { error } = await supabase
     .from('citas')
@@ -111,7 +100,7 @@ export async function cancelarCitaAction(citaId: string, motivo?: string) {
 
   const { error } = await supabase
     .from('citas')
-    .update({ estado: 'cancelada', activa: false })
+    .update({ estado: 'cancelada' })
     .eq('id', citaId)
 
   if (error) return { error: 'Error al cancelar la cita' }

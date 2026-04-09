@@ -10,7 +10,7 @@ export default async function CitasPage() {
   const { data: citas } = await supabase
     .from('citas')
     .select(`
-      id, fecha_cita, hora_cita, estado, motivo, notas_previas,
+      id, fecha_cita, hora_cita, estado, servicio, notas,
       cliente:clientes ( id, nombre, apellido, whatsapp ),
       vehiculo:vehiculos ( id, marca, modelo, anio, placa ),
       asesor:usuarios ( id, nombre, apellido )
@@ -23,8 +23,8 @@ export default async function CitasPage() {
     fecha_cita: string
     hora_cita: string
     estado: EstadoCita
-    motivo: string | null
-    notas_previas: string | null
+    servicio: string | null
+    notas: string | null
     cliente: { id: string; nombre: string; apellido: string; whatsapp: string } | null
     vehiculo: { id: string; marca: string; modelo: string; anio: number; placa: string | null } | null
     asesor: { id: string; nombre: string; apellido: string } | null
