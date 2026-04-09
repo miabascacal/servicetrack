@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { formatDate, formatDateTime, cn } from '@/lib/utils'
 import { ChevronLeft, Car, Phone, Clock, User, Calendar, Wrench, AlertCircle } from 'lucide-react'
 import type { EstadoOT } from '@/types/database'
@@ -33,7 +33,7 @@ const ESTADO_READONLY: EstadoOT[] = ['entregada', 'cancelada']
 
 export default async function OTDetailPage({ params }: PageProps) {
   const { id } = await params
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const { data: ot } = await supabase
     .from('ordenes_trabajo')

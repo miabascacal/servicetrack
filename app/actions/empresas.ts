@@ -38,3 +38,32 @@ export async function createEmpresaAction(formData: FormData) {
   revalidatePath('/crm/empresas')
   return { id: data.id }
 }
+
+export async function updateEmpresaAction(id: string, formData: FormData) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+
+  const nombre = (formData.get('nombre') as string)?.trim()
+  if (!nombre) return { error: 'El nombre de la empresa es requerido' }
+
+  const { error } = await supabase
+    .from('empresas')
+    .update({
+      nombre,
+      rfc: (formData.get('rfc') as string)?.trim().toUpperCase() || null,
+      telefono: (formData.get('telefono') as string)?.trim() || null,
+      email: (formData.get('email') as string)?.trim() || null,
+    })
+    .eq('id', id)
+
+  if (error) {
+    if (error.code === '23505') return { error: 'Ya existe una empresa con ese nombre o RFC' }
+    return { error: `Error al actualizar la empresa: ${error.message}` }
+  }
+
+  revalidatePath(`/crm/empresas/${id}`)
+  revalidatePath('/crm/empresas')
+  return { success: true }
+}

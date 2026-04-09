@@ -1,11 +1,11 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Plus } from 'lucide-react'
 import { CitasKanban } from '@/app/_components/citas/CitasKanban'
 import type { EstadoCita } from '@/types/database'
 
 export default async function CitasPage() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const { data: citas } = await supabase
     .from('citas')

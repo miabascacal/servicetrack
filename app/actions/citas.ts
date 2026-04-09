@@ -35,9 +35,10 @@ export async function createCitaAction(formData: FormData) {
       vehiculo_id,
       fecha_cita,
       hora_cita,
-      estado: 'pendiente_contactar' as EstadoCita,
-      servicio: motivo || null,
-      notas: notas_previas || null,
+      estado: 'pendiente' as EstadoCita,
+      motivo: motivo || null,
+      notas_previas: notas_previas || null,
+      activa: true,
     })
     .select('id')
     .single()

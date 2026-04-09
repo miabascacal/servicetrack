@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Wrench, Plus, Clock, Car, User } from 'lucide-react'
 import { formatDate, formatDateTime, cn } from '@/lib/utils'
 import type { EstadoOT } from '@/types/database'
@@ -21,7 +21,7 @@ interface PageProps {
 
 export default async function TallerPage({ searchParams }: PageProps) {
   const { estado, q = '' } = await searchParams
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   let query = supabase
     .from('ordenes_trabajo')

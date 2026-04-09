@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { ChevronLeft, Car, Phone, Clock, User, Calendar, Wrench, AlertCircle } from 'lucide-react'
 import type { EstadoCita } from '@/types/database'
@@ -42,7 +42,7 @@ const ALLOWED_TRANSITIONS: Record<EstadoCita, EstadoCita[]> = {
 
 export default async function CitaDetailPage({ params }: PageProps) {
   const { id } = await params
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const { data: cita } = await supabase
     .from('citas')

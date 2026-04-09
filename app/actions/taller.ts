@@ -54,7 +54,7 @@ export async function createOTAction(formData: FormData) {
     .select('id')
     .single()
 
-  if (error) return { error: 'Error al crear la orden de trabajo' }
+  if (error) return { error: `Error al crear la orden de trabajo: ${error.message}` }
 
   revalidatePath('/taller')
   return { id: data.id }
