@@ -29,20 +29,18 @@ type Column = {
 }
 
 const COLUMNS: Column[] = [
-  { id: 'pendiente',   label: 'Pendiente',   color: 'border-yellow-300', headerBg: 'bg-yellow-50',  dotColor: 'bg-yellow-400' },
+  { id: 'pendiente_contactar' as EstadoCita, label: 'Por contactar', color: 'border-yellow-300', headerBg: 'bg-yellow-50',  dotColor: 'bg-yellow-400' },
   { id: 'confirmada',  label: 'Confirmada',  color: 'border-blue-300',   headerBg: 'bg-blue-50',    dotColor: 'bg-blue-500' },
-  { id: 'llegada',     label: 'Llegó',       color: 'border-indigo-300', headerBg: 'bg-indigo-50',  dotColor: 'bg-indigo-500' },
-  { id: 'en_proceso',  label: 'En proceso',  color: 'border-purple-300', headerBg: 'bg-purple-50',  dotColor: 'bg-purple-500' },
+  { id: 'en_agencia' as EstadoCita,   label: 'En agencia',  color: 'border-indigo-300', headerBg: 'bg-indigo-50',  dotColor: 'bg-indigo-500' },
   { id: 'terminada',   label: 'Terminada',   color: 'border-green-300',  headerBg: 'bg-green-50',   dotColor: 'bg-green-500' },
   { id: 'no-show',     label: 'No show',     color: 'border-red-300',    headerBg: 'bg-red-50',     dotColor: 'bg-red-500' },
 ]
 
-// Which estado can move to which (forward + allow no-show from pendiente/confirmada)
-const ALLOWED_TRANSITIONS: Record<EstadoCita, EstadoCita[]> = {
-  pendiente:   ['confirmada', 'no-show', 'cancelada'],
-  confirmada:  ['llegada', 'no-show', 'cancelada'],
-  llegada:     ['en_proceso', 'cancelada'],
-  en_proceso:  ['terminada', 'cancelada'],
+// Which estado can move to which
+const ALLOWED_TRANSITIONS: Record<string, EstadoCita[]> = {
+  pendiente_contactar: ['confirmada', 'no-show', 'cancelada'],
+  confirmada:  ['en_agencia' as EstadoCita, 'no-show', 'cancelada'],
+  en_agencia:  ['terminada', 'cancelada'],
   terminada:   [],
   'no-show':   ['confirmada'],
   cancelada:   [],
@@ -58,12 +56,12 @@ export function CitasKanban({ citas: initialCitas }: CitasKanbanProps) {
   const [dragOver, setDragOver] = useState<EstadoCita | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
 
-  const byColumn = (estado: EstadoCita) => citas.filter((c) => c.estado === estado)
+  const byColumn = (estado: string) => citas.filter((c) => c.estado === estado)
 
   async function moveCita(citaId: string, newEstado: EstadoCita) {
     const cita = citas.find((c) => c.id === citaId)
     if (!cita) return
-    const allowed = ALLOWED_TRANSITIONS[cita.estado]
+    const allowed = ALLOWED_TRANSITIONS[cita.estado] ?? []
     if (!allowed.includes(newEstado)) return
 
     // Optimistic update
@@ -107,7 +105,7 @@ export function CitasKanban({ citas: initialCitas }: CitasKanbanProps) {
   return (
     <div className="flex gap-4 overflow-x-auto pb-4 flex-1 min-h-0">
       {COLUMNS.map((col) => {
-        const columnCitas = byColumn(col.id)
+        const columnCitas = byColumn(col.id as string)
         const isDropTarget = dragOver === col.id
 
         return (

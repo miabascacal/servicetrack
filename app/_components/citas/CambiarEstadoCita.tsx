@@ -6,14 +6,20 @@ import { cn } from '@/lib/utils'
 import type { EstadoCita } from '@/types/database'
 import { updateCitaEstadoAction } from '@/app/actions/citas'
 
-const ESTADO_CONFIG: Record<EstadoCita, { label: string; color: string; bg: string }> = {
+const ESTADO_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  pendiente_contactar: { label: 'Por contactar', color: 'text-yellow-700', bg: 'bg-yellow-100 border-yellow-300' },
+  contactada:          { label: 'Contactada',    color: 'text-sky-700',    bg: 'bg-sky-100 border-sky-300' },
+  confirmada:          { label: 'Confirmada',    color: 'text-blue-700',   bg: 'bg-blue-100 border-blue-300' },
+  en_agencia:          { label: 'En agencia',    color: 'text-indigo-700', bg: 'bg-indigo-100 border-indigo-300' },
+  show:                { label: 'Show',          color: 'text-purple-700', bg: 'bg-purple-100 border-purple-300' },
+  no_show:             { label: 'No show',       color: 'text-red-700',    bg: 'bg-red-100 border-red-300' },
+  terminada:           { label: 'Terminada',     color: 'text-green-700',  bg: 'bg-green-100 border-green-300' },
+  cancelada:           { label: 'Cancelada',     color: 'text-gray-600',   bg: 'bg-gray-100 border-gray-300' },
+  // legacy values kept for compatibility
   pendiente:   { label: 'Pendiente',   color: 'text-yellow-700', bg: 'bg-yellow-100 border-yellow-300' },
-  confirmada:  { label: 'Confirmada',  color: 'text-blue-700',   bg: 'bg-blue-100 border-blue-300' },
   llegada:     { label: 'Llegó',       color: 'text-indigo-700', bg: 'bg-indigo-100 border-indigo-300' },
   en_proceso:  { label: 'En proceso',  color: 'text-purple-700', bg: 'bg-purple-100 border-purple-300' },
-  terminada:   { label: 'Terminada',   color: 'text-green-700',  bg: 'bg-green-100 border-green-300' },
   'no-show':   { label: 'No show',     color: 'text-red-700',    bg: 'bg-red-100 border-red-300' },
-  cancelada:   { label: 'Cancelada',   color: 'text-gray-600',   bg: 'bg-gray-100 border-gray-300' },
 }
 
 interface CambiarEstadoCitaProps {
@@ -26,7 +32,7 @@ export function CambiarEstadoCita({ citaId, estadoActual, transitions }: Cambiar
   const router = useRouter()
   const [loading, setLoading] = useState<EstadoCita | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const config = ESTADO_CONFIG[estadoActual]
+  const config = ESTADO_CONFIG[estadoActual] ?? { label: estadoActual, color: 'text-gray-700', bg: 'bg-gray-100 border-gray-300' }
 
   async function cambiar(newEstado: EstadoCita) {
     setLoading(newEstado)

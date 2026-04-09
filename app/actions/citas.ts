@@ -32,12 +32,12 @@ export async function createCitaAction(formData: FormData) {
     .insert({
       sucursal_id: usuario.sucursal_id,
       cliente_id,
-      vehiculo_id,
+      vehiculo_id: vehiculo_id || null,
       fecha_cita,
       hora_cita,
-      estado: 'pendiente' as EstadoCita,
       motivo: motivo || null,
       notas_previas: notas_previas || null,
+      estado: 'pendiente_contactar' as unknown as EstadoCita,
       activa: true,
     })
     .select('id')
@@ -56,14 +56,20 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
   if (!user) return { error: 'No autorizado' }
 
   // Verify valid transition server-side
-  const ALLOWED_TRANSITIONS: Record<EstadoCita, EstadoCita[]> = {
-    pendiente:   ['confirmada', 'no-show', 'cancelada'],
-    confirmada:  ['llegada', 'no-show', 'cancelada'],
+  const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+    pendiente_contactar: ['contactada', 'confirmada', 'no_show', 'cancelada'],
+    contactada:  ['confirmada', 'no_show', 'cancelada'],
+    confirmada:  ['en_agencia', 'no_show', 'cancelada'],
+    en_agencia:  ['show', 'no_show', 'cancelada'],
+    show:        ['terminada'],
+    terminada:   [],
+    no_show:     ['confirmada'],
+    cancelada:   [],
+    // legacy
+    pendiente:   ['confirmada', 'cancelada'],
     llegada:     ['en_proceso', 'cancelada'],
     en_proceso:  ['terminada', 'cancelada'],
-    terminada:   [],
     'no-show':   ['confirmada'],
-    cancelada:   [],
   }
 
   const { data: cita } = await supabase
@@ -74,7 +80,7 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
 
   if (!cita) return { error: 'Cita no encontrada' }
 
-  const allowed = ALLOWED_TRANSITIONS[cita.estado as EstadoCita]
+  const allowed = ALLOWED_TRANSITIONS[cita.estado] ?? []
   if (!allowed.includes(nuevoEstado)) {
     return { error: `No se puede mover de "${cita.estado}" a "${nuevoEstado}"` }
   }
@@ -82,7 +88,7 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
   const updateData: Record<string, unknown> = { estado: nuevoEstado }
 
   // When terminada, mark activa = false (remove from kanban)
-  if (nuevoEstado === 'terminada' || nuevoEstado === 'cancelada') {
+  if (['terminada', 'cancelada', 'no_show'].includes(nuevoEstado)) {
     updateData.activa = false
   }
 
