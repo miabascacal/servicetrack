@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { formatDate, formatDateTime } from '@/lib/utils'
-import { ChevronLeft, Car, Phone } from 'lucide-react'
+import { ChevronLeft, Car, Phone, Wrench } from 'lucide-react'
 import type { EstadoCita } from '@/types/database'
 import { CambiarEstadoCita } from '@/app/_components/citas/CambiarEstadoCita'
 
