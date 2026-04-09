@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Settings, Users, ClipboardList, Building2, AlertTriangle } from 'lucide-react'
+import { Settings, Users, ClipboardList, Building2, AlertTriangle, MessageCircle } from 'lucide-react'
 
 const MODULOS = [
   {
@@ -8,6 +8,14 @@ const MODULOS = [
     color: 'bg-blue-100 text-blue-600',
     titulo: 'Usuarios y Permisos',
     descripcion: 'Administra usuarios, roles y accesos del sistema',
+    disponible: true,
+  },
+  {
+    href: '/configuracion/whatsapp',
+    icon: MessageCircle,
+    color: 'bg-green-100 text-green-600',
+    titulo: 'WhatsApp',
+    descripcion: 'Números de WhatsApp Business API por módulo',
     disponible: true,
   },
   {
