@@ -169,7 +169,7 @@ export default async function ClienteDetailPage({ params, searchParams }: PagePr
   const ultimaFecha = allItems.at(0)?.fecha
   const gastoHistorico = 0
   const proximoServicio = null
-  const proxVencido = proximoServicio && proximoServicio < today
+  const proxVencido = proximoServicio && (proximoServicio as string) < today
 
   // Area counts for filter tabs
   const counts: Record<string, number> = {
