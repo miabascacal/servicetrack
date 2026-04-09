@@ -44,21 +44,21 @@ export default async function CitaDetailPage({ params }: PageProps) {
   const { id } = await params
   const supabase = createAdminClient()
 
-  const { data: cita, error: citaError } = await supabase
+  const { data: cita } = await supabase
     .from('citas')
     .select(`
       id, fecha_cita, hora_cita, estado, servicio, notas, creado_at,
-      cliente:clientes ( id, nombre, apellido, apellido_2, whatsapp, email ),
-      vehiculo:vehiculos ( id, marca, modelo, anio, color, placa, km_actual )
+      cliente:clientes ( id, nombre, apellido, whatsapp ),
+      vehiculo:vehiculos ( id, marca, modelo, anio, placa )
     `)
     .eq('id', id)
     .single()
 
-  if (citaError || !cita) notFound()
+  if (!cita) notFound()
 
   type CitaFull = typeof cita & {
-    cliente: { id: string; nombre: string; apellido: string; apellido_2: string | null; whatsapp: string; email: string | null } | null
-    vehiculo: { id: string; marca: string; modelo: string; anio: number; color: string | null; placa: string | null; km_actual: number | null } | null
+    cliente: { id: string; nombre: string; apellido: string; whatsapp: string } | null
+    vehiculo: { id: string; marca: string; modelo: string; anio: number; placa: string | null } | null
   }
 
   const c = cita as unknown as CitaFull
@@ -127,14 +127,10 @@ export default async function CitaDetailPage({ params }: PageProps) {
                 <div>
                   <p className="font-medium text-gray-900 text-sm">
                     {c.cliente.nombre} {c.cliente.apellido}
-                    {c.cliente.apellido_2 ? ` ${c.cliente.apellido_2}` : ''}
                   </p>
                   <p className="text-xs text-gray-500 font-mono">{c.cliente.whatsapp}</p>
                 </div>
               </Link>
-              {c.cliente.email && (
-                <p className="text-xs text-gray-500">{c.cliente.email}</p>
-              )}
             </div>
           )}
 
@@ -153,23 +149,13 @@ export default async function CitaDetailPage({ params }: PageProps) {
                   <p className="font-medium text-gray-900 text-sm">
                     {c.vehiculo.marca} {c.vehiculo.modelo} {c.vehiculo.anio}
                   </p>
-                  <div className="flex gap-2 mt-0.5">
-                    {c.vehiculo.placa && (
-                      <span className="text-xs font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                        {c.vehiculo.placa}
-                      </span>
-                    )}
-                    {c.vehiculo.color && (
-                      <span className="text-xs text-gray-500">{c.vehiculo.color}</span>
-                    )}
-                  </div>
+                  {c.vehiculo.placa && (
+                    <p className="text-xs font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded inline-block mt-0.5">
+                      {c.vehiculo.placa}
+                    </p>
+                  )}
                 </div>
               </Link>
-              {c.vehiculo.km_actual && (
-                <p className="text-xs text-gray-500">
-                  KM actuales: {c.vehiculo.km_actual.toLocaleString('es-MX')}
-                </p>
-              )}
             </div>
           )}
 
