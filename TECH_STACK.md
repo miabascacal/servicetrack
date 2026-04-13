@@ -8,10 +8,10 @@
 | Lenguaje | TypeScript estricto | Sin `any`, tipos en todo |
 | Estilos | TailwindCSS + shadcn/ui | Dark theme, componentes listos |
 | Base de datos | Supabase (PostgreSQL) | Auth, RLS, Realtime, Storage |
-| Automatizaciones | n8n (self-hosted o cloud) | Lectura archivos, WA, CSI, escalaciones |
+| Automatizaciones | Código nativo Next.js | Vercel Cron Jobs + Server Actions + lib/ (NO n8n) |
 | IA | Claude API (claude-sonnet-4-20250514) | Clasificación, WA personalizados, sugerencias |
-| WhatsApp | Por definir: Twilio / 360dialog / Meta Business | WA Business API |
-| Email | Resend o SendGrid | Transaccionales + notificaciones |
+| WhatsApp | Meta Cloud API (Meta Business) | WA Business API — lib/whatsapp.ts |
+| Email | Resend | Transaccionales + notificaciones — lib/email.ts |
 | Deploy | Vercel | Next.js nativo, edge functions |
 | Dev env | GitHub Codespaces / Cursor local | |
 | Control de versiones | GitHub | |
@@ -127,15 +127,23 @@
 - Todas las queries a través de Supabase client (nunca directo)
 - Usar `supabase.from('tabla').select()` con tipos generados
 
-### n8n — Automatizaciones principales a configurar
-1. **Lectura de archivos**: trigger por archivo en Drive → parse → update Supabase
-2. **Timer 15 min citas**: cron cada 1 min → check citas pendientes → si +15 min → enviar WA bot
-3. **Seguimiento OTs**: cron cada 30 min → check OTs sin actualizar → escalación
-4. **Recordatorios citas**: cron 8am → enviar WA 24h antes de citas del día siguiente
-5. **CSI 48h**: cron diario → check OTs entregadas hace 48h → procesar archivo CSI
-6. **Seguimiento cotizaciones**: cron diario → check cotizaciones sin respuesta → bot WA
-7. **Outlook sync**: webhook activado desde Supabase → crear/actualizar evento en Outlook
-8. **Cola de mensajes fuera de horario**: cron 8am → enviar mensajes encolados del día anterior
+### Automatizaciones nativas — implementadas en código (NO n8n)
+
+| Automatización | Implementación | Archivo |
+|----------------|---------------|---------|
+| Recordatorios 24h de citas | Vercel Cron (9 AM diario) | `app/api/cron/recordatorios-citas/route.ts` |
+| WA al confirmar cita | Server Action | `app/actions/citas.ts` |
+| WA al cancelar cita | Server Action | `app/actions/citas.ts` |
+| Email al confirmar/cancelar | Server Action | `app/actions/citas.ts` |
+| Envío WA | Meta Cloud API | `lib/whatsapp.ts` |
+| Envío Email | Resend | `lib/email.ts` |
+
+**Pendientes de implementar (siguientes sprints):**
+- Timer 15 min citas — cron cada 1 min
+- Escalación OTs — cron cada 30 min
+- CSI 48h post-entrega — cron diario
+- Cola mensajes fuera de horario — cron 8 AM
+- Webhook respuesta cliente WA
 
 ## Variables de entorno (.env.local)
 
@@ -148,15 +156,10 @@ SUPABASE_SERVICE_ROLE_KEY=eyJh...
 # Claude API
 ANTHROPIC_API_KEY=sk-ant-...
 
-# n8n
-N8N_WEBHOOK_BASE_URL=https://n8n.tudominio.com
-N8N_API_KEY=
-
-# WhatsApp
-WA_PROVIDER=twilio              # twilio | 360dialog | meta
-WA_API_URL=
-WA_API_TOKEN=
-WA_PHONE_NUMBER_ID=
+# WhatsApp — Meta Cloud API
+WA_PHONE_NUMBER_ID=             # ID del número en Meta
+WA_ACCESS_TOKEN=                # Token permanente Meta
+WA_VERIFY_TOKEN=                # Token para verificar webhook
 
 # Google Maps (para links en WA)
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=

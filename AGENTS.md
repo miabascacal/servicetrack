@@ -30,14 +30,25 @@ Antes de escribir cualquier código, lee estos archivos en orden:
 
 ## Estado actual del proyecto
 
+_Actualizado: 2026-04-13_
+
 - ✅ Next.js 14 inicializado con TypeScript y TailwindCSS
 - ✅ Supabase conectado con middleware de auth
 - ✅ Deploy en Vercel: servicetrack-one.vercel.app
-- ✅ Documentación completa del producto en los archivos MD
-- 🔲 Layout principal (Sidebar + Topbar) — por construir
-- 🔲 Dashboard con KPIs — por construir
-- 🔲 Módulo CRM — por construir
-- 🔲 Módulo CITAS con Kanban — por construir
+- ✅ Layout principal (Sidebar + Topbar) — construido
+- ✅ Módulo CRM — clientes, empresas, vehículos con CRUD completo y búsqueda
+- ✅ Módulo CITAS — Kanban con datos reales de Supabase, crear/editar/detalle
+- ✅ Módulo TALLER — Kanban OTs con datos reales de Supabase, crear/detalle
+- ✅ Módulo REFACCIONES — maestro partes + cotizaciones conectados a Supabase
+- ✅ Automatizaciones nativas: WA (Meta Cloud API) + Email (Resend) + Cron (Vercel)
+- ✅ Configuración de WhatsApp y Email por sucursal
+- ✅ Usuarios y roles (UI base construida)
+- 🔲 Sprint 2 — Permisos granulares por rol (usePermisos, middleware, validaciones)
+- 🔲 Sprint 4 — Timer 15 min, importar archivos, Recepción Express
+- 🔲 Sprint 5 — Líneas OT, WA al cambiar estado, escalación automática
+- 🔲 Sprint 7 — Ventas (placeholder)
+- 🔲 Sprint 8 — Bandeja+IA (UI mock sin datos reales)
+- 🔲 Sprints 9-11 — Atención, CSI, Seguros (sin empezar)
 
 ## Regla más importante
 

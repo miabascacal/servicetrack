@@ -149,7 +149,39 @@ CREATE TABLE error_logs (
 
 ---
 
-### 7. Página editar cliente — sección vinculación
+### 7. Ejecutar migración `002_email_config.sql` en Supabase
+
+La tabla `email_config` no existe en la BD. La pantalla `/configuracion/email` falla silenciosamente.
+**Pasos:**
+1. Abrir Supabase SQL Editor
+2. Ejecutar el contenido de `supabase/migrations/002_email_config.sql`
+3. Verificar que la pantalla de configuración de email guarda correctamente
+
+---
+
+### 8. Campos obligatorios en forms de CREAR — (ver punto 1)
+
+_(ya documentado arriba — relistado aquí para priorización)_
+
+---
+
+### 9. Detección de duplicados en tiempo real — (ver punto 2)
+
+_(ya documentado arriba)_
+
+---
+
+### 10. Permisos básicos por rol — deuda de Sprint 2
+
+Sin esto, cualquier usuario puede intentar eliminar registros de otros.
+**Mínimo viable:**
+- Server action verifica `usuario.rol` antes de DELETE
+- Botón "Eliminar" oculto si rol no es `admin` o `gerente`
+- Hook `usePermisos()` retorna permisos del usuario actual
+
+---
+
+### 11. Página editar cliente — sección vinculación
 
 En `/crm/clientes/[id]/editar` NO hay sección para vincular/desvincular empresa o vehículos.
 Esos controles solo están en el perfil (`/crm/clientes/[id]`).
