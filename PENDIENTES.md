@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-13 — análisis completo de código vs IMPLEMENTATION_PLAN.md_
+_Actualizado: 2026-04-14 — Sprint 8 Fase 1 implementada; WA API pendiente de proveedor; siguiente: bandeja real_
 
 ---
 
@@ -14,7 +14,7 @@ _Actualizado: 2026-04-13 — análisis completo de código vs IMPLEMENTATION_PLA
 | Sprint 5 | TALLER | 25% | 🔴 Base construida |
 | Sprint 6 | REFACCIONES | 30% | 🔴 Base construida |
 | Sprint 7 | VENTAS | 2% | 🔴 Placeholder |
-| Sprint 8 | BANDEJA + IA | 5% | 🔴 UI mock sin datos reales |
+| Sprint 8 | BANDEJA + IA | 35% | 🟡 Fase 1 implementada, WA sin validar, bandeja en progreso |
 | Sprint 9 | ATENCIÓN A CLIENTES | 0% | ⬜ Sin empezar |
 | Sprint 10 | CSI | 0% | ⬜ Sin empezar |
 | Sprint 11 | SEGUROS | 0% | ⬜ Sin empezar |
@@ -49,6 +49,38 @@ _Actualizado: 2026-04-13 — análisis completo de código vs IMPLEMENTATION_PLA
 - [x] WA automático al confirmar/cancelar cita
 - [x] Refacciones: `/partes` conectado a Supabase (`maestro_partes`)
 - [x] Refacciones: `/cotizaciones` conectado a Supabase (`cotizaciones`)
+
+---
+
+## 🚨 ACCIÓN INMEDIATA — ANTES DE CUALQUIER CÓDIGO NUEVO
+
+### A. ✅ Migración 003_ai_foundation.sql — COMPLETADA 2026-04-13
+### A2. ✅ Migración 004_messaging_adjustments.sql — COMPLETADA 2026-04-14
+Constraints actualizados: `message_source` → `agent`, `processing_status` → nuevo vocabulario, `last_message_source` alineado.
+
+### A3. ✅ Sprint 8 Fase 1 — IMPLEMENTADA 2026-04-14
+`lib/threads.ts` (`getOrCreateThread`), `lib/whatsapp.ts` (persistencia conversacional), `app/actions/citas.ts` (usuario_asesor_id + contexto).
+⬜ Validación runtime pendiente: `wa_numeros` vacío — ver pendiente WA abajo.
+
+### A4. 🚨 PENDIENTE BLOQUEANTE — WhatsApp Business API (dependencia externa)
+**Causa:** Problema con proveedor — número no dado de alta / posible estafa.
+**Impacto:** No se puede probar envío real, integración Meta, ni recepción (webhook).
+**Decisión:** NO bloquear desarrollo. Continuar con bandeja real y componentes internos.
+**Acción futura:** Cuando exista número válido → poblar `wa_numeros` → smoke test completo.
+
+
+Tablas creadas: `mensajes`, `ai_settings`, `conversation_threads`, `outbound_queue`, `automation_logs`
+Columnas en `mensajes`: `thread_id`, `message_source`, `wa_message_id`, `ai_intent`, `ai_intent_confidence`, `ai_sentiment`, `processing_status`
+Índices: `idx_mensajes_thread`, `idx_mensajes_wa_message_id` (UNIQUE), `idx_mensajes_processing`
+
+### B. Ejecutar migración 002_email_config.sql (sigue pendiente)
+**Archivo**: `supabase/migrations/002_email_config.sql`
+Sin esta tabla, la pantalla `/configuracion/email` falla silenciosamente.
+
+### C. ✅ Variables de entorno en Vercel — COMPLETAS 2026-04-13
+Todas en All Environments: `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (onboarding@resend.dev temporal),
+`CRON_SECRET`, `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 
 ---
 
@@ -191,6 +223,18 @@ _(Baja prioridad si ya accesibles desde perfil)_
 
 ## 🐛 BUGS / DEUDA TÉCNICA ENCONTRADA EN ANÁLISIS (2026-04-13)
 
+### Bug 0 — RLS por rol pendiente en tablas de capa IA (NUEVO — 2026-04-13)
+Las policies de `ai_settings` y `outbound_queue` (migración 003) solo validan `sucursal_id`.
+No validan rol del usuario. La verificación de rol (admin/gerente para modificar AI settings,
+encargadas/asesores para aprobar mensajes) se hace en server actions por ahora.
+→ **Endurecer con RLS por rol cuando se implemente Sprint 2 (usePermisos + middleware).**
+→ Afecta también: cualquier endpoint que use estas tablas.
+
+### Bug 0b — mensajes no tiene creado_at (NUEVO — detectado en migración 003)
+La tabla `mensajes` usa `enviado_at` como timestamp principal, NO `creado_at`.
+El índice `idx_mensajes_processing` fue corregido para usar `enviado_at`.
+→ Cualquier código que busque `mensajes.creado_at` fallará. Usar `enviado_at`.
+
 ### Bug 1 — AGENTS.md desactualizado
 `AGENTS.md` todavía dice que Layout, CRM y Citas están "por construir" — llevan semanas construidos.
 No afecta el código pero confunde a agentes de IA en sesiones nuevas.
@@ -209,7 +253,7 @@ fallará silenciosamente.
 ### Bug 4 — Bandeja (`/bandeja`) usa datos DEMO, no Supabase
 El código tiene el comentario: "Demo data — in production this comes from Supabase mensajes table".
 La bandeja NO está conectada a datos reales.
-→ Sprint 8 pendiente por completo.
+→ **PRIORIDAD ACTIVA — Sprint 8 Fase 3: bandeja real mínima en progreso.**
 
 ### Bug 5 — `hooks/` del proyecto tiene solo archivos de Next.js hooks (no app hooks)
 TECH_STACK.md documenta `useCitas.ts`, `useOTs.ts`, `useActividades.ts`, `useRealtime.ts`
@@ -276,3 +320,19 @@ Sigue sin verificarse.
 - Al aprobar → piezas se agregan a OT automáticamente
 
 **Sprints 7-11:** Ventas, Bandeja+IA, Atención, CSI, Seguros — por completo.
+
+---
+
+## 🎯 PRIORIDAD ACTIVA — Sprint 8 Fase 3: Bandeja real mínima
+
+Motivo: UI actual usa mock data. BD lista (`mensajes`, `conversation_threads`). Avanzar sin Meta.
+
+Debe mostrar:
+- Lista de conversaciones (desde `conversation_threads`)
+- Cliente vinculado
+- Último mensaje + fecha de última actividad
+- Canal (`whatsapp` | `email` | etc.)
+- Estado del hilo (`open` | `waiting_customer` | `waiting_agent`)
+- Quién envió el último mensaje (`last_message_source`)
+
+**Siguiente acción:** implementar `app/(dashboard)/bandeja/page.tsx` con datos reales.

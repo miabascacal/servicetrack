@@ -1,10 +1,10 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import type { EstadoCita } from '@/types/database'
-import { ensureUsuario } from '@/lib/ensure-usuario'
+import { createClient }       from '@/lib/supabase/server'
+import { createAdminClient }  from '@/lib/supabase/admin'
+import type { EstadoCita }    from '@/types/database'
+import { ensureUsuario }      from '@/lib/ensure-usuario'
 import {
   enviarMensajeWA,
   mensajeConfirmacionCita,
@@ -16,7 +16,7 @@ import { enviarEmail } from '@/lib/email'
 
 function formatearFecha(fecha: string): string {
   return new Date(fecha + 'T12:00:00').toLocaleDateString('es-MX', {
-    weekday: 'long', day: 'numeric', month: 'long'
+    weekday: 'long', day: 'numeric', month: 'long',
   })
 }
 
@@ -32,17 +32,17 @@ export async function createCitaAction(formData: FormData) {
   try { usuario = await ensureUsuario(supabase, user.id, user.email ?? '') }
   catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
 
-  const cliente_id = formData.get('cliente_id') as string
-  const fecha_cita = formData.get('fecha_cita') as string
-  const hora_cita = formData.get('hora_cita') as string
+  const cliente_id  = formData.get('cliente_id')  as string
+  const fecha_cita  = formData.get('fecha_cita')  as string
+  const hora_cita   = formData.get('hora_cita')   as string
 
   if (!cliente_id || !fecha_cita || !hora_cita) {
     return { error: 'Cliente, fecha y hora son requeridos' }
   }
 
   const vehiculo_id = (formData.get('vehiculo_id') as string) || null
-  const servicio = (formData.get('servicio') as string)?.trim() || null
-  const notas = (formData.get('notas') as string)?.trim() || null
+  const servicio    = (formData.get('servicio')    as string)?.trim() || null
+  const notas       = (formData.get('notas')       as string)?.trim() || null
 
   const { data, error } = await supabase
     .from('citas')
@@ -52,9 +52,9 @@ export async function createCitaAction(formData: FormData) {
       vehiculo_id: vehiculo_id || null,
       fecha_cita,
       hora_cita,
-      servicio: servicio || null,
-      notas: notas || null,
-      estado: 'pendiente_contactar' as unknown as EstadoCita,
+      servicio:    servicio    || null,
+      notas:       notas       || null,
+      estado:      'pendiente_contactar' as unknown as EstadoCita,
     })
     .select('id')
     .single()
@@ -72,6 +72,12 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+
+  // Resolver usuario de la tabla usuarios para propagar usuario_asesor_id
+  // en mensajes salientes (Sprint 8 Fase 1).
+  let usuario: import('@/lib/ensure-usuario').UsuarioCtx
+  try { usuario = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
 
   const ALLOWED_TRANSITIONS: Record<string, string[]> = {
     pendiente_contactar: ['contactada', 'confirmada', 'no_show', 'cancelada'],
@@ -111,69 +117,73 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
 
   // ── Enviar WhatsApp según el nuevo estado ──────────────────────────────
   type CitaConRelaciones = typeof cita & {
-    cliente: { id: string; nombre: string; whatsapp: string; email: string | null } | null
+    cliente:  { id: string; nombre: string; whatsapp: string; email: string | null } | null
     sucursal: { nombre: string; direccion: string | null } | null
   }
   const c = cita as unknown as CitaConRelaciones
 
   if (c.cliente && c.sucursal_id) {
     const datosMensaje = {
-      nombre: c.cliente.nombre,
-      fecha: formatearFecha(c.fecha_cita),
-      hora: c.hora_cita.slice(0, 5),
-      agencia: c.sucursal?.nombre ?? 'la agencia',
+      nombre:   c.cliente.nombre,
+      fecha:    formatearFecha(c.fecha_cita),
+      hora:     c.hora_cita.slice(0, 5),
+      agencia:  c.sucursal?.nombre ?? 'la agencia',
       direccion: c.sucursal?.direccion ?? undefined,
       servicio: (cita as unknown as { servicio: string | null }).servicio ?? undefined,
     }
 
     if (nuevoEstado === 'confirmada') {
-      // WhatsApp
       if (c.cliente.whatsapp) {
         void enviarMensajeWA({
-          sucursal_id: c.sucursal_id,
-          modulo: 'citas',
-          telefono: c.cliente.whatsapp,
-          mensaje: mensajeConfirmacionCita(datosMensaje),
-          tipo: 'confirmacion_cita',
-          entidad_tipo: 'cita',
-          entidad_id: citaId,
-          cliente_id: c.cliente.id,
+          sucursal_id:      c.sucursal_id,
+          modulo:           'citas',
+          telefono:         c.cliente.whatsapp,
+          mensaje:          mensajeConfirmacionCita(datosMensaje),
+          tipo:             'confirmacion_cita',
+          entidad_tipo:     'cita',
+          entidad_id:       citaId,
+          cliente_id:       c.cliente.id,
+          // Sprint 8 Fase 1: propagar contexto para persistencia conversacional
+          usuario_asesor_id: user.id,   // usuarios.id == auth UUID (ver ensure-usuario.ts)
+          contexto_tipo:    'cita',
+          contexto_id:      citaId,
         })
       }
-      // Email
       if (c.cliente.email) {
         void enviarEmail({
-          to: c.cliente.email,
-          tipo: 'confirmacion_cita',
-          datos: datosMensaje,
+          to:          c.cliente.email,
+          tipo:        'confirmacion_cita',
+          datos:       datosMensaje,
           sucursal_id: c.sucursal_id,
-          modulo: 'citas',
+          modulo:      'citas',
         })
       }
     }
 
     if (nuevoEstado === 'cancelada') {
-      // WhatsApp
       if (c.cliente.whatsapp) {
         void enviarMensajeWA({
-          sucursal_id: c.sucursal_id,
-          modulo: 'citas',
-          telefono: c.cliente.whatsapp,
-          mensaje: mensajeCitaCancelada(datosMensaje),
-          tipo: 'cita_cancelada',
-          entidad_tipo: 'cita',
-          entidad_id: citaId,
-          cliente_id: c.cliente.id,
+          sucursal_id:      c.sucursal_id,
+          modulo:           'citas',
+          telefono:         c.cliente.whatsapp,
+          mensaje:          mensajeCitaCancelada(datosMensaje),
+          tipo:             'cita_cancelada',
+          entidad_tipo:     'cita',
+          entidad_id:       citaId,
+          cliente_id:       c.cliente.id,
+          // Sprint 8 Fase 1: propagar contexto para persistencia conversacional
+          usuario_asesor_id: user.id,   // usuarios.id == auth UUID (ver ensure-usuario.ts)
+          contexto_tipo:    'cita',
+          contexto_id:      citaId,
         })
       }
-      // Email
       if (c.cliente.email) {
         void enviarEmail({
-          to: c.cliente.email,
-          tipo: 'cita_cancelada',
-          datos: datosMensaje,
+          to:          c.cliente.email,
+          tipo:        'cita_cancelada',
+          datos:       datosMensaje,
           sucursal_id: c.sucursal_id,
-          modulo: 'citas',
+          modulo:      'citas',
         })
       }
     }
