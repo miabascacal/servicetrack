@@ -63,9 +63,15 @@ Constraints actualizados: `message_source` → `agent`, `processing_status` → 
 ⬜ Validación runtime pendiente: `wa_numeros` vacío — ver pendiente WA abajo.
 
 ### A4. 🚨 PENDIENTE BLOQUEANTE — WhatsApp Business API (dependencia externa)
+
+⬜ **WhatsApp Business API / número no operativo**
+- `wa_numeros` vacío — sin `phone_number_id` ni `access_token` de Meta
+- Validación end-to-end de mensajería pendiente por dependencia externa
+- No bloquea desarrollo interno: bandeja real ✅, webhook (pendiente Sprint 8 Fase 2), clasificador IA (pendiente)
+
 **Causa:** Problema con proveedor — número no dado de alta / posible estafa.
 **Impacto:** No se puede probar envío real, integración Meta, ni recepción (webhook).
-**Decisión:** NO bloquear desarrollo. Continuar con bandeja real y componentes internos.
+**Decisión:** NO bloquear desarrollo. Continuar con componentes internos.
 **Acción futura:** Cuando exista número válido → poblar `wa_numeros` → smoke test completo.
 
 

@@ -209,6 +209,42 @@ No es deuda de código. Acción: cuando exista número → poblar `wa_numeros` �
 
 ---
 
+## REGLA PERMANENTE — DOCUMENTACIÓN Y SINCRONIZACIÓN
+
+1. **Actualización obligatoria al cierre de cada tarea relevante.**
+   Cada cambio en arquitectura, BD, flujos, integraciones externas, mensajería,
+   IA, seguridad, despliegue o configuración operativa obliga a evaluar y actualizar
+   los documentos afectados antes de dar la tarea por terminada.
+
+2. **Documentos a revisar cuando aplique:**
+   - `CLAUDE.md` — decisiones, estado actual, reglas de arquitectura
+   - `docs/IMPLEMENTATION_RUNBOOK.md` — configuración, go-live, soporte
+   - `PENDIENTES.md` — roadmap y prioridades si el cambio las altera
+   - Documentos de arquitectura existentes
+   - Manuales operativos o de usuario ya existentes
+
+3. **No dar una tarea por terminada si dejó documentos desactualizados.**
+
+4. **CLAUDE.md se mantiene ligero.**
+   Solo contiene: decisiones clave, estado actual, reglas de arquitectura y
+   referencias a documentación operativa. No duplica documentos largos.
+
+5. **IMPLEMENTATION_RUNBOOK.md es el documento operativo detallado.**
+   Cubre: infraestructura, variables de entorno, configuración por cliente/sucursal,
+   checklists de go-live, validaciones técnicas, troubleshooting y glosario.
+   → Ver `docs/IMPLEMENTATION_RUNBOOK.md`
+
+6. **Dependencias externas pendientes se registran explícitamente.**
+   Cuando un cambio quede bloqueado por validación externa (ej. Meta WhatsApp
+   Business API, proveedor de número, OAuth de tercero), se documenta como
+   `⬜ PENDIENTE — bloqueado por [dependencia]` en CLAUDE.md y en PENDIENTES.md.
+
+7. **Nuevos runbooks o manuales se registran en CLAUDE.md.**
+   Al crear un nuevo documento operativo, agregar su referencia en la sección
+   "Documentación operativa" de CLAUDE.md.
+
+---
+
 ## COLORES POR MÓDULO (usar siempre estos)
 
 ```typescript
