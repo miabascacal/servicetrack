@@ -31,7 +31,7 @@ Lee también: PRODUCT_MASTER.md · SUPABASE_SCHEMA.sql · TECH_STACK.md · N8N_W
 | CRM — Empresas | `/crm/empresas`, `/crm/empresas/[id]`, `/nuevo`, `/editar` | ✅ Funcional |
 | CRM — Vehículos | `/crm/vehiculos`, `/crm/vehiculos/[id]`, `/nuevo`, `/editar` | ✅ Funcional |
 | Citas | `/citas` (kanban), `/citas/[id]`, `/citas/nuevo` | ✅ Funcional |
-| Taller / OTs | `/taller` (kanban), `/taller/[id]`, `/taller/nuevo` | ✅ Construido |
+| Taller / OTs | `/taller` (kanban), `/taller/[id]`, `/taller/nuevo` | ✅ Construido — soporta numero_ot_dms + eventos internos en bandeja |
 | Usuarios | `/usuarios`, `/usuarios/roles`, `/usuarios/roles/nuevo` | ✅ Construido |
 | Refacciones | `/refacciones/partes`, cotizaciones | ✅ Construido |
 | Bandeja / Automatizaciones | `/bandeja/automatizaciones` | ✅ Construido |
@@ -165,7 +165,25 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
 
 `cases` · `case_status_history` · `ai_logs` · `knowledge_base` · ALTER TABLE mensajes (case_id, ai_suggested_reply, ai_reply_sent) · ALTER TABLE clientes · ALTER TABLE citas · ALTER TABLE ordenes_trabajo
 
-### Estado Sprint 8 — actualizado 2026-04-14
+### Decisiones clave — Taller + DMS (2026-04-15)
+
+- **`ordenes_trabajo` tiene dos identificadores distintos:**
+  - `numero_ot` = identificador interno ServiceTrack. Inmutable. Generado por `generarNumeroOT()`.
+  - `numero_ot_dms` = identificador externo del DMS del cliente (Autoline, CDK, etc). Opcional, nullable.
+  - Nunca reutilizar uno para el otro. Nunca guardar el número DMS en notas o metadata.
+- **Pantallas que muestran `numero_ot` también deben mostrar `numero_ot_dms` cuando exista.**
+  - Aplica a: lista de taller, detalle de OT, cualquier tarjeta o componente que renderice el número.
+- **Taller genera eventos internos en mensajes/bandeja:**
+  - OT creada → mensaje de sistema en hilo `canal='interno'` con `contexto_tipo='ot'`.
+  - Cambio de estado → mensaje de sistema en el mismo hilo.
+  - `processing_status = 'skipped'` — no pasan por el clasificador IA.
+  - Visible en bandeja bajo filtro "Todos". Canal identificado como "Interno".
+  - Implementado en `insertarEventoOT()` helper en `app/actions/taller.ts`.
+  - Best-effort: errores en el evento NO fallan la operación principal de OT.
+- **`conversation_threads.canal` ahora acepta `'interno'`** (migración 006).
+- **`lib/threads.ts` — `ThreadCanal`** incluye `'interno'`.
+
+### Estado Sprint 8 — actualizado 2026-04-15
 
 #### Fase 1 — Saliente → mensajes ✅ IMPLEMENTADA
 

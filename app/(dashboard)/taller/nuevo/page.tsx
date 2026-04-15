@@ -235,6 +235,27 @@ export default function NuevaOTPage() {
           </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              No. OT — ServiceTrack
+            </label>
+            <p className="text-xs text-gray-400 mt-0.5">Se genera automáticamente al crear la OT.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              No. OT — DMS{' '}
+              <span className="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <input
+              name="numero_ot_dms"
+              type="text"
+              placeholder="Ej: 98765 (número en Autoline u otro DMS)"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Diagnóstico / Descripción del servicio</label>
           <textarea

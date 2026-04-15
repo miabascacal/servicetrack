@@ -23,7 +23,7 @@ import { getThreadMessagesAction, type MensajeRow } from '@/app/actions/bandeja'
 // Tipos exportados — usados por page.tsx (Server Component)
 // ─────────────────────────────────────────────────────────
 
-export type BandejaCanal   = 'whatsapp' | 'email' | 'facebook' | 'instagram'
+export type BandejaCanal   = 'whatsapp' | 'email' | 'facebook' | 'instagram' | 'interno'
 export type BandejaEstado  = 'open' | 'waiting_customer' | 'waiting_agent'
 
 export interface ThreadRow {
@@ -95,6 +95,7 @@ const CANAL_CONFIG: Record<string, {
   email:     { label: 'Email',    color: 'text-blue-600',  bg: 'bg-blue-500',   icon: <Mail size={13} /> },
   instagram: { label: 'IG',       color: 'text-pink-600',  bg: 'bg-gradient-to-br from-purple-500 to-pink-500', icon: <Instagram size={13} /> },
   facebook:  { label: 'Facebook', color: 'text-blue-700',  bg: 'bg-blue-600',   icon: <Facebook size={13} /> },
+  interno:   { label: 'Interno',  color: 'text-gray-600',  bg: 'bg-gray-500',   icon: <Wrench size={13} /> },
 }
 
 function getCanalCfg(canal: string) {

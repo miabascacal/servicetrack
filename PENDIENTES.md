@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-14 — Sprint 8 Fase 1 implementada; WA API pendiente de proveedor; siguiente: bandeja real_
+_Actualizado: 2026-04-15 — Sprint 8 Fase 1 implementada; Taller: numero_ot_dms + eventos internos en bandeja implementados; migración 005+006 pendientes de ejecutar_
 
 ---
 

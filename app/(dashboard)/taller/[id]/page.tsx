@@ -40,7 +40,7 @@ export default async function OTDetailPage({ params }: PageProps) {
   const { data: ot } = await supabase
     .from('ordenes_trabajo')
     .select(`
-      id, numero_ot, estado, diagnostico, notas_internas,
+      id, numero_ot, numero_ot_dms, estado, diagnostico, notas_internas,
       km_ingreso, promesa_entrega, fecha_entrega, created_at, updated_at,
       cliente:clientes ( id, nombre, apellido, apellido_2, whatsapp, email ),
       vehiculo:vehiculos ( id, marca, modelo, anio, color, placa, km_actual ),
@@ -59,6 +59,7 @@ export default async function OTDetailPage({ params }: PageProps) {
     .order('created_at')
 
   type OTFull = typeof ot & {
+    numero_ot_dms: string | null
     cliente: { id: string; nombre: string; apellido: string; apellido_2: string | null; whatsapp: string; email: string | null } | null
     vehiculo: { id: string; marca: string; modelo: string; anio: number; color: string | null; placa: string | null; km_actual: number | null } | null
     asesor: { id: string; nombre: string; apellido: string } | null
@@ -78,8 +79,13 @@ export default async function OTDetailPage({ params }: PageProps) {
             <ChevronLeft size={18} />
           </Link>
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-xl font-semibold text-gray-900 font-mono">{o.numero_ot}</h1>
+              {o.numero_ot_dms && (
+                <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                  DMS: {o.numero_ot_dms}
+                </span>
+              )}
               <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-medium', ESTADO_COLORS[estado])}>
                 {ESTADO_LABELS[estado]}
               </span>

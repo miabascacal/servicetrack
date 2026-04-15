@@ -1,8 +1,8 @@
 # IMPLEMENTATION_RUNBOOK.md — ServiceTrack
 
 > Documento técnico y operativo para la implementación de ServiceTrack en clientes reales.
-> Última revisión: 2026-04-14
-> Sprint de referencia: Sprint 8 (Fase 1 en progreso)
+> Última revisión: 2026-04-15
+> Sprint de referencia: Sprint 8 (Fase 1 completa — Taller+DMS implementado)
 
 ---
 
@@ -20,7 +20,7 @@ No es un manual comercial. Es un documento de operación para quien ejecuta la i
 |---|---|
 | CRM (Clientes, Empresas, Vehículos) | ✅ Operativo |
 | Citas (Kanban) | ✅ Operativo |
-| Taller / OTs | ✅ Construido — pendiente validación de flujo completo |
+| Taller / OTs | ✅ Construido — `numero_ot_dms` implementado; eventos internos en bandeja activos; pendiente validación de flujo completo post-migración |
 | Refacciones | ✅ Construido |
 | Bandeja / Automatizaciones (UI) | 🔄 En desarrollo — usa datos mock, no conectada a Supabase real |
 | WhatsApp — canal saliente | ✅ Operativo (`lib/whatsapp.ts`) |
@@ -36,8 +36,14 @@ No es un manual comercial. Es un documento de operación para quien ejecuta la i
 **Nota sobre mensajería:**
 - `mensajes` es la fuente de verdad para conversaciones (Sprint 8 Fase 1 activa).
 - `wa_mensajes_log` es la tabla legacy de log técnico de API. Se conserva como auditoría de bajo nivel. No usarla para lógica de negocio nueva.
-- `conversation_threads` agrupa mensajes por cliente + canal + contexto. Operativo para salientes.
+- `conversation_threads` agrupa mensajes por cliente + canal + contexto. Operativo para salientes y eventos internos.
 - El bot de IA está apagado por defecto (`ai_settings.activo = FALSE`). No se activa solo.
+- `canal = 'interno'` en `conversation_threads` y `mensajes` se usa para eventos de sistema (ej. creación de OT, cambio de estado). Visible en bandeja bajo filtro "Todos". No requiere WA ni email.
+
+**Nota sobre Taller / OTs — identificadores duales:**
+- `numero_ot` — identificador interno ServiceTrack. Inmutable, auto-generado (`OT-YYYYMM-XXXX`). Es la referencia interna del sistema.
+- `numero_ot_dms` — número de OT en el DMS externo del cliente (Autoline u otro). Opcional (`NULL` si no aplica). Nunca reemplaza ni sobreescribe `numero_ot`.
+- Ambos identificadores deben mostrarse en pantalla cuando `numero_ot_dms` esté presente. El UI los muestra en el listado de taller y en el detalle de OT.
 
 ---
 
@@ -90,6 +96,7 @@ El sistema no tiene servidor propio. Todo corre en Vercel (stateless) con Supaba
 | Ruta | Propósito | Estado |
 |---|---|---|
 | `app/actions/citas.ts` | CRUD citas + disparo de WA/Email | ✅ Operativo |
+| `app/actions/taller.ts` | CRUD OTs + eventos internos en mensajes/bandeja | ✅ Operativo |
 | `app/api/cron/recordatorios-citas/route.ts` | Recordatorios 24h antes de cita | ✅ Operativo |
 | `app/api/webhooks/whatsapp/route.ts` | Recepción de mensajes WA entrantes | ⬜ Pendiente |
 
@@ -102,6 +109,10 @@ Migraciones aplicadas:
 - `002_email_config.sql` ✅
 - `003_ai_foundation.sql` ✅
 - `004_messaging_adjustments.sql` — verificar si fue ejecutada (agrega columna `processing_status: 'skipped'` usada en mensajes salientes)
+- `005_taller_foundation.sql` ⬜ **PENDIENTE DE EJECUTAR** — crea `ordenes_trabajo` y `lineas_ot`
+- `006_ot_dms_and_taller_events.sql` ⬜ **PENDIENTE DE EJECUTAR** — agrega `numero_ot_dms` y expande constraint `canal` de `conversation_threads` para incluir `'interno'`
+
+**Orden obligatorio:** ejecutar 005 antes de 006. Ejecutar 006 antes de desplegar el módulo Taller.
 
 ### 4.4 Cron Jobs
 
@@ -237,7 +248,8 @@ Modelos configurados por defecto en `ai_settings`:
 | `vehiculos` | Vehículos vinculados a clientes | Por sucursal |
 | `empresas` | Empresas (personas morales) | Por sucursal |
 | `citas` | Citas de servicio | Por sucursal |
-| `ordenes_trabajo` | OTs abiertas en taller | Por sucursal |
+| `ordenes_trabajo` | OTs abiertas en taller — incluye `numero_ot` (interno) y `numero_ot_dms` (externo, nullable) | Por sucursal |
+| `lineas_ot` | Líneas de trabajo/partes asociadas a una OT | Por sucursal (vía OT) |
 | `mensajes` | Todos los mensajes entrantes y salientes | Por sucursal |
 | `conversation_threads` | Agrupación de mensajes por contexto | Por sucursal |
 | `wa_numeros` | Credenciales Meta API por número y módulo | Por sucursal |
@@ -260,9 +272,11 @@ Las siguientes tablas se llenan durante la operación y no requieren configuraci
 
 - **RLS activo en todas las tablas.** La función `get_mi_sucursal_id()` determina qué filas ve cada usuario según su JWT.
 - **`conversation_threads.contexto_id`** es FK lógica sin constraint declarado. Puede apuntar a `citas`, `ordenes_trabajo`, `cotizaciones` o `leads` según `contexto_tipo`. La integridad la mantiene el código.
-- **`mensajes.processing_status = NULL`** en mensajes históricos — no entran al clasificador IA. Solo filas nuevas post-003 tienen `DEFAULT 'pending'`.
+- **`mensajes.processing_status = NULL`** en mensajes históricos — no entran al clasificador IA. Solo filas nuevas post-003 tienen `DEFAULT 'pending'`. Los mensajes internos de sistema usan `processing_status = 'skipped'` — nunca entran al clasificador IA.
 - **`ai_settings.activo = FALSE`** por defecto. El bot no se activa sin acción explícita de admin.
 - **`outbound_queue` e `automation_logs`** no tienen policy de INSERT para usuarios autenticados — solo inserta service role.
+- **`conversation_threads.canal = 'interno'`** — canal especial para eventos de sistema (creación OT, cambio de estado OT). No requiere número WA ni configuración de email. Visible en bandeja bajo filtro "Todos". Requiere migración 006 ejecutada.
+- **Eventos internos de OT** — best-effort: si la inserción del evento en `mensajes` falla, la operación OT (crear/cambiar estado) NO falla. Los errores se registran en logs del servidor (`console.error`).
 
 ---
 
@@ -273,7 +287,7 @@ Un "cliente" de ServiceTrack es una agencia o grupo automotriz. Corresponde a un
 | Paso | Acción | Dónde |
 |---|---|---|
 | 1 | Crear proyecto Supabase (o reusar instancia SaaS con RLS) | Supabase Dashboard |
-| 2 | Ejecutar migraciones `001` → `003` en orden | Supabase SQL Editor |
+| 2 | Ejecutar migraciones `001` → `006` en orden | Supabase SQL Editor |
 | 3 | Insertar fila en `grupos` con nombre del cliente | SQL o UI admin |
 | 4 | Crear sucursal(es) en `sucursales` con FK a `grupos.id` | SQL o UI admin |
 | 5 | Crear primer usuario admin en Supabase Auth | Supabase Dashboard → Auth |
@@ -315,8 +329,9 @@ Si no hay número para el módulo específico, `lib/whatsapp.ts` hace fallback a
 ### Infraestructura
 
 - [ ] Proyecto Supabase creado y configurado
-- [ ] Migraciones `001`, `002`, `003` ejecutadas y verificadas
-- [ ] `004_messaging_adjustments.sql` ejecutada (si aplica — verificar si existe)
+- [ ] Migraciones `001`, `002`, `003`, `004` ejecutadas y verificadas
+- [ ] `005_taller_foundation.sql` ejecutada (crea `ordenes_trabajo` y `lineas_ot`)
+- [ ] `006_ot_dms_and_taller_events.sql` ejecutada (agrega `numero_ot_dms` + expande constraint `canal`)
 - [ ] Variables de entorno configuradas en Vercel (todos los entornos)
 - [ ] Deploy a producción exitoso (`npm run build` sin errores)
 - [ ] Cron job visible en Vercel Dashboard → Cron Jobs
@@ -362,10 +377,34 @@ SELECT table_name FROM information_schema.tables
 WHERE table_schema = 'public'
 AND table_name IN (
   'mensajes','ai_settings','conversation_threads',
-  'outbound_queue','automation_logs'
+  'outbound_queue','automation_logs',
+  'ordenes_trabajo','lineas_ot'
 )
 ORDER BY table_name;
--- Debe devolver 5 filas
+-- Debe devolver 7 filas
+```
+
+### Verificar columnas de ordenes_trabajo (migraciones 005 + 006)
+
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'ordenes_trabajo'
+AND column_name IN ('numero_ot', 'numero_ot_dms', 'seguimiento_token', 'estado')
+ORDER BY column_name;
+-- numero_ot: text, NO (NOT NULL)
+-- numero_ot_dms: text, YES (nullable)
+-- seguimiento_token: text, NO (NOT NULL, UNIQUE)
+-- estado: text o enum, NO
+```
+
+### Verificar constraint canal en conversation_threads (migración 006)
+
+```sql
+SELECT constraint_name, check_clause
+FROM information_schema.check_constraints
+WHERE constraint_name = 'conversation_threads_canal_check';
+-- check_clause debe incluir 'interno'
 ```
 
 ### Verificar processing_status default
@@ -432,6 +471,10 @@ Estas pruebas deben ejecutarse antes de dar acceso a usuarios reales.
 | E8 | Ejecutar cron manualmente | Responde 200, registros en `wa_mensajes_log` |
 | E9 | Usuario de sucursal B intenta ver datos de sucursal A | No ve nada (RLS) |
 | E10 | Verificar `automation_logs` | Hay registro de los eventos E5 y E6 (si está implementado) |
+| E11 | Crear OT desde `/taller/nuevo` | OT aparece en listado con `numero_ot`; si se ingresó `numero_ot_dms`, se muestra en la fila |
+| E12 | Cambiar estado de OT | Estado se actualiza; `mensajes` tiene un registro con `canal = 'interno'`, `message_source = 'system'`; `conversation_threads` tiene un hilo con `canal = 'interno'` para esa OT |
+| E13 | Crear OT con `numero_ot_dms` | Detalle `/taller/[id]` muestra badge "DMS: XXXXX" junto al número interno |
+| E14 | Abrir OT de otra sucursal por UUID directo | Página devuelve 404 (RLS protege acceso) |
 
 ---
 
@@ -518,7 +561,7 @@ No debería ocurrir — los índices parciales únicos en BD previenen duplicado
 | Riesgo | Severidad | Descripción | Mitigación |
 |---|---|---|---|
 | WA solo saliente | Alta | Sin webhook, los mensajes entrantes no se procesan ni registran | Implementar Sprint 8 Fase 2 antes de activar WA con clientes |
-| Bandeja con datos mock | Media | La UI de bandeja no refleja datos reales — confusión para demos/piloto | Conectar a Supabase antes de piloto con cliente |
+| Bandeja con datos mock | Media | La UI de bandeja no refleja datos reales — confusión para demos/piloto. Eventos internos de OT SÍ se guardan en Supabase, pero la bandeja no los muestra hasta que se conecte. | Conectar a Supabase antes de piloto con cliente |
 | `message_count` sin incremento | Baja | El contador denormalizado en `conversation_threads` no se actualiza | Implementar trigger o RPC en Fase 2 |
 | RLS por rol pendiente | Media | `ai_settings` y `outbound_queue` solo validan sucursal, no rol | Implementar con Sprint 2 (usePermisos) |
 | Token WA expirable | Alta | Access tokens de Meta pueden expirar — sistema falla silenciosamente | Implementar renovación de tokens o usar token permanente de negocio |
@@ -547,7 +590,7 @@ No debería ocurrir — los índices parciales únicos en BD previenen duplicado
 | RLS por rol | `ai_settings` y `outbound_queue` — solo validar sucursal, no rol |
 | `wa_mensajes_log` → deprecar | Migrar completamente a `mensajes` como única fuente de verdad conversacional |
 | Módulos vacíos | Ventas, CSI, Seguros, Reportes, Atención — sin implementar |
-| Validación flujo OT | Flujo completo de OT nunca validado post-fixes de estado |
+| Validación flujo OT | Flujo completo de OT nunca validado post-migración 005+006 — pendiente ejecutar migraciones y probar end-to-end |
 | Dominio email propio | Actualmente usa `onboarding@resend.dev` |
 
 ---
@@ -570,3 +613,6 @@ No debería ocurrir — los índices parciales únicos en BD previenen duplicado
 | **service role** | Cliente de Supabase que bypasea RLS. Usado solo en server-side via `createAdminClient()`. Nunca exponer al frontend. |
 | **CRON_SECRET** | String secreto que protege el endpoint del cron job. Meta/Vercel envía este header para verificar que la llamada es legítima. |
 | **horario del bot** | 8:00 AM – 7:30 PM hora México. Mensajes fuera de este horario se encolan en `outbound_queue`. |
+| **numero_ot** | Número de OT interno de ServiceTrack. Formato `OT-YYYYMM-XXXX`. Inmutable. Siempre presente. Es el identificador de referencia dentro del sistema. |
+| **numero_ot_dms** | Número de OT en el DMS externo del cliente (Autoline u otro). Opcional. `NULL` si el cliente no usa DMS o no ingresó el número. Nunca reemplaza `numero_ot`. |
+| **evento_interno** | Mensaje con `canal = 'interno'` y `message_source = 'system'` en la tabla `mensajes`. Registra acciones del sistema (ej. creación OT, cambio de estado). Visible en bandeja bajo "Todos". No dispara WA ni email. |

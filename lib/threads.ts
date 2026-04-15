@@ -18,7 +18,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 // ── Tipos exportados ───────────────────────────────────────────────────────
 
-export type ThreadCanal = 'whatsapp' | 'email' | 'facebook' | 'instagram'
+export type ThreadCanal = 'whatsapp' | 'email' | 'facebook' | 'instagram' | 'interno'
 
 /**
  * Contextos de Phase 1. 'postventa' existe en BD pero se reserva para fases posteriores.

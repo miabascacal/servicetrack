@@ -2,10 +2,12 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { EstadoOT } from '@/types/database'
 import { ensureUsuario } from '@/lib/ensure-usuario'
 import { tieneRol } from '@/lib/permisos'
-import { OT_TRANSITIONS } from '@/lib/ot-estados'
+import { OT_TRANSITIONS, ESTADO_OT_LABELS } from '@/lib/ot-estados'
+import { getOrCreateThread } from '@/lib/threads'
 
 // ── Generar número de OT único ─────────────────────────────────────────────
 function generarNumeroOT(): string {
@@ -47,6 +49,54 @@ async function recalcularTotalesOT(
     .eq('id', ot_id)
 }
 
+// ── Insertar evento interno de sistema en bandeja ─────────────────────────
+// Best-effort: los errores aquí NO fallan la operación principal.
+// Crea o reutiliza el hilo 'interno' del contexto OT e inserta un
+// mensaje de sistema visible en la bandeja bajo el filtro "Todos".
+async function insertarEventoOT(params: {
+  sucursal_id:  string
+  cliente_id:   string
+  ot_id:        string
+  numero_ot:    string
+  numero_ot_dms: string | null
+  contenido:    string
+  assignee_id?: string
+}): Promise<void> {
+  const admin = createAdminClient()
+
+  const { thread_id } = await getOrCreateThread({
+    sucursal_id:  params.sucursal_id,
+    cliente_id:   params.cliente_id,
+    canal:        'interno',
+    contexto_tipo: 'ot',
+    contexto_id:  params.ot_id,
+    assignee_id:  params.assignee_id,
+  })
+
+  const now = new Date().toISOString()
+
+  await admin.from('mensajes').insert({
+    sucursal_id:      params.sucursal_id,
+    cliente_id:       params.cliente_id,
+    thread_id,
+    canal:            'interno',
+    direccion:        'saliente',
+    message_source:   'system',
+    contenido:        params.contenido,
+    enviado_por_bot:  false,
+    enviado_at:       now,
+    processing_status: 'skipped',   // eventos del sistema no pasan por el clasificador IA
+  })
+
+  // Actualizar metadatos del hilo para que aparezca en bandeja con orden correcto
+  await admin.from('conversation_threads')
+    .update({
+      last_message_at:     now,
+      last_message_source: 'system',
+    })
+    .eq('id', thread_id)
+}
+
 // ── Crear OT ───────────────────────────────────────────────────────────────
 export async function createOTAction(formData: FormData) {
   const supabase = await createClient()
@@ -68,8 +118,12 @@ export async function createOTAction(formData: FormData) {
   const diagnostico = (formData.get('diagnostico') as string)?.trim() || null
   const notas_internas = (formData.get('notas_internas') as string)?.trim() || null
   const promesa_entrega = (formData.get('promesa_entrega') as string) || null
+  const numero_ot_dms = (formData.get('numero_ot_dms') as string)?.trim() || null
 
   if (!cliente_id) return { error: 'Cliente es requerido' }
+
+  // Generar número interno antes del INSERT para usarlo en el evento de sistema
+  const numero_ot = generarNumeroOT()
 
   const { data, error } = await supabase
     .from('ordenes_trabajo')
@@ -79,7 +133,8 @@ export async function createOTAction(formData: FormData) {
       vehiculo_id,
       cita_id,
       asesor_id: user.id,
-      numero_ot: generarNumeroOT(),
+      numero_ot,
+      numero_ot_dms,
       estado: 'recibido' as EstadoOT,
       km_ingreso,
       diagnostico,
@@ -90,6 +145,22 @@ export async function createOTAction(formData: FormData) {
     .single()
 
   if (error) return { error: `Error al crear la orden de trabajo: ${error.message}` }
+
+  // Evento interno — best-effort: no falla la creación de la OT si hay error aquí
+  try {
+    const dmsInfo = numero_ot_dms ? ` · DMS: ${numero_ot_dms}` : ''
+    await insertarEventoOT({
+      sucursal_id:  usuario.sucursal_id,
+      cliente_id,
+      ot_id:        data.id,
+      numero_ot,
+      numero_ot_dms,
+      contenido:    `OT creada — ServiceTrack: ${numero_ot}${dmsInfo}.`,
+      assignee_id:  user.id,
+    })
+  } catch (e) {
+    console.error('[createOT] error creando evento interno:', e)
+  }
 
   revalidatePath('/taller')
   return { id: data.id }
@@ -109,9 +180,10 @@ export async function updateEstadoOTAction(otId: string, nuevoEstado: EstadoOT) 
   if (!tieneRol(ctx.rol, 'asesor_servicio'))
     return { success: false, error: 'Sin permisos para esta operación' }
 
+  // Traer estado actual + contexto necesario para el evento interno
   const { data: ot } = await supabase
     .from('ordenes_trabajo')
-    .select('estado')
+    .select('estado, cliente_id, sucursal_id, numero_ot, numero_ot_dms')
     .eq('id', otId)
     .single()
 
@@ -133,6 +205,25 @@ export async function updateEstadoOTAction(otId: string, nuevoEstado: EstadoOT) 
     .eq('id', otId)
 
   if (error) return { error: 'Error al actualizar el estado' }
+
+  // Evento interno — best-effort
+  try {
+    if (ot.cliente_id && ot.sucursal_id) {
+      const estadoAnterior = ESTADO_OT_LABELS[ot.estado as EstadoOT] ?? ot.estado
+      const estadoNuevo    = ESTADO_OT_LABELS[nuevoEstado] ?? nuevoEstado
+      const dmsInfo = ot.numero_ot_dms ? ` · DMS: ${ot.numero_ot_dms}` : ''
+      await insertarEventoOT({
+        sucursal_id:  ot.sucursal_id,
+        cliente_id:   ot.cliente_id,
+        ot_id:        otId,
+        numero_ot:    ot.numero_ot,
+        numero_ot_dms: ot.numero_ot_dms,
+        contenido:    `Estado actualizado — ${ot.numero_ot}${dmsInfo}: "${estadoAnterior}" → "${estadoNuevo}".`,
+      })
+    }
+  } catch (e) {
+    console.error('[updateEstadoOT] error creando evento interno:', e)
+  }
 
   revalidatePath('/taller')
   revalidatePath(`/taller/${otId}`)

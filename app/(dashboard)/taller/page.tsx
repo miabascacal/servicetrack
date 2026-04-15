@@ -26,7 +26,7 @@ export default async function TallerPage({ searchParams }: PageProps) {
   let query = supabase
     .from('ordenes_trabajo')
     .select(`
-      id, numero_ot, estado, diagnostico, km_ingreso, promesa_entrega, created_at, updated_at,
+      id, numero_ot, numero_ot_dms, estado, diagnostico, km_ingreso, promesa_entrega, created_at, updated_at,
       cliente:clientes ( id, nombre, apellido, whatsapp ),
       vehiculo:vehiculos ( id, marca, modelo, anio, placa ),
       asesor:usuarios ( id, nombre, apellido )
@@ -144,6 +144,11 @@ export default async function TallerPage({ searchParams }: PageProps) {
                       <Link href={`/taller/${row.id}`} className="font-mono text-xs font-medium text-blue-600 hover:underline">
                         {row.numero_ot}
                       </Link>
+                      {(row as unknown as { numero_ot_dms: string | null }).numero_ot_dms && (
+                        <p className="text-xs text-gray-400 font-mono mt-0.5">
+                          DMS: {(row as unknown as { numero_ot_dms: string | null }).numero_ot_dms}
+                        </p>
+                      )}
                       {row.diagnostico && (
                         <p className="text-xs text-gray-500 mt-0.5 truncate max-w-[160px]">{row.diagnostico}</p>
                       )}
