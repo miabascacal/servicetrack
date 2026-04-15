@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { EstadoOT } from '@/types/database'
 import { ensureUsuario } from '@/lib/ensure-usuario'
+import { tieneRol } from '@/lib/permisos'
+import { OT_TRANSITIONS } from '@/lib/ot-estados'
 
 // ── Generar número de OT único ─────────────────────────────────────────────
 function generarNumeroOT(): string {
@@ -13,6 +15,36 @@ function generarNumeroOT(): string {
   const day = String(now.getDate()).padStart(2, '0')
   const rand = Math.floor(Math.random() * 9000) + 1000
   return `OT-${year}${month}${day}-${rand}`
+}
+
+// ── Recalcular totales de OT ───────────────────────────────────────────────
+// Llama después de cualquier INSERT o DELETE en lineas_ot.
+// Actualiza total_mano_obra, total_refacciones y total_ot en ordenes_trabajo.
+async function recalcularTotalesOT(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ot_id: string
+): Promise<void> {
+  const { data: lineas } = await supabase
+    .from('lineas_ot')
+    .select('tipo, total')
+    .eq('ot_id', ot_id)
+
+  const rows = lineas ?? []
+
+  const totalManoObra = rows
+    .filter(l => l.tipo === 'mano_obra')
+    .reduce((s, l) => s + (l.total ?? 0), 0)
+
+  const totalRefacciones = rows
+    .filter(l => ['refaccion', 'fluido', 'externo', 'cortesia'].includes(l.tipo))
+    .reduce((s, l) => s + (l.total ?? 0), 0)
+
+  const totalOT = rows.reduce((s, l) => s + (l.total ?? 0), 0)
+
+  await supabase
+    .from('ordenes_trabajo')
+    .update({ total_mano_obra: totalManoObra, total_refacciones: totalRefacciones, total_ot: totalOT })
+    .eq('id', ot_id)
 }
 
 // ── Crear OT ───────────────────────────────────────────────────────────────
@@ -25,6 +57,9 @@ export async function createOTAction(formData: FormData) {
   let usuario: import('@/lib/ensure-usuario').UsuarioCtx
   try { usuario = await ensureUsuario(supabase, user.id, user.email ?? '') }
   catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(usuario.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   const cliente_id = formData.get('cliente_id') as string
   const vehiculo_id = (formData.get('vehiculo_id') as string) || null
@@ -39,7 +74,7 @@ export async function createOTAction(formData: FormData) {
   const { data, error } = await supabase
     .from('ordenes_trabajo')
     .insert({
-      sucursal_id: usuario.sucursal_id ?? usuario.grupo_id,
+      sucursal_id: usuario.sucursal_id,
       cliente_id,
       vehiculo_id,
       cita_id,
@@ -61,20 +96,18 @@ export async function createOTAction(formData: FormData) {
 }
 
 // ── Cambiar estado OT ──────────────────────────────────────────────────────
-const ALLOWED_TRANSITIONS: Record<EstadoOT, EstadoOT[]> = {
-  recibido:     ['diagnostico', 'en_reparacion', 'cancelado'],
-  diagnostico:  ['en_reparacion', 'cancelado'],
-  en_reparacion: ['listo', 'cancelado'],
-  listo:        ['entregado'],
-  entregado:    [],
-  cancelado:    [],
-}
-
 export async function updateEstadoOTAction(otId: string, nuevoEstado: EstadoOT) {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   const { data: ot } = await supabase
     .from('ordenes_trabajo')
@@ -84,14 +117,12 @@ export async function updateEstadoOTAction(otId: string, nuevoEstado: EstadoOT) 
 
   if (!ot) return { error: 'OT no encontrada' }
 
-  const allowed = ALLOWED_TRANSITIONS[ot.estado as EstadoOT]
+  const allowed = OT_TRANSITIONS[ot.estado as EstadoOT]
   if (!allowed.includes(nuevoEstado)) {
     return { error: `No se puede mover de "${ot.estado}" a "${nuevoEstado}"` }
   }
 
-  const updateData: Record<string, unknown> = {
-    estado: nuevoEstado,
-  }
+  const updateData: Record<string, unknown> = { estado: nuevoEstado }
   if (nuevoEstado === 'entregado') {
     updateData.fecha_entrega = new Date().toISOString()
   }
@@ -114,6 +145,13 @@ export async function addLineaOTAction(formData: FormData) {
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   const ot_id = formData.get('ot_id') as string
   const tipo = formData.get('tipo') as string
@@ -141,6 +179,8 @@ export async function addLineaOTAction(formData: FormData) {
 
   if (error) return { error: 'Error al agregar la línea' }
 
+  await recalcularTotalesOT(supabase, ot_id)
+
   revalidatePath(`/taller/${ot_id}`)
   return { success: true }
 }
@@ -152,6 +192,13 @@ export async function deleteLineaOTAction(lineaId: string, otId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
 
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'gerente'))
+    return { success: false, error: 'Sin permisos para esta operación' }
+
   const { error } = await supabase
     .from('lineas_ot')
     .delete()
@@ -159,16 +206,28 @@ export async function deleteLineaOTAction(lineaId: string, otId: string) {
 
   if (error) return { error: 'Error al eliminar la línea' }
 
+  await recalcularTotalesOT(supabase, otId)
+
   revalidatePath(`/taller/${otId}`)
   return { success: true }
 }
 
-// ── Actualizar diagnóstico / notas OT ──────────────────────────────────────
-export async function updateOTAction(otId: string, fields: { diagnostico?: string; notas_internas?: string; promesa_entrega?: string | null }) {
+// ── Actualizar diagnóstico / notas / promesa OT ────────────────────────────
+export async function updateOTAction(
+  otId: string,
+  fields: { diagnostico?: string; notas_internas?: string; promesa_entrega?: string | null }
+) {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   const { error } = await supabase
     .from('ordenes_trabajo')

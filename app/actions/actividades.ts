@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ensureUsuario } from '@/lib/ensure-usuario'
+import { tieneRol } from '@/lib/permisos'
 
 export async function createActividadAction(formData: FormData) {
   const supabase = await createClient()
@@ -68,6 +69,13 @@ export async function completarActividadAction(id: string) {
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   const { error } = await supabase
     .from('actividades')

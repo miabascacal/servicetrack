@@ -5,6 +5,7 @@ import { createClient }       from '@/lib/supabase/server'
 import { createAdminClient }  from '@/lib/supabase/admin'
 import type { EstadoCita }    from '@/types/database'
 import { ensureUsuario }      from '@/lib/ensure-usuario'
+import { tieneRol }           from '@/lib/permisos'
 import {
   enviarMensajeWA,
   mensajeConfirmacionCita,
@@ -78,6 +79,9 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
   let usuario: import('@/lib/ensure-usuario').UsuarioCtx
   try { usuario = await ensureUsuario(supabase, user.id, user.email ?? '') }
   catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(usuario.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   const ALLOWED_TRANSITIONS: Record<string, string[]> = {
     pendiente_contactar: ['contactada', 'confirmada', 'no_show', 'cancelada'],

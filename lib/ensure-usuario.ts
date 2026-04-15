@@ -2,8 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export interface UsuarioCtx {
-  grupo_id: string
+  grupo_id:    string
   sucursal_id: string
+  /** Rol del usuario en su sucursal. NULL en BD se normaliza a 'viewer'. */
+  rol:         string
 }
 
 /**
@@ -26,7 +28,7 @@ export async function ensureUsuario(
   // 1. Buscar usuario existente con su sucursal
   const { data: usr, error: eRead } = await admin
     .from('usuarios')
-    .select('sucursal_id')
+    .select('sucursal_id, rol')
     .eq('id', userId)
     .single()
 
@@ -49,7 +51,11 @@ export async function ensureUsuario(
         .eq('id', suc.razon_social_id)
         .single()
 
-      if (rs?.grupo_id) return { grupo_id: rs.grupo_id, sucursal_id: usr.sucursal_id }
+      if (rs?.grupo_id) return {
+        grupo_id:    rs.grupo_id,
+        sucursal_id: usr.sucursal_id,
+        rol:         (usr as unknown as { rol: string | null }).rol ?? 'viewer',
+      }
     }
   }
 
@@ -93,5 +99,5 @@ export async function ensureUsuario(
 
   if (eUsr) throw new Error(`Bootstrap usuarios: ${eUsr.message}`)
 
-  return { grupo_id: grupo.id, sucursal_id: suc.id }
+  return { grupo_id: grupo.id, sucursal_id: suc.id, rol: 'admin' }
 }

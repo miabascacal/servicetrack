@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { ensureUsuario } from '@/lib/ensure-usuario'
+import { tieneRol } from '@/lib/permisos'
 
 // ── Create Cliente ─────────────────────────────────────────────────────────
 export async function createClienteAction(formData: FormData) {
@@ -56,6 +57,13 @@ export async function vincularClienteEmpresaAction(clienteId: string, empresaId:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
 
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
+
   const { error } = await supabase
     .from('clientes')
     .update({ empresa_id: empresaId })
@@ -77,6 +85,9 @@ export async function createEmpresaYVincularAction(clienteId: string, formData: 
   let ctx: import('@/lib/ensure-usuario').UsuarioCtx
   try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
   catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   const nombre = (formData.get('nombre') as string)?.trim()
   if (!nombre) return { error: 'El nombre de la empresa es requerido' }
@@ -118,6 +129,13 @@ export async function desvincularClienteEmpresaAction(clienteId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
 
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'gerente'))
+    return { success: false, error: 'Sin permisos para esta operación' }
+
   const { error } = await supabase
     .from('clientes')
     .update({ empresa_id: null })
@@ -135,6 +153,13 @@ export async function updateClienteAction(id: string, formData: FormData) {
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   const nombre = (formData.get('nombre') as string)?.trim()
   const apellido = (formData.get('apellido') as string)?.trim()

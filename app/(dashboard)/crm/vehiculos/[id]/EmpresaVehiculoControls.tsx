@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Building2, Plus, X, Search, Unlink, Loader2, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { tieneRol } from '@/lib/permisos'
 import {
   vincularEmpresaVehiculoAction,
   desvincularEmpresaVehiculoAction,
@@ -15,9 +16,11 @@ interface EmpresaInfo { id: string; nombre: string; rfc: string | null }
 export function EmpresaVehiculoSection({
   vehiculoId,
   empresa,
+  rolUsuario,
 }: {
   vehiculoId: string
   empresa: EmpresaInfo | null
+  rolUsuario: string
 }) {
   const router = useRouter()
   const [modal, setModal] = useState(false)
@@ -65,10 +68,12 @@ export function EmpresaVehiculoSection({
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
           <h2 className="text-sm font-semibold text-gray-700">Empresa</h2>
           {empresa ? (
-            <button onClick={desvincular} disabled={loading}
-              className="flex items-center gap-1 text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors disabled:opacity-50">
-              <Unlink size={12} /> Desvincular
-            </button>
+            tieneRol(rolUsuario, 'gerente') && (
+              <button onClick={desvincular} disabled={loading}
+                className="flex items-center gap-1 text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors disabled:opacity-50">
+                <Unlink size={12} /> Desvincular
+              </button>
+            )
           ) : (
             <button onClick={() => { setModal(true); setQ(''); setError(null) }}
               className="flex items-center gap-1 text-xs text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors">

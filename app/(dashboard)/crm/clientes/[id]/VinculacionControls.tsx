@@ -7,6 +7,7 @@ import {
   Building2, Car, Plus, X, Search, Unlink, Loader2, ChevronRight, CheckCircle2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { tieneRol } from '@/lib/permisos'
 import {
   vincularClienteEmpresaAction,
   desvincularClienteEmpresaAction,
@@ -35,10 +36,12 @@ export function EmpresaSection({
   clienteId,
   empresa,
   vehiculos,          // vehículos del cliente para el prompt
+  rolUsuario,
 }: {
   clienteId: string
   empresa: EmpresaInfo | null
   vehiculos: VehiculoInfo[]
+  rolUsuario: string
 }) {
   const router = useRouter()
   const [modal, setModal] = useState<'vincular' | 'crear' | 'preguntar_vehiculos' | null>(null)
@@ -140,10 +143,12 @@ export function EmpresaSection({
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Empresa</h2>
           {empresa ? (
-            <button onClick={desvincular} disabled={loading}
-              className="flex items-center gap-1 text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors disabled:opacity-50">
-              <Unlink size={12} /> Desvincular
-            </button>
+            tieneRol(rolUsuario, 'gerente') && (
+              <button onClick={desvincular} disabled={loading}
+                className="flex items-center gap-1 text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors disabled:opacity-50">
+                <Unlink size={12} /> Desvincular
+              </button>
+            )
           ) : (
             <button onClick={() => { setModal('vincular'); setQ(''); setError(null) }}
               className="flex items-center gap-1 text-xs text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors">
@@ -310,9 +315,11 @@ export function EmpresaSection({
 export function VehiculosSection({
   clienteId,
   vehiculos,
+  rolUsuario,
 }: {
   clienteId: string
   vehiculos: VehiculoInfo[]
+  rolUsuario: string
 }) {
   const router = useRouter()
   const [modal, setModal] = useState(false)
@@ -398,11 +405,13 @@ export function VehiculosSection({
                     </div>
                   </div>
                 </Link>
-                <button onClick={() => desvincular(v.id, `${v.marca} ${v.modelo}`)} disabled={loading}
-                  title="Desvincular vehículo"
-                  className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-all disabled:opacity-30">
-                  <Unlink size={13} />
-                </button>
+                {tieneRol(rolUsuario, 'gerente') && (
+                  <button onClick={() => desvincular(v.id, `${v.marca} ${v.modelo}`)} disabled={loading}
+                    title="Desvincular vehículo"
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-all disabled:opacity-30">
+                    <Unlink size={13} />
+                  </button>
+                )}
               </li>
             ))}
           </ul>

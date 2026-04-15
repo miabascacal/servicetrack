@@ -67,13 +67,23 @@ export function LineasOT({ otId, lineas, readonly = false }: LineasOTProps) {
 
   async function handleDelete(lineaId: string) {
     setDeleting(lineaId)
-    await deleteLineaOTAction(lineaId, otId)
-    router.refresh()
+    setError(null)
+    const result = await deleteLineaOTAction(lineaId, otId)
+    if (result?.error) {
+      setError(result.error)
+    } else {
+      router.refresh()
+    }
     setDeleting(null)
   }
 
   return (
     <div className="space-y-3">
+      {/* Error global — visible tanto en add como en delete */}
+      {error && !showForm && (
+        <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+      )}
+
       {/* Lines list */}
       {lineas.length === 0 ? (
         <p className="text-sm text-gray-400 py-4 text-center">Sin líneas registradas</p>

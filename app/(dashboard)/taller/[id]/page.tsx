@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatDateTime, cn } from '@/lib/utils'
-import { ChevronLeft, Car, Phone, Clock, User, Calendar, Wrench, AlertCircle } from 'lucide-react'
+import { ChevronLeft, Car, Phone, Clock, User, Calendar, AlertCircle } from 'lucide-react'
 import type { EstadoOT } from '@/types/database'
 import { CambiarEstadoOT } from '@/app/_components/taller/CambiarEstadoOT'
 import { LineasOT } from '@/app/_components/taller/LineasOT'
@@ -12,28 +12,30 @@ interface PageProps {
 }
 
 const ESTADO_COLORS: Record<EstadoOT, string> = {
-  recibido:     'bg-blue-100 text-blue-700',
-  diagnostico:  'bg-yellow-100 text-yellow-700',
+  recibido:      'bg-blue-100 text-blue-700',
+  diagnostico:   'bg-yellow-100 text-yellow-700',
   en_reparacion: 'bg-purple-100 text-purple-700',
-  listo:        'bg-green-100 text-green-700',
-  entregado:    'bg-gray-100 text-gray-600',
-  cancelado:    'bg-red-100 text-red-600',
+  listo:         'bg-green-100 text-green-700',
+  entregado:     'bg-gray-100 text-gray-600',
+  cancelado:     'bg-red-100 text-red-600',
 }
 
 const ESTADO_LABELS: Record<EstadoOT, string> = {
-  recibido:     'Recibido',
-  diagnostico:  'Diagnóstico',
+  recibido:      'Recibido',
+  diagnostico:   'Diagnóstico',
   en_reparacion: 'En reparación',
-  listo:        'Listo',
-  entregado:    'Entregado',
-  cancelado:    'Cancelado',
+  listo:         'Listo',
+  entregado:     'Entregado',
+  cancelado:     'Cancelado',
 }
 
 const ESTADO_READONLY: EstadoOT[] = ['entregado', 'cancelado']
 
 export default async function OTDetailPage({ params }: PageProps) {
   const { id } = await params
-  const supabase = createAdminClient()
+  // createClient() aplica RLS — solo devuelve OTs de la sucursal del usuario autenticado.
+  // Si el UUID existe pero pertenece a otra sucursal, .single() devuelve null → notFound().
+  const supabase = await createClient()
 
   const { data: ot } = await supabase
     .from('ordenes_trabajo')
@@ -54,7 +56,7 @@ export default async function OTDetailPage({ params }: PageProps) {
     .from('lineas_ot')
     .select('id, tipo, descripcion, numero_parte, cantidad, precio_unitario, total, estado, aprobado_cliente')
     .eq('ot_id', id)
-    .order('creada_at')
+    .order('created_at')
 
   type OTFull = typeof ot & {
     cliente: { id: string; nombre: string; apellido: string; apellido_2: string | null; whatsapp: string; email: string | null } | null
@@ -212,7 +214,7 @@ export default async function OTDetailPage({ params }: PageProps) {
             />
           </div>
 
-          {/* Notes */}
+          {/* Notas internas */}
           {o.notas_internas && (
             <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-2">
               <div className="flex items-center gap-1.5">

@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { formatDate } from '@/lib/utils'
 import {
@@ -79,6 +80,16 @@ export default async function ClienteDetailPage({ params, searchParams }: PagePr
   const { id } = await params
   const { area = 'todos' } = await searchParams
   const supabase = createAdminClient()
+
+  // Obtener rol del usuario autenticado para pasar a componentes interactivos
+  const authClient = await createClient()
+  const { data: { user: authUser } } = await authClient.auth.getUser()
+  let rolUsuario = 'viewer'
+  if (authUser) {
+    const { data: usr } = await supabase
+      .from('usuarios').select('rol').eq('id', authUser.id).single()
+    rolUsuario = (usr as unknown as { rol: string | null } | null)?.rol ?? 'viewer'
+  }
 
   const { data: cliente } = await supabase
     .from('clientes')
@@ -361,6 +372,7 @@ export default async function ClienteDetailPage({ params, searchParams }: PagePr
           <EmpresaSection
             clienteId={id}
             empresa={empresa}
+            rolUsuario={rolUsuario}
             vehiculos={vehiculos
               .filter(vp => vp.vehiculo)
               .map(vp => ({
@@ -376,6 +388,7 @@ export default async function ClienteDetailPage({ params, searchParams }: PagePr
           {/* Vehículos */}
           <VehiculosSection
             clienteId={id}
+            rolUsuario={rolUsuario}
             vehiculos={vehiculos
               .filter(vp => vp.vehiculo)
               .map(vp => ({

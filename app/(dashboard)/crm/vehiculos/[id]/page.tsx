@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   ChevronLeft, Car, User, Pencil, Hash, Calendar,
@@ -42,6 +43,16 @@ function Campo({ icon: Icon, label, value }: {
 export default async function VehiculoDetailPage({ params }: PageProps) {
   const { id } = await params
   const admin = createAdminClient()
+
+  // Obtener rol del usuario autenticado para pasar a componentes interactivos
+  const authClient = await createClient()
+  const { data: { user: authUser } } = await authClient.auth.getUser()
+  let rolUsuario = 'viewer'
+  if (authUser) {
+    const { data: usr } = await admin
+      .from('usuarios').select('rol').eq('id', authUser.id).single()
+    rolUsuario = (usr as unknown as { rol: string | null } | null)?.rol ?? 'viewer'
+  }
 
   const { data: v, error } = await admin
     .from('vehiculos')
@@ -170,7 +181,7 @@ export default async function VehiculoDetailPage({ params }: PageProps) {
       </div>
 
       {/* Empresa */}
-      <EmpresaVehiculoSection vehiculoId={v.id} empresa={empresa} />
+      <EmpresaVehiculoSection vehiculoId={v.id} empresa={empresa} rolUsuario={rolUsuario} />
 
       {/* Personas vinculadas */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">

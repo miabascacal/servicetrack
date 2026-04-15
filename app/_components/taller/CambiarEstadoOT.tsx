@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import type { EstadoOT } from '@/types/database'
+import { OT_TRANSITIONS } from '@/lib/ot-estados'
 import { updateEstadoOTAction } from '@/app/actions/taller'
 
 const ESTADO_CONFIG: Record<EstadoOT, { label: string; color: string; bg: string }> = {
@@ -13,15 +14,6 @@ const ESTADO_CONFIG: Record<EstadoOT, { label: string; color: string; bg: string
   listo:         { label: 'Listo',          color: 'text-green-700',   bg: 'bg-green-100 border-green-300' },
   entregado:     { label: 'Entregado',      color: 'text-gray-600',    bg: 'bg-gray-100 border-gray-300' },
   cancelado:     { label: 'Cancelado',      color: 'text-red-600',     bg: 'bg-red-100 border-red-300' },
-}
-
-const ALLOWED_TRANSITIONS: Record<EstadoOT, EstadoOT[]> = {
-  recibido:      ['diagnostico', 'en_reparacion', 'cancelado'],
-  diagnostico:   ['en_reparacion', 'cancelado'],
-  en_reparacion: ['listo', 'cancelado'],
-  listo:         ['entregado'],
-  entregado:     [],
-  cancelado:     [],
 }
 
 interface CambiarEstadoOTProps {
@@ -35,7 +27,8 @@ export function CambiarEstadoOT({ otId, estadoActual }: CambiarEstadoOTProps) {
   const [error, setError] = useState<string | null>(null)
 
   const config = ESTADO_CONFIG[estadoActual]
-  const transitions = ALLOWED_TRANSITIONS[estadoActual]
+  // Las transiciones vienen de la misma fuente que usa el backend
+  const transitions = OT_TRANSITIONS[estadoActual]
 
   async function cambiar(newEstado: EstadoOT) {
     setLoading(newEstado)

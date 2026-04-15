@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { ensureUsuario } from '@/lib/ensure-usuario'
+import { tieneRol } from '@/lib/permisos'
 import { revalidatePath } from 'next/cache'
 
 export async function invitarUsuarioAction(formData: FormData) {
@@ -14,6 +15,9 @@ export async function invitarUsuarioAction(formData: FormData) {
   let ctx: import('@/lib/ensure-usuario').UsuarioCtx
   try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
   catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'admin'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   const email = (formData.get('email') as string)?.trim().toLowerCase()
   const nombre = (formData.get('nombre') as string)?.trim()

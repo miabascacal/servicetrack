@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { ensureUsuario } from '@/lib/ensure-usuario'
+import { tieneRol } from '@/lib/permisos'
 import type { ModuloPermiso } from '@/types/database'
 
 type PermisoRow = {
@@ -24,20 +26,18 @@ export async function createRolAction(input: CreateRolInput) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
 
-  // Get grupo_id from the authenticated user
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('grupo_id')
-    .eq('id', user.id)
-    .single()
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
 
-  if (!usuario) return { error: 'Usuario no encontrado' }
+  if (!tieneRol(ctx.rol, 'admin'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   // Create the role
   const { data: rol, error: rolError } = await supabase
     .from('roles')
     .insert({
-      grupo_id: usuario.grupo_id,
+      grupo_id: ctx.grupo_id,
       nombre: input.nombre.trim(),
       descripcion: input.descripcion.trim() || null,
       es_super_admin: false,
@@ -80,6 +80,13 @@ export async function updateRolPermisosAction(
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'admin'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   // Upsert all permissions for this role
   const permisosUpsert = Object.entries(permisos).map(([modulo, p]) => ({

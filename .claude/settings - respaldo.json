@@ -24,5 +24,10 @@
       "Bash(pdftotext '$BASE/000SER_002_Nueva funcionalidad  de departamentos-Usuarios.pdf' -)"
     ]
   },
-  "env": {}
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
+    "ANTHROPIC_AUTH_TOKEN": "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",
+    "ANTHROPIC_API_KEY": "",
+    "ANTHROPIC_MODEL": "openrouter/free"
+  }
 }

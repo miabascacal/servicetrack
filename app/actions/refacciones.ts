@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { ensureUsuario } from '@/lib/ensure-usuario'
+import { tieneRol } from '@/lib/permisos'
 
 function generarNumCotizacion(): string {
   const now = new Date()
@@ -117,6 +118,13 @@ export async function updateEstadoCotizacionAction(cotId: string, nuevoEstado: s
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
 
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
+
   const updateData: Record<string, unknown> = { estado: nuevoEstado }
   if (nuevoEstado === 'enviada') updateData.enviada_at = new Date().toISOString()
   if (nuevoEstado === 'aprobada') updateData.aprobada_at = new Date().toISOString()
@@ -139,6 +147,13 @@ export async function addItemCotizacionAction(formData: FormData) {
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   const cotizacion_id = formData.get('cotizacion_id') as string
   const descripcion = (formData.get('descripcion') as string)?.trim()
@@ -174,6 +189,13 @@ export async function deleteItemCotizacionAction(itemId: string, cotizacionId: s
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'gerente'))
+    return { success: false, error: 'Sin permisos para esta operación' }
 
   await supabase.from('cotizacion_items').delete().eq('id', itemId)
 
