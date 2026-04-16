@@ -75,26 +75,44 @@ async function insertarEventoOT(params: {
 
   const now = new Date().toISOString()
 
-  await admin.from('mensajes').insert({
-    sucursal_id:      params.sucursal_id,
-    cliente_id:       params.cliente_id,
+  const payload = {
+    sucursal_id:       params.sucursal_id,
+    cliente_id:        params.cliente_id,
     thread_id,
-    canal:            'interno',
-    direccion:        'saliente',
-    message_source:   'system',
-    contenido:        params.contenido,
-    enviado_por_bot:  false,
-    enviado_at:       now,
+    canal:             'interno',
+    direccion:         'saliente',
+    message_source:    'system',
+    contenido:         params.contenido,
+    enviado_por_bot:   false,
+    enviado_at:        now,
     processing_status: 'skipped',   // eventos del sistema no pasan por el clasificador IA
-  })
+  }
+
+  const { error: msgError } = await admin.from('mensajes').insert(payload)
+
+  if (msgError) {
+    throw new Error(
+      `[insertarEventoOT] mensajes.insert falló — ` +
+      `code: ${msgError.code}, message: ${msgError.message}, details: ${msgError.details} — ` +
+      `payload: ${JSON.stringify({ ot_id: params.ot_id, numero_ot: params.numero_ot, thread_id, canal: 'interno', sucursal_id: params.sucursal_id })}`
+    )
+  }
 
   // Actualizar metadatos del hilo para que aparezca en bandeja con orden correcto
-  await admin.from('conversation_threads')
+  const { error: threadError } = await admin.from('conversation_threads')
     .update({
       last_message_at:     now,
       last_message_source: 'system',
     })
     .eq('id', thread_id)
+
+  if (threadError) {
+    // No lanzar — el mensaje ya fue insertado. Solo registrar.
+    console.error(
+      `[insertarEventoOT] conversation_threads.update falló (no crítico) — ` +
+      `thread_id: ${thread_id}, code: ${threadError.code}, message: ${threadError.message}`
+    )
+  }
 }
 
 // ── Crear OT ───────────────────────────────────────────────────────────────
@@ -159,7 +177,10 @@ export async function createOTAction(formData: FormData) {
       assignee_id:  user.id,
     })
   } catch (e) {
-    console.error('[createOT] error creando evento interno:', e)
+    console.error(
+      `[createOT] evento interno falló — ot_id: ${data.id}, numero_ot: ${numero_ot}, sucursal_id: ${usuario.sucursal_id} — `,
+      e instanceof Error ? e.message : e
+    )
   }
 
   revalidatePath('/taller')
@@ -222,7 +243,10 @@ export async function updateEstadoOTAction(otId: string, nuevoEstado: EstadoOT) 
       })
     }
   } catch (e) {
-    console.error('[updateEstadoOT] error creando evento interno:', e)
+    console.error(
+      `[updateEstadoOT] evento interno falló — ot_id: ${otId}, numero_ot: ${ot.numero_ot}, nuevo_estado: ${nuevoEstado} — `,
+      e instanceof Error ? e.message : e
+    )
   }
 
   revalidatePath('/taller')

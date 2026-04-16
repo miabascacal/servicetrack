@@ -110,7 +110,8 @@ Migraciones aplicadas:
 - `003_ai_foundation.sql` ✅
 - `004_messaging_adjustments.sql` — verificar si fue ejecutada (agrega columna `processing_status: 'skipped'` usada en mensajes salientes)
 - `005_taller_foundation.sql` ⬜ **PENDIENTE DE EJECUTAR** — crea `ordenes_trabajo` y `lineas_ot`
-- `006_ot_dms_and_taller_events.sql` ⬜ **PENDIENTE DE EJECUTAR** — agrega `numero_ot_dms` y expande constraint `canal` de `conversation_threads` para incluir `'interno'`
+- `006_ot_dms_and_taller_events.sql` ✅ ejecutada — agrega `numero_ot_dms` + expande CHECK constraint `canal` de `conversation_threads` para incluir `'interno'`
+- `007_canal_interno_enum.sql` ⬜ **PENDIENTE DE EJECUTAR** — agrega `'interno'` al ENUM `canal_mensaje` (fix mensajes internos OT) + trigger `message_count`
 
 **Orden obligatorio:** ejecutar 005 antes de 006. Ejecutar 006 antes de desplegar el módulo Taller.
 
@@ -332,6 +333,7 @@ Si no hay número para el módulo específico, `lib/whatsapp.ts` hace fallback a
 - [ ] Migraciones `001`, `002`, `003`, `004` ejecutadas y verificadas
 - [ ] `005_taller_foundation.sql` ejecutada (crea `ordenes_trabajo` y `lineas_ot`)
 - [ ] `006_ot_dms_and_taller_events.sql` ejecutada (agrega `numero_ot_dms` + expande constraint `canal`)
+- [ ] `007_canal_interno_enum.sql` ejecutada (agrega `'interno'` al ENUM + trigger `message_count`)
 - [ ] Variables de entorno configuradas en Vercel (todos los entornos)
 - [ ] Deploy a producción exitoso (`npm run build` sin errores)
 - [ ] Cron job visible en Vercel Dashboard → Cron Jobs
