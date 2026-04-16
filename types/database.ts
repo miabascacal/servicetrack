@@ -20,7 +20,7 @@ export type EstadoCita =
 export type EstadoOT =
   | 'recibido'
   | 'diagnostico'
-  | 'en_reparacion'
+  | 'en_proceso'
   | 'listo'
   | 'entregado'
   | 'cancelado'

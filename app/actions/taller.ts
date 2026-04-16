@@ -133,10 +133,10 @@ export async function createOTAction(formData: FormData) {
   const vehiculo_id = (formData.get('vehiculo_id') as string) || null
   const cita_id = (formData.get('cita_id') as string) || null
   const km_ingreso = formData.get('km_ingreso') ? parseInt(formData.get('km_ingreso') as string) : null
-  const diagnostico = (formData.get('diagnostico') as string)?.trim() || null
+  const diagnostico = (formData.get('diagnostico') as string)?.trim().toUpperCase() || null
   const notas_internas = (formData.get('notas_internas') as string)?.trim() || null
   const promesa_entrega = (formData.get('promesa_entrega') as string) || null
-  const numero_ot_dms = (formData.get('numero_ot_dms') as string)?.trim() || null
+  const numero_ot_dms = (formData.get('numero_ot_dms') as string)?.trim().toUpperCase() || null
 
   if (!cliente_id) return { error: 'Cliente es requerido' }
 
@@ -219,6 +219,9 @@ export async function updateEstadoOTAction(otId: string, nuevoEstado: EstadoOT) 
   if (nuevoEstado === 'entregado') {
     updateData.fecha_entrega = new Date().toISOString()
   }
+  // updated_at es manejado por el trigger t_ordenes_trabajo_updated (migration 005).
+  // TODO: agregar columna updated_by UUID cuando se cree la migración correspondiente.
+  // Por ahora el usuario que operó el cambio queda trazado en el evento interno de bandeja.
 
   const { error } = await supabase
     .from('ordenes_trabajo')
@@ -330,7 +333,7 @@ export async function deleteLineaOTAction(lineaId: string, otId: string) {
 // ── Actualizar diagnóstico / notas / promesa OT ────────────────────────────
 export async function updateOTAction(
   otId: string,
-  fields: { diagnostico?: string; notas_internas?: string; promesa_entrega?: string | null }
+  fields: { diagnostico?: string; notas_internas?: string; promesa_entrega?: string | null; numero_ot_dms?: string | null }
 ) {
   const supabase = await createClient()
 
@@ -344,13 +347,76 @@ export async function updateOTAction(
   if (!tieneRol(ctx.rol, 'asesor_servicio'))
     return { success: false, error: 'Sin permisos para esta operación' }
 
+  const normalizedFields = {
+    ...fields,
+    ...(fields.diagnostico !== undefined && { diagnostico: fields.diagnostico?.trim().toUpperCase() || null }),
+    ...(fields.numero_ot_dms !== undefined && { numero_ot_dms: fields.numero_ot_dms?.trim().toUpperCase() || null }),
+  }
+
   const { error } = await supabase
     .from('ordenes_trabajo')
-    .update({ ...fields, updated_at: new Date().toISOString() })
+    .update({ ...normalizedFields, updated_at: new Date().toISOString() })
     .eq('id', otId)
 
   if (error) return { error: 'Error al actualizar la OT' }
 
+  revalidatePath(`/taller/${otId}`)
+  return { success: true }
+}
+
+// ── Vincular OT existente a una Cita ──────────────────────────────────────
+// Valida que la OT y la cita compartan sucursal, cliente y vehículo.
+// Actualiza ordenes_trabajo.cita_id = citaId.
+export async function vincularOTCitaAction(citaId: string, otId: string) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'asesor_servicio'))
+    return { success: false, error: 'Sin permisos para esta operación' }
+
+  // Traer cita y OT en paralelo — RLS garantiza que ambas son de la sucursal del usuario
+  const [{ data: cita }, { data: ot }] = await Promise.all([
+    supabase
+      .from('citas')
+      .select('id, cliente_id, vehiculo_id, sucursal_id')
+      .eq('id', citaId)
+      .single(),
+    supabase
+      .from('ordenes_trabajo')
+      .select('id, cliente_id, vehiculo_id, sucursal_id, estado, cita_id')
+      .eq('id', otId)
+      .single(),
+  ])
+
+  if (!cita) return { error: 'Cita no encontrada' }
+  if (!ot)   return { error: 'OT no encontrada' }
+
+  // Validaciones de contexto
+  if (ot.sucursal_id !== cita.sucursal_id) return { error: 'La OT pertenece a otra sucursal' }
+  if (ot.cliente_id  !== cita.cliente_id)  return { error: 'La OT pertenece a otro cliente' }
+  // Regla vehiculo_id: solo bloquear si AMBOS tienen vehículo asignado y son distintos.
+  // Si alguno es null (cita sin vehículo o OT sin vehículo), se permite — no hay conflicto explícito.
+  if (cita.vehiculo_id && ot.vehiculo_id && ot.vehiculo_id !== cita.vehiculo_id)
+    return { error: 'La OT corresponde a otro vehículo' }
+  if (ot.estado === 'entregado' || ot.estado === 'cancelado')
+    return { error: 'No se puede vincular una OT cerrada' }
+  if (ot.cita_id && ot.cita_id !== citaId)
+    return { error: 'La OT ya está vinculada a otra cita' }
+
+  const { error } = await supabase
+    .from('ordenes_trabajo')
+    .update({ cita_id: citaId, updated_at: new Date().toISOString() })
+    .eq('id', otId)
+
+  if (error) return { error: 'Error al vincular la OT' }
+
+  revalidatePath(`/citas/${citaId}`)
   revalidatePath(`/taller/${otId}`)
   return { success: true }
 }

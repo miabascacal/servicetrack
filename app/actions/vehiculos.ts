@@ -16,8 +16,8 @@ export async function createVehiculoAction(formData: FormData) {
   try { usuario = await ensureUsuario(supabase, user.id, user.email ?? '') }
   catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
 
-  const marca = (formData.get('marca') as string)?.trim()
-  const modelo = (formData.get('modelo') as string)?.trim()
+  const marca = (formData.get('marca') as string)?.trim().toUpperCase()
+  const modelo = (formData.get('modelo') as string)?.trim().toUpperCase()
   const anio = parseInt(formData.get('anio') as string)
   const dueno_cliente_id = formData.get('dueno_cliente_id') as string
 
@@ -35,8 +35,9 @@ export async function createVehiculoAction(formData: FormData) {
       grupo_id: usuario.grupo_id,
       marca,
       modelo,
+      version: (formData.get('version') as string)?.trim().toUpperCase() || null,
       anio,
-      color: (formData.get('color') as string)?.trim() || null,
+      color: (formData.get('color') as string)?.trim().toUpperCase() || null,
       placa: (formData.get('placa') as string)?.trim().toUpperCase() || null,
       vin: (formData.get('vin') as string)?.trim().toUpperCase() || null,
       km_actual: parseInt(formData.get('km_actual') as string) || null,
@@ -97,8 +98,8 @@ export async function createVehiculoYVincularAction(clienteId: string, formData:
   try { usuario = await ensureUsuario(supabase, user.id, user.email ?? '') }
   catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
 
-  const marca = (formData.get('marca') as string)?.trim()
-  const modelo = (formData.get('modelo') as string)?.trim()
+  const marca = (formData.get('marca') as string)?.trim().toUpperCase()
+  const modelo = (formData.get('modelo') as string)?.trim().toUpperCase()
   const anio = parseInt(formData.get('anio') as string)
 
   if (!marca || !modelo || !anio) return { error: 'Marca, modelo y año son requeridos' }
@@ -109,8 +110,9 @@ export async function createVehiculoYVincularAction(clienteId: string, formData:
       grupo_id: usuario.grupo_id,
       marca,
       modelo,
+      version: (formData.get('version') as string)?.trim().toUpperCase() || null,
       anio,
-      color: (formData.get('color') as string)?.trim() || null,
+      color: (formData.get('color') as string)?.trim().toUpperCase() || null,
       placa: (formData.get('placa') as string)?.trim().toUpperCase() || null,
       vin: (formData.get('vin') as string)?.trim().toUpperCase() || null,
       km_actual: parseInt(formData.get('km_actual') as string) || null,
@@ -151,10 +153,10 @@ export async function updateVehiculoAction(id: string, formData: FormData) {
   if (!tieneRol(ctx.rol, 'asesor_servicio'))
     return { success: false, error: 'Sin permisos para esta operación' }
 
-  const marca = (formData.get('marca') as string)?.trim()
-  const modelo = (formData.get('modelo') as string)?.trim()
+  const marca = (formData.get('marca') as string)?.trim().toUpperCase()
+  const modelo = (formData.get('modelo') as string)?.trim().toUpperCase()
   const anio = parseInt(formData.get('anio') as string)
-  const color = (formData.get('color') as string)?.trim()
+  const color = (formData.get('color') as string)?.trim().toUpperCase()
   const placa = (formData.get('placa') as string)?.trim()
   const vin = (formData.get('vin') as string)?.trim()
 
@@ -168,7 +170,7 @@ export async function updateVehiculoAction(id: string, formData: FormData) {
     .update({
       marca,
       modelo,
-      version: (formData.get('version') as string)?.trim() || null,
+      version: (formData.get('version') as string)?.trim().toUpperCase() || null,
       anio,
       color,
       placa: placa.toUpperCase(),

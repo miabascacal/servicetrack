@@ -12,21 +12,21 @@ interface PageProps {
 }
 
 const ESTADO_COLORS: Record<EstadoOT, string> = {
-  recibido:      'bg-blue-100 text-blue-700',
-  diagnostico:   'bg-yellow-100 text-yellow-700',
-  en_reparacion: 'bg-purple-100 text-purple-700',
-  listo:         'bg-green-100 text-green-700',
-  entregado:     'bg-gray-100 text-gray-600',
-  cancelado:     'bg-red-100 text-red-600',
+  recibido:    'bg-blue-100 text-blue-700',
+  diagnostico: 'bg-yellow-100 text-yellow-700',
+  en_proceso:  'bg-purple-100 text-purple-700',
+  listo:       'bg-green-100 text-green-700',
+  entregado:   'bg-gray-100 text-gray-600',
+  cancelado:   'bg-red-100 text-red-600',
 }
 
 const ESTADO_LABELS: Record<EstadoOT, string> = {
-  recibido:      'Recibido',
-  diagnostico:   'Diagnóstico',
-  en_reparacion: 'En reparación',
-  listo:         'Listo',
-  entregado:     'Entregado',
-  cancelado:     'Cancelado',
+  recibido:    'Recibido',
+  diagnostico: 'Diagnóstico',
+  en_proceso:  'En proceso',
+  listo:       'Listo',
+  entregado:   'Entregado',
+  cancelado:   'Cancelado',
 }
 
 const ESTADO_READONLY: EstadoOT[] = ['entregado', 'cancelado']

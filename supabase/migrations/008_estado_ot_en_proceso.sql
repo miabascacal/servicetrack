@@ -1,0 +1,29 @@
+-- ════════════════════════════════════════════════════
+-- 008_estado_ot_en_proceso.sql
+-- Rename ENUM value: 'en_reparacion' → 'en_proceso'
+--
+-- CAUSA RAÍZ:
+--   El valor 'en_reparacion' se eligió provisionalmente en migration 005.
+--   El nombre canónico del producto es 'en_proceso' (más genérico y consistente
+--   con otros módulos del sistema).
+--
+-- CAMBIOS:
+--   ALTER TYPE estado_ot RENAME VALUE 'en_reparacion' TO 'en_proceso'
+--   - Renombra el valor en el ENUM. PostgreSQL actualiza automáticamente todas
+--     las filas existentes en ordenes_trabajo.estado que tenían 'en_reparacion'.
+--   - Idempotente en esencia: si 'en_proceso' ya existe y 'en_reparacion' no,
+--     el comando falla con un error claro — no produce corrupción silenciosa.
+--
+-- PREREQUISITOS:
+--   - 005_taller_foundation.sql ejecutada (crea el ENUM estado_ot)
+--   - 006_ot_dms_and_taller_events.sql ejecutada
+--   - 007_canal_interno_enum.sql ejecutada
+--
+-- Verificación post-ejecución:
+--   SELECT enumlabel FROM pg_enum
+--   WHERE enumtypid = (SELECT oid FROM pg_type WHERE typname = 'estado_ot')
+--   ORDER BY enumsortorder;
+--   → debe incluir 'en_proceso', NO 'en_reparacion'
+-- ════════════════════════════════════════════════════
+
+ALTER TYPE estado_ot RENAME VALUE 'en_reparacion' TO 'en_proceso';

@@ -16,8 +16,8 @@ export async function createClienteAction(formData: FormData) {
   try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
   catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
 
-  const nombre = (formData.get('nombre') as string)?.trim()
-  const apellido = (formData.get('apellido') as string)?.trim()
+  const nombre = (formData.get('nombre') as string)?.trim().toUpperCase()
+  const apellido = (formData.get('apellido') as string)?.trim().toUpperCase()
   const whatsapp = (formData.get('whatsapp') as string)?.trim()
 
   if (!nombre || !apellido || !whatsapp) {
@@ -30,7 +30,7 @@ export async function createClienteAction(formData: FormData) {
       grupo_id: ctx.grupo_id,
       nombre,
       apellido,
-      apellido_2: (formData.get('apellido_2') as string)?.trim() || null,
+      apellido_2: (formData.get('apellido_2') as string)?.trim().toUpperCase() || null,
       whatsapp,
       telefono_contacto: (formData.get('telefono_contacto') as string)?.trim() || null,
       telefono_alterno: (formData.get('telefono_alterno') as string)?.trim() || null,
@@ -89,7 +89,7 @@ export async function createEmpresaYVincularAction(clienteId: string, formData: 
   if (!tieneRol(ctx.rol, 'asesor_servicio'))
     return { success: false, error: 'Sin permisos para esta operación' }
 
-  const nombre = (formData.get('nombre') as string)?.trim()
+  const nombre = (formData.get('nombre') as string)?.trim().toUpperCase()
   if (!nombre) return { error: 'El nombre de la empresa es requerido' }
 
   const { data: empresa, error: eError } = await supabase
@@ -161,8 +161,8 @@ export async function updateClienteAction(id: string, formData: FormData) {
   if (!tieneRol(ctx.rol, 'asesor_servicio'))
     return { success: false, error: 'Sin permisos para esta operación' }
 
-  const nombre = (formData.get('nombre') as string)?.trim()
-  const apellido = (formData.get('apellido') as string)?.trim()
+  const nombre = (formData.get('nombre') as string)?.trim().toUpperCase()
+  const apellido = (formData.get('apellido') as string)?.trim().toUpperCase()
   const whatsapp = (formData.get('whatsapp') as string)?.trim()
 
   if (!nombre || !apellido || !whatsapp) {
@@ -174,7 +174,7 @@ export async function updateClienteAction(id: string, formData: FormData) {
     .update({
       nombre,
       apellido,
-      apellido_2: (formData.get('apellido_2') as string)?.trim() || null,
+      apellido_2: (formData.get('apellido_2') as string)?.trim().toUpperCase() || null,
       whatsapp,
       telefono_contacto: (formData.get('telefono_contacto') as string)?.trim() || null,
       telefono_alterno: (formData.get('telefono_alterno') as string)?.trim() || null,

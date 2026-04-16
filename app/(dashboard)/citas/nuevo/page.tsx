@@ -164,6 +164,17 @@ export default function NuevaCitaPage() {
                 ))}
               </ul>
             )}
+            {showClienteList && clientes.length === 0 && clienteQuery.length >= 2 && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-center">
+                <p className="text-sm text-gray-500 mb-2">No se encontraron clientes</p>
+                <Link
+                  href={`/crm/clientes/nuevo?return_to=/citas/nuevo`}
+                  className="text-sm text-blue-600 hover:underline font-medium"
+                >
+                  + Crear cliente nuevo
+                </Link>
+              </div>
+            )}
           </div>
         )}
 

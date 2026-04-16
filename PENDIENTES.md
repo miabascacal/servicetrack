@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-15 — Sprint 8 Fase 1 implementada; Taller: numero_ot_dms + eventos internos en bandeja implementados; migración 005+006 pendientes de ejecutar_
+_Actualizado: 2026-04-15 — Sprint 9: estado OT en_proceso, normalización mayúsculas, flujo contextual citas→nuevo cliente, Abrir OT en en_agencia. Migración 008 lista, pendiente de ejecutar_
 
 ---
 
@@ -78,6 +78,25 @@ Constraints actualizados: `message_source` → `agent`, `processing_status` → 
 Tablas creadas: `mensajes`, `ai_settings`, `conversation_threads`, `outbound_queue`, `automation_logs`
 Columnas en `mensajes`: `thread_id`, `message_source`, `wa_message_id`, `ai_intent`, `ai_intent_confidence`, `ai_sentiment`, `processing_status`
 Índices: `idx_mensajes_thread`, `idx_mensajes_wa_message_id` (UNIQUE), `idx_mensajes_processing`
+
+### A5. ✅ Sprint 9 — IMPLEMENTADO 2026-04-15
+- `estado_ot` ENUM: `en_reparacion` → `en_proceso` (migración 008, pendiente de ejecutar en Supabase)
+- Normalización MAYÚSCULAS: `nombre`/`apellido`/`apellido_2` (create+update clientes), `nombre` empresa (create+update), `marca`/`modelo`/`version`/`color` vehículos (create+update), `diagnostico`/`numero_ot_dms` OT (create+update)
+- Cita: bloque "Orden de Trabajo" en detalle de cita (estados `en_agencia`/`show`): crear nueva OT o vincular OT existente
+- `vincularOTCitaAction` en `app/actions/taller.ts`: validaciones de sucursal+cliente+vehículo
+- `app/_components/citas/VincularOTCita.tsx`: componente cliente para buscar/vincular OT
+- Nueva cita: link "Crear cliente nuevo" cuando búsqueda retorna cero resultados
+- Wizard nuevo cliente: soporte `return_to` para redirigir de regreso a `/citas/nuevo?cliente_id=...`
+- `version` en `createVehiculoAction` y `createVehiculoYVincularAction`
+- `updateOTAction` acepta `numero_ot_dms` para edición posterior
+
+### A6. 🚨 PENDIENTE INMEDIATO — Ejecutar migración 008 en Supabase
+**Archivo**: `supabase/migrations/008_estado_ot_en_proceso.sql`
+Ejecutar en SQL Editor de Supabase antes del próximo deploy:
+```sql
+ALTER TYPE estado_ot RENAME VALUE 'en_reparacion' TO 'en_proceso';
+```
+⚠ Si el deploy ocurre antes de ejecutar esto, OTs en estado `en_reparacion` en BD quedarán inconsistentes con el TypeScript.
 
 ### B. Ejecutar migración 002_email_config.sql (sigue pendiente)
 **Archivo**: `supabase/migrations/002_email_config.sql`
@@ -228,6 +247,17 @@ _(Baja prioridad si ya accesibles desde perfil)_
 ---
 
 ## 🐛 BUGS / DEUDA TÉCNICA ENCONTRADA EN ANÁLISIS (2026-04-13)
+
+### Bug 0c — `createAdminClient()` en `citas/[id]` para queries de OT (DEUDA TÉCNICA — 2026-04-15)
+`app/(dashboard)/citas/[id]/page.tsx` usa `createAdminClient()` (service_role) para todas las
+consultas de la página, incluyendo las queries de `ordenes_trabajo` y `citas`.
+**Riesgo:** bypass total de RLS — si la URL de una cita es accedida directamente, el servidor
+podría devolver OTs de otras sucursales sin que las policies lo impidan.
+**Mitigación actual:** la página es Server Component dentro del layout autenticado; en la práctica
+el usuario autenticado solo ve sus datos porque los filtros de negocio están en la query.
+**Acción futura:** migrar a `createClient()` con RLS cuando se estabilice el flujo de auth por
+sucursal y las policies de `citas` y `ordenes_trabajo` estén verificadas con usuarios reales.
+→ Ver también: decisión técnica "Admin client" en tabla de decisiones más abajo.
 
 ### Bug 0 — RLS por rol pendiente en tablas de capa IA (NUEVO — 2026-04-13)
 Las policies de `ai_settings` y `outbound_queue` (migración 003) solo validan `sucursal_id`.

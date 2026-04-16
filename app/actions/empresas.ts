@@ -14,7 +14,7 @@ export async function createEmpresaAction(formData: FormData) {
   try { usuario = await ensureUsuario(supabase, user.id, user.email ?? '') }
   catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
 
-  const nombre = (formData.get('nombre') as string)?.trim()
+  const nombre = (formData.get('nombre') as string)?.trim().toUpperCase()
   if (!nombre) return { error: 'El nombre de la empresa es requerido' }
 
   const { data, error } = await supabase
@@ -45,7 +45,7 @@ export async function updateEmpresaAction(id: string, formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
 
-  const nombre = (formData.get('nombre') as string)?.trim()
+  const nombre = (formData.get('nombre') as string)?.trim().toUpperCase()
   if (!nombre) return { error: 'El nombre de la empresa es requerido' }
 
   const { error } = await supabase

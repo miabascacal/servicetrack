@@ -3,8 +3,9 @@ import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { ChevronLeft, Car, Phone, Wrench } from 'lucide-react'
-import type { EstadoCita } from '@/types/database'
+import type { EstadoCita, EstadoOT } from '@/types/database'
 import { CambiarEstadoCita } from '@/app/_components/citas/CambiarEstadoCita'
+import { VincularOTCita } from '@/app/_components/citas/VincularOTCita'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -65,6 +66,41 @@ export default async function CitaDetailPage({ params }: PageProps) {
   const estado = c.estado as EstadoCita
   const transitions = ALLOWED_TRANSITIONS[estado] ?? []
 
+  // Queries de OT — solo cuando el estado permite abrir/vincular OT
+  type OTRow = { id: string; numero_ot: string; numero_ot_dms: string | null; estado: EstadoOT }
+  let otVinculada: OTRow | null = null
+  let otsDisponibles: OTRow[] = []
+
+  if (estado === 'en_agencia' || estado === 'show') {
+    // OT ya vinculada a esta cita
+    const { data: otLinked } = await supabase
+      .from('ordenes_trabajo')
+      .select('id, numero_ot, numero_ot_dms, estado')
+      .eq('cita_id', id)
+      .limit(1)
+      .maybeSingle()
+    otVinculada = (otLinked as OTRow | null) ?? null
+
+    // OTs disponibles para vincular: mismo cliente + mismo vehículo, no cerradas, sin cita
+    if (!otVinculada && c.cliente) {
+      let otQuery = supabase
+        .from('ordenes_trabajo')
+        .select('id, numero_ot, numero_ot_dms, estado')
+        .eq('cliente_id', c.cliente.id)
+        .not('estado', 'in', '("entregado","cancelado")')
+        .is('cita_id', null)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      if (c.vehiculo) {
+        otQuery = otQuery.eq('vehiculo_id', c.vehiculo.id)
+      }
+
+      const { data: otsData } = await otQuery
+      otsDisponibles = (otsData as OTRow[] | null) ?? []
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
@@ -87,15 +123,6 @@ export default async function CitaDetailPage({ params }: PageProps) {
         </div>
         {/* Actions */}
         <div className="flex gap-2 shrink-0">
-          {estado === 'show' && (
-            <Link
-              href={`/taller/nuevo?cita_id=${c.id}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
-            >
-              <Wrench size={14} />
-              Abrir OT
-            </Link>
-          )}
           {c.cliente?.whatsapp && (
             <a
               href={`https://wa.me/${c.cliente.whatsapp.replace(/\D/g, '')}?text=Hola%20${c.cliente.nombre},%20te%20contactamos%20por%20tu%20cita%20del%20${formatDate(c.fecha_cita)}`}
@@ -172,6 +199,27 @@ export default async function CitaDetailPage({ params }: PageProps) {
               transitions={transitions}
             />
           </div>
+
+          {/* OT — vincular o ver */}
+          {(estado === 'en_agencia' || estado === 'show') && (
+            <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
+              <h2 className="text-sm font-semibold text-gray-900">Orden de Trabajo</h2>
+              {!otVinculada && (
+                <Link
+                  href={`/taller/nuevo?cita_id=${c.id}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors w-fit"
+                >
+                  <Wrench size={14} />
+                  Crear nueva OT
+                </Link>
+              )}
+              <VincularOTCita
+                citaId={c.id}
+                otVinculada={otVinculada}
+                otsDisponibles={otsDisponibles}
+              />
+            </div>
+          )}
 
           {/* Notes */}
           {c.notas && (

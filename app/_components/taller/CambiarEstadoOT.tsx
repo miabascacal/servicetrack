@@ -8,12 +8,12 @@ import { OT_TRANSITIONS } from '@/lib/ot-estados'
 import { updateEstadoOTAction } from '@/app/actions/taller'
 
 const ESTADO_CONFIG: Record<EstadoOT, { label: string; color: string; bg: string }> = {
-  recibido:      { label: 'Recibido',       color: 'text-blue-700',    bg: 'bg-blue-100 border-blue-300' },
-  diagnostico:   { label: 'Diagnóstico',    color: 'text-yellow-700',  bg: 'bg-yellow-100 border-yellow-300' },
-  en_reparacion: { label: 'En reparación',  color: 'text-purple-700',  bg: 'bg-purple-100 border-purple-300' },
-  listo:         { label: 'Listo',          color: 'text-green-700',   bg: 'bg-green-100 border-green-300' },
-  entregado:     { label: 'Entregado',      color: 'text-gray-600',    bg: 'bg-gray-100 border-gray-300' },
-  cancelado:     { label: 'Cancelado',      color: 'text-red-600',     bg: 'bg-red-100 border-red-300' },
+  recibido:    { label: 'Recibido',     color: 'text-blue-700',    bg: 'bg-blue-100 border-blue-300' },
+  diagnostico: { label: 'Diagnóstico', color: 'text-yellow-700',  bg: 'bg-yellow-100 border-yellow-300' },
+  en_proceso:  { label: 'En proceso',  color: 'text-purple-700',  bg: 'bg-purple-100 border-purple-300' },
+  listo:       { label: 'Listo',       color: 'text-green-700',   bg: 'bg-green-100 border-green-300' },
+  entregado:   { label: 'Entregado',   color: 'text-gray-600',    bg: 'bg-gray-100 border-gray-300' },
+  cancelado:   { label: 'Cancelado',   color: 'text-red-600',     bg: 'bg-red-100 border-red-300' },
 }
 
 interface CambiarEstadoOTProps {

@@ -5,15 +5,15 @@ import { formatDate, formatDateTime, cn } from '@/lib/utils'
 import type { EstadoOT } from '@/types/database'
 
 const ESTADO_CONFIG: Record<EstadoOT, { label: string; color: string; dot: string }> = {
-  recibido:     { label: 'Recibido',    color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500' },
-  diagnostico:  { label: 'Diagnóstico', color: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500' },
-  en_reparacion: { label: 'En reparación', color: 'bg-purple-100 text-purple-700', dot: 'bg-purple-500' },
-  listo:        { label: 'Listo',       color: 'bg-green-100 text-green-700',  dot: 'bg-green-500' },
-  entregado:    { label: 'Entregado',   color: 'bg-gray-100 text-gray-600',    dot: 'bg-gray-400' },
-  cancelado:    { label: 'Cancelado',   color: 'bg-red-100 text-red-600',      dot: 'bg-red-400' },
+  recibido:    { label: 'Recibido',    color: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500' },
+  diagnostico: { label: 'Diagnóstico', color: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500' },
+  en_proceso:  { label: 'En proceso',  color: 'bg-purple-100 text-purple-700', dot: 'bg-purple-500' },
+  listo:       { label: 'Listo',       color: 'bg-green-100 text-green-700',  dot: 'bg-green-500' },
+  entregado:   { label: 'Entregado',   color: 'bg-gray-100 text-gray-600',    dot: 'bg-gray-400' },
+  cancelado:   { label: 'Cancelado',   color: 'bg-red-100 text-red-600',      dot: 'bg-red-400' },
 }
 
-const ESTADO_ORDEN: EstadoOT[] = ['recibido', 'diagnostico', 'en_reparacion', 'listo', 'entregado', 'cancelado']
+const ESTADO_ORDEN: EstadoOT[] = ['recibido', 'diagnostico', 'en_proceso', 'listo', 'entregado', 'cancelado']
 
 interface PageProps {
   searchParams: Promise<{ estado?: string; q?: string }>
@@ -136,7 +136,9 @@ export default async function TallerPage({ searchParams }: PageProps) {
                   asesor: { id: string; nombre: string; apellido: string } | null
                 }
                 const row = ot as unknown as OTRow
-                const estadoCfg = ESTADO_CONFIG[row.estado as EstadoOT]
+                const estadoCfg =
+                  ESTADO_CONFIG[row.estado as EstadoOT] ??
+                  { label: row.estado ?? 'SIN ESTADO', color: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' }
 
                 return (
                   <tr key={row.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
@@ -194,7 +196,7 @@ export default async function TallerPage({ searchParams }: PageProps) {
                       ) : '—'}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-400">
-                      {formatDateTime(row.created_at)}
+                      {row.created_at ? formatDateTime(row.created_at) : '—'}
                     </td>
                   </tr>
                 )

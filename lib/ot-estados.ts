@@ -6,19 +6,19 @@
 import type { EstadoOT } from '@/types/database'
 
 export const OT_TRANSITIONS: Record<EstadoOT, EstadoOT[]> = {
-  recibido:      ['diagnostico', 'en_reparacion', 'cancelado'],
-  diagnostico:   ['en_reparacion', 'cancelado'],
-  en_reparacion: ['listo', 'cancelado'],
-  listo:         ['entregado'],
-  entregado:     [],
-  cancelado:     [],
+  recibido:    ['diagnostico', 'en_proceso', 'cancelado'],
+  diagnostico: ['en_proceso', 'cancelado'],
+  en_proceso:  ['listo', 'cancelado'],
+  listo:       ['entregado'],
+  entregado:   [],
+  cancelado:   [],
 }
 
 export const ESTADO_OT_LABELS: Record<EstadoOT, string> = {
-  recibido:      'Recibido',
-  diagnostico:   'Diagnóstico',
-  en_reparacion: 'En reparación',
-  listo:         'Listo',
-  entregado:     'Entregado',
-  cancelado:     'Cancelado',
+  recibido:    'Recibido',
+  diagnostico: 'Diagnóstico',
+  en_proceso:  'En proceso',
+  listo:       'Listo',
+  entregado:   'Entregado',
+  cancelado:   'Cancelado',
 }

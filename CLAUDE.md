@@ -183,6 +183,38 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
 - **`conversation_threads.canal` ahora acepta `'interno'`** (migración 006).
 - **`lib/threads.ts` — `ThreadCanal`** incluye `'interno'`.
 
+### Decisiones clave — Sprint 9 (2026-04-15)
+
+- **ENUM `estado_ot`: valor canónico es `'en_proceso'`, no `'en_reparacion'`.**
+  - Aplicado en migración 008. El nombre reflejaba etapa interna genérica; `en_proceso` es más preciso para el producto.
+  - `types/database.ts` → `EstadoOT` usa `'en_proceso'`.
+  - `lib/ot-estados.ts` es la única fuente de verdad de transiciones y labels.
+- **Normalización a MAYÚSCULAS en server actions (campos de texto visibles):**
+  - `nombre`, `apellido`, `apellido_2` de clientes → `.toUpperCase()` en `app/actions/clientes.ts`
+  - `marca`, `modelo` de vehículos → `.toUpperCase()` en `app/actions/vehiculos.ts` (placa y VIN ya lo tenían)
+  - `diagnostico` de OTs → `.toUpperCase()` en `app/actions/taller.ts`
+  - NO aplica a: email, whatsapp, URLs, VIN, tokens, notas_internas, promesa_entrega
+- **Cita "Abrir OT" también disponible en estado `en_agencia`** (antes solo en `show`).
+  - `app/(dashboard)/citas/[id]/page.tsx` — condición: `(estado === 'en_agencia' || estado === 'show')`
+- **Flujo contextual de nueva cita: "Crear cliente" cuando no hay resultados.**
+  - `app/(dashboard)/citas/nuevo/page.tsx` — link a `/crm/clientes/nuevo?return_to=/citas/nuevo`
+  - `app/(dashboard)/crm/clientes/nuevo/page.tsx` — lee `return_to` de searchParams
+  - Al finalizar el wizard (vincular/crear vehículo, o saltar), redirige a `${return_to}?cliente_id=${id}` si `return_to` existe, si no al perfil del cliente.
+- **Cita en `en_agencia` o `show` → bloque "Orden de Trabajo"** en detalle de cita:
+  - Si hay OT vinculada (`cita_id = cita.id`) → muestra `numero_ot` + `numero_ot_dms` + link "Ver OT"
+  - Si no hay OT vinculada → botón "Crear nueva OT" + lista de OTs existentes del mismo cliente/vehículo para vincular
+  - Componente: `app/_components/citas/VincularOTCita.tsx`
+  - Acción: `vincularOTCitaAction` en `app/actions/taller.ts` — valida sucursal+cliente+vehículo antes de actualizar `cita_id`
+- **`updateOTAction` acepta `numero_ot_dms`** para edición posterior del identificador DMS.
+- **`version` en creates de vehículo** — campo normalizado a MAYÚSCULAS en `createVehiculoAction` y `createVehiculoYVincularAction`.
+- **Normalización MAYÚSCULAS — cobertura completa:**
+  - Clientes: `nombre`, `apellido`, `apellido_2` — create y update
+  - Empresas: `nombre` — create y update (ambas acciones)
+  - Vehículos: `marca`, `modelo`, `version`, `color` — create y update (3 funciones)
+  - OT: `diagnostico`, `numero_ot_dms` — create y update
+  - NO normalizar: `email`, `whatsapp`, `notas_internas`, `promesa_entrega`, `tokens`
+- **Trazabilidad de estado OT:** `updated_at` manejado por trigger `t_ordenes_trabajo_updated` (migration 005). **TODO pendiente:** agregar columna `updated_by` UUID en migración futura cuando se requiera auditoría por usuario.
+
 ### Estado Sprint 8 — actualizado 2026-04-15
 
 #### Fase 1 — Saliente → mensajes ✅ IMPLEMENTADA

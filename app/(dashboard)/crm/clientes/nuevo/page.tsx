@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Save, Search, UserPlus, Building2, Car, CheckCircle2, ArrowRight, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -23,6 +23,17 @@ type WizardStep =
 
 export default function NuevoClientePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const returnTo = searchParams.get('return_to')
+
+  // Helper: redirect to return_to with cliente_id, or to client profile
+  function redirectAfterCreate(clienteId: string) {
+    if (returnTo) {
+      router.push(`${returnTo}?cliente_id=${clienteId}`)
+    } else {
+      router.push(`/crm/clientes/${clienteId}`)
+    }
+  }
 
   // Wizard state
   const [step, setStep] = useState<WizardStep>('search')
@@ -149,7 +160,7 @@ export default function NuevoClientePage() {
     const result = await addVehiculoPersonaAction(vehiculo.id, createdCliente.id, 'dueno' as RolVehiculo)
     if (result?.error) { setError(result.error); setSaving(false); return }
     setSaving(false)
-    router.push(`/crm/clientes/${createdCliente.id}`)
+    redirectAfterCreate(createdCliente.id)
   }
 
   // ── Handler: Crear vehículo y vincular ───────────────────────────────────
@@ -161,7 +172,7 @@ export default function NuevoClientePage() {
     const result = await createVehiculoYVincularAction(createdCliente.id, new FormData(e.currentTarget))
     if (result?.error) { setError(result.error); setSaving(false); return }
     setSaving(false)
-    router.push(`/crm/clientes/${createdCliente.id}`)
+    redirectAfterCreate(createdCliente.id)
   }
 
   // ── STEP: search ─────────────────────────────────────────────────────────
@@ -507,7 +518,7 @@ export default function NuevoClientePage() {
           </div>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={() => router.push(`/crm/clientes/${createdCliente?.id}`)}
+              onClick={() => createdCliente && redirectAfterCreate(createdCliente.id)}
               className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
             >
               No, ir al perfil
@@ -536,7 +547,7 @@ export default function NuevoClientePage() {
             <ChevronLeft size={18} />
           </button>
           <h2 className="text-base font-semibold text-gray-900">Vincular con vehículo</h2>
-          <button onClick={() => router.push(`/crm/clientes/${createdCliente?.id}`)} className="ml-auto text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+          <button onClick={() => createdCliente && redirectAfterCreate(createdCliente.id)} className="ml-auto text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
             <X size={13} /> Omitir
           </button>
         </div>
