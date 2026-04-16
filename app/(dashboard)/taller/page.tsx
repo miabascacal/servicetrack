@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { Wrench, Plus, Clock, Car, User } from 'lucide-react'
 import { formatDate, formatDateTime, cn } from '@/lib/utils'
 import type { EstadoOT } from '@/types/database'
@@ -21,7 +21,8 @@ interface PageProps {
 
 export default async function TallerPage({ searchParams }: PageProps) {
   const { estado, q = '' } = await searchParams
-  const supabase = createAdminClient()
+  // createClient() aplica RLS — solo devuelve OTs de la sucursal del usuario autenticado
+  const supabase = await createClient()
 
   let query = supabase
     .from('ordenes_trabajo')

@@ -2,8 +2,44 @@
 ## ⚠ NO MODIFICAR ESTE ARCHIVO sin instrucción explícita del usuario
 ## Plataforma SaaS de Gestión de Servicio Postventa Automotriz
 
-Este archivo es la ÚNICA fuente de verdad para Claude Code.
+Este archivo es la guía de comportamiento y reglas de arquitectura para Claude Code.
 Lee también: PRODUCT_MASTER.md · SUPABASE_SCHEMA.sql · TECH_STACK.md · N8N_WORKFLOWS.md · INSTRUCCIONES_PROYECTO_CLAUDE.md
+
+---
+
+## 📌 SOURCE OF TRUTH
+
+El documento principal y único de planeación operativa del proyecto es:
+
+> **`docs/WORKPLAN_CURRENT_STATE.md`**
+
+Este documento contiene: estado actual validado, lo implementado, lo pendiente, roadmap por fases, riesgos, decisiones arquitectónicas (ADRs) y checklists de validación.
+
+**Roadmap activo (ver WORKPLAN para detalle):**
+- FASE 1.5 — Acceso multiusuario: invitaciones, recuperación de contraseña, estado de usuarios → **prioridad inmediata antes de cualquier feature nueva**
+- FASE 2.2 — Mi Agenda con vista calendario (mes/semana/día)
+- FASE 2.3 — Calendario operativo de Citas (disponibilidad al crear)
+- FASE 4.4 — Calendario de Taller (pasada posterior separada)
+
+**Reglas de uso obligatorio:**
+- Antes de implementar, proponer cambios o diseñar features → leer el WORKPLAN.
+- Si el WORKPLAN no está en contexto → pedirlo explícitamente antes de continuar.
+- Después de cualquier análisis, decisión o implementación → indicar qué sección del WORKPLAN debe actualizarse.
+- Los bugs, riesgos y decisiones detectados en chat deben integrarse al WORKPLAN antes de cerrar la tarea.
+
+**Documentos complementarios que NO reemplazan al WORKPLAN:**
+- `CLAUDE.md` — guía de comportamiento, reglas de arquitectura y convenciones de código. NO es plan operativo.
+- `PENDIENTES.md` — historial de sprints, bugs legacy y lista de items pendientes. NO es el roadmap activo.
+- `docs/IMPLEMENTATION_RUNBOOK.md` — onboarding de clientes reales, infraestructura, go-live. NO es plan de desarrollo.
+
+---
+
+## ⚠️ DOCUMENTATION RULES
+
+- **NO crear nuevos documentos de planeación** — prohibido generar archivos tipo `ARCHITECT_REVIEW.md`, `PLAN_V2.md`, `ROADMAP_NEW.md` u otros análisis fuera del WORKPLAN.
+- **TODO análisis, bug, decisión y mejora debe integrarse al WORKPLAN** — no dejar información solo en el chat.
+- **No duplicar información entre documentos** — si algo ya está en el WORKPLAN, no repetirlo en CLAUDE.md ni en PENDIENTES.md.
+- **CLAUDE.md se mantiene ligero** — solo reglas, convenciones y referencias. No estado de implementación.
 
 ---
 
@@ -13,7 +49,7 @@ Lee también: PRODUCT_MASTER.md · SUPABASE_SCHEMA.sql · TECH_STACK.md · N8N_W
 - **Repo**: github.com/miabascacal/servicetrack
 - **Deploy**: servicetrack-one.vercel.app
 - **Tipo**: SaaS vertical automotriz — gestión de postventa para concesionarios en México
-- **Stack**: Next.js 14 + TypeScript + TailwindCSS + Supabase + Claude API + Vercel
+- **Stack**: Next.js 16 + TypeScript + TailwindCSS + Supabase + Claude API + Vercel
 - **Automatizaciones**: Código nativo Next.js — Meta Cloud API (WA) + Resend (email) + Vercel Cron Jobs
 - **DMS piloto**: Autoline (exporta CSV/Excel)
 - **Horario del bot**: 8:00 AM – 7:30 PM hora México (mensajes fuera de horario se encolan)
@@ -63,12 +99,12 @@ Lee también: PRODUCT_MASTER.md · SUPABASE_SCHEMA.sql · TECH_STACK.md · N8N_W
 ```env
 RESEND_API_KEY=           # API key de resend.com — para activar emails
 CRON_SECRET=              # cualquier string largo — para proteger el cron job
-RESEND_FROM_EMAIL=        # email desde el que se envían las notificaciones
+EMAIL_FROM=               # email desde el que se envían las notificaciones
 ```
 
 ### Migraciones pendientes en Supabase
 - Ejecutar `supabase/migrations/002_email_config.sql`
-- Ejecutar `supabase/migrations/003_ai_foundation.sql` (Sección 1, luego Sección 2 en pasada separada)
+- `003_ai_foundation.sql` ya fue ejecutada; la fuente real de cambios posteriores son las migraciones `004` a `008`
 
 ### WhatsApp Business API (Meta) — proceso largo
 - Requiere cuenta Meta Business verificada
@@ -95,7 +131,7 @@ RESEND_FROM_EMAIL=        # email desde el que se envían las notificaciones
 | `conversation_threads` | ✅ Tabla activa — se crea automáticamente con cada envío saliente |
 | `mensajes` | ✅ Fuente de verdad conversacional — reemplaza a `wa_mensajes_log` para lógica nueva |
 | `wa_mensajes_log` | 🔄 Legacy — conservada como log técnico de bajo nivel. No usar para lógica nueva |
-| Bandeja UI | 🔄 En desarrollo — actualmente usa datos mock. No conectada a Supabase |
+| Bandeja UI | 🟡 Conectada parcialmente a Supabase — usa `conversation_threads` + `mensajes`; pendiente madurez operativa |
 | Webhook WhatsApp (recepción) | ⬜ Pendiente — Sprint 8 Fase 2 |
 | Flush de `outbound_queue` (cron) | ⬜ Pendiente |
 | Clasificador de intención IA | ⬜ Pendiente (`lib/ai/classify-intent.ts`) |
@@ -106,7 +142,7 @@ RESEND_FROM_EMAIL=        # email desde el que se envían las notificaciones
 - **`mensajes` es la fuente de verdad.** Todo mensaje nuevo (saliente e, en Fase 2, entrante) se persiste en `mensajes`.
 - **`wa_mensajes_log` es legacy.** Solo se conserva como log técnico de la llamada a la API de Meta. No construir lógica nueva sobre esta tabla.
 - **Webhook pendiente.** Hasta que se implemente `app/api/webhooks/whatsapp/route.ts`, no hay recepción de mensajes WA. El canal es unidireccional saliente.
-- **Bandeja con mock.** La UI en `/bandeja/automatizaciones` muestra datos de demostración, no datos reales de Supabase.
+- **Bandeja parcial con datos reales.** `/bandeja` ya consume `conversation_threads` + `mensajes`; la deuda pendiente está en webhook entrante, composición real y validación operativa.
 - **Bot apagado por defecto.** `ai_settings.activo = FALSE` — requiere habilitación explícita de admin.
 - **`message_count` sin incremento.** El contador denormalizado en `conversation_threads` no se actualiza aún — pendiente de trigger o RPC en Fase 2.
 - **`message_source`** usa: `customer`, `agent` (humano), `agent_bot` (bot automático), `system`, `import`. Nunca `agent_manual`.
@@ -134,7 +170,7 @@ CRM (corazón) ← todos los módulos leen y escriben aquí
 
 ---
 
-## CAPA IA — SPRINT 8 (migración 003 lista, pendiente de ejecutar)
+## CAPA IA — SPRINT 8 (migración 003 ya ejecutada)
 
 ### Tablas creadas por 003_ai_foundation.sql
 
@@ -183,12 +219,15 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
 - **`conversation_threads.canal` ahora acepta `'interno'`** (migración 006).
 - **`lib/threads.ts` — `ThreadCanal`** incluye `'interno'`.
 
-### Decisiones clave — Sprint 9 (2026-04-15)
+### Decisiones clave — Sprint 9 (2026-04-15 → 2026-04-16)
 
 - **ENUM `estado_ot`: valor canónico es `'en_proceso'`, no `'en_reparacion'`.**
-  - Aplicado en migración 008. El nombre reflejaba etapa interna genérica; `en_proceso` es más preciso para el producto.
+  - Migración 008 ✅ ejecutada y validada en Supabase (2026-04-16). ENUM contiene: `recibido`, `diagnostico`, `en_proceso`, `listo`, `entregado`, `cancelado`.
   - `types/database.ts` → `EstadoOT` usa `'en_proceso'`.
   - `lib/ot-estados.ts` es la única fuente de verdad de transiciones y labels.
+- **Crash `/taller` resuelto (2026-04-16):**
+  - `app/(dashboard)/taller/page.tsx` — fallback defensivo en `ESTADO_CONFIG[row.estado]` + guard en `formatDateTime(row.created_at)`.
+  - Requiere deploy a Vercel. No requiere migración.
 - **Normalización a MAYÚSCULAS en server actions (campos de texto visibles):**
   - `nombre`, `apellido`, `apellido_2` de clientes → `.toUpperCase()` en `app/actions/clientes.ts`
   - `marca`, `modelo` de vehículos → `.toUpperCase()` en `app/actions/vehiculos.ts` (placa y VIN ya lo tenían)
@@ -237,10 +276,10 @@ No es deuda de código. Acción: cuando exista número → poblar `wa_numeros` �
 3. `lib/ai/detect-sentiment.ts` — detector de sentimiento
 4. `app/api/cron/outbound-queue-flush/route.ts` — procesar cola de mensajes
 
-#### Fase 3 — Bandeja real (prioridad activa)
+#### Fase 3 — Bandeja real (madurez operativa pendiente)
 
-- `app/(dashboard)/bandeja/page.tsx` — lista de conversaciones desde `conversation_threads`
-- Conectar a `mensajes` + `clientes` — reemplazar mock data
+- `app/(dashboard)/bandeja/page.tsx` — ya lista conversaciones desde `conversation_threads`
+- Pendiente: webhook entrante, composición real, validación manual y hardening operativo
 
 ---
 
@@ -267,11 +306,10 @@ No es deuda de código. Acción: cuando exista número → poblar `wa_numeros` �
    los documentos afectados antes de dar la tarea por terminada.
 
 2. **Documentos a revisar cuando aplique:**
-   - `CLAUDE.md` — decisiones, estado actual, reglas de arquitectura
-   - `docs/IMPLEMENTATION_RUNBOOK.md` — configuración, go-live, soporte
-   - `PENDIENTES.md` — roadmap y prioridades si el cambio las altera
-   - Documentos de arquitectura existentes
-   - Manuales operativos o de usuario ya existentes
+   - `docs/WORKPLAN_CURRENT_STATE.md` — **PRIMERO SIEMPRE** — estado activo, roadmap, riesgos, ADRs
+   - `CLAUDE.md` — si el cambio afecta reglas de arquitectura o convenciones
+   - `docs/IMPLEMENTATION_RUNBOOK.md` — si el cambio afecta infraestructura, migraciones o go-live
+   - `PENDIENTES.md` — si hay un item de historial que marcar como resuelto
 
 3. **No dar una tarea por terminada si dejó documentos desactualizados.**
 
@@ -415,15 +453,14 @@ ANTHROPIC_API_KEY=
 
 # Email — Resend — ✅ configuradas en Vercel (mover a All Environments)
 RESEND_API_KEY=               # ✅ creada 2026-04-13
-RESEND_FROM_EMAIL=            # ✅ onboarding@resend.dev (temporal — cambiar al tener dominio)
+EMAIL_FROM=                   # ✅ onboarding@resend.dev temporal o remitente del cliente
 
 # Cron Jobs — Vercel — ✅ configurada (mover a All Environments)
 CRON_SECRET=                  # ✅ configurada 2026-04-13
 
 # WhatsApp — Meta Cloud API
-WA_PHONE_NUMBER_ID=           # ⬜ PENDIENTE — proceso de aprobación Meta
-WA_ACCESS_TOKEN=              # ⬜ PENDIENTE
-WA_VERIFY_TOKEN=              # ⬜ PENDIENTE
+# `WA_PHONE_NUMBER_ID` y `WA_ACCESS_TOKEN` viven por sucursal en tabla `wa_numeros`
+WA_VERIFY_TOKEN=              # ⬜ PENDIENTE — solo requerido al implementar webhook
 
 # Google Maps (para links en WA de citas)
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=

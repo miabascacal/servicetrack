@@ -13,7 +13,6 @@ import {
   HeartHandshake,
   Star,
   Shield,
-  UserCog,
   BarChart3,
   Settings,
   ChevronLeft,
@@ -33,7 +32,6 @@ const NAV_ITEMS = [
   { label: 'Atención a Clientes', href: '/atencion', icon: HeartHandshake },
   { label: 'CSI', href: '/csi', icon: Star },
   { label: 'Seguros', href: '/seguros', icon: Shield },
-  { label: 'Usuarios', href: '/usuarios', icon: UserCog },
   { label: 'Reportes', href: '/reportes', icon: BarChart3 },
   { label: 'Configuración', href: '/configuracion', icon: Settings },
 ]

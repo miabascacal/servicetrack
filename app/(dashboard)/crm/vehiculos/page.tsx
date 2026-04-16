@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { Car, Plus, Search } from 'lucide-react'
 
 interface PageProps {
@@ -8,7 +8,8 @@ interface PageProps {
 
 export default async function VehiculosPage({ searchParams }: PageProps) {
   const { q = '' } = await searchParams
-  const admin = createAdminClient()
+  // createClient() aplica RLS — solo devuelve vehículos de la sucursal del usuario autenticado
+  const admin = await createClient()
 
   let query = admin
     .from('vehiculos')

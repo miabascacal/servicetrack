@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { ChevronLeft, Car, Phone, Wrench } from 'lucide-react'
 import type { EstadoCita, EstadoOT } from '@/types/database'
@@ -43,7 +43,8 @@ const ALLOWED_TRANSITIONS: Record<EstadoCita, EstadoCita[]> = {
 
 export default async function CitaDetailPage({ params }: PageProps) {
   const { id } = await params
-  const supabase = createAdminClient()
+  // createClient() aplica RLS — solo devuelve citas de la sucursal del usuario autenticado
+  const supabase = await createClient()
 
   const { data: cita } = await supabase
     .from('citas')

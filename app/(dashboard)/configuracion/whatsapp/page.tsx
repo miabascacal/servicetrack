@@ -71,8 +71,7 @@ export default async function WhatsAppConfigPage() {
     .eq('id', user.id)
     .single()
 
-  const admin = createAdminClient()
-  const { data: numeros } = await admin
+  const { data: numeros } = await supabase
     .from('wa_numeros')
     .select('*')
     .eq('sucursal_id', usuario?.sucursal_id ?? '')

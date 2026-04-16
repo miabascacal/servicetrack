@@ -1,11 +1,12 @@
 import Link from 'next/link'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { Plus } from 'lucide-react'
 import { CitasKanban } from '@/app/_components/citas/CitasKanban'
 import type { EstadoCita } from '@/types/database'
 
 export default async function CitasPage() {
-  const supabase = createAdminClient()
+  // createClient() aplica RLS — solo devuelve citas de la sucursal del usuario autenticado
+  const supabase = await createClient()
 
   const { data: citas } = await supabase
     .from('citas')

@@ -1,12 +1,16 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { UserCog, Shield } from 'lucide-react'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { UserCog, Shield, MailCheck, Clock } from 'lucide-react'
 import { InvitarUsuario } from './InvitarUsuario'
+import { UsuarioAcciones } from './UsuarioAcciones'
+import { cn } from '@/lib/utils'
 
 export default async function UsuariosPage() {
   const supabase = await createClient()
+  const admin = createAdminClient()
 
-  const [{ data: usuarios }, { data: roles }] = await Promise.all([
+  const [{ data: usuarios }, { data: roles }, { data: authList }] = await Promise.all([
     supabase
       .from('usuarios')
       .select(`
@@ -22,7 +26,17 @@ export default async function UsuariosPage() {
       .select('id, nombre, es_super_admin, activo')
       .eq('activo', true)
       .order('nombre'),
+    // auth.users data para estado de invitación (email_confirmed_at)
+    admin.auth.admin.listUsers({ perPage: 1000 }),
   ])
+
+  // Mapa userId → email_confirmed_at para saber si aceptó la invitación
+  const authMap = new Map(
+    (authList?.users ?? []).map((u) => [u.id, u.email_confirmed_at ?? null])
+  )
+
+  const totalActivos = usuarios?.filter((u) => u.activo && authMap.get(u.id)).length ?? 0
+  const totalPendientes = usuarios?.filter((u) => !authMap.get(u.id)).length ?? 0
 
   return (
     <div className="space-y-6">
@@ -50,20 +64,16 @@ export default async function UsuariosPage() {
           <p className="text-xs text-gray-500 mt-1">Usuarios totales</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-2xl font-bold text-gray-900">
-            {usuarios?.filter((u) => u.activo).length ?? 0}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">Usuarios activos</p>
+          <p className="text-2xl font-bold text-green-600">{totalActivos}</p>
+          <p className="text-xs text-gray-500 mt-1">Activos</p>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <p className="text-2xl font-bold text-yellow-500">{totalPendientes}</p>
+          <p className="text-xs text-gray-500 mt-1">Invitación pendiente</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-2xl font-bold text-gray-900">{roles?.length ?? 0}</p>
           <p className="text-xs text-gray-500 mt-1">Roles configurados</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-2xl font-bold text-gray-900">
-            {roles?.filter((r) => r.es_super_admin).length ?? 0}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">Super admins</p>
         </div>
       </div>
 
@@ -78,9 +88,6 @@ export default async function UsuariosPage() {
           <div className="py-16 text-center">
             <UserCog size={32} className="mx-auto text-gray-300 mb-3" />
             <p className="text-sm text-gray-500">No hay usuarios registrados</p>
-            <p className="text-xs text-gray-400 mt-1">
-              Los usuarios se crean desde Supabase Auth
-            </p>
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -91,9 +98,6 @@ export default async function UsuariosPage() {
                 </th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
                   Rol
-                </th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide hidden sm:table-cell">
-                  WhatsApp
                 </th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
                   Estado
@@ -111,11 +115,17 @@ export default async function UsuariosPage() {
                 const rolesActivos = ((u.usuario_roles as unknown) as UsuarioRolRow[]).filter(
                   (ur) => ur.activo
                 )
+                const confirmed = !!authMap.get(u.id)
+                const invitePending = !confirmed
+
                 return (
                   <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
+                        <div className={cn(
+                          'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
+                          invitePending ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
+                        )}>
                           {u.nombre.slice(0, 1).toUpperCase()}
                           {u.apellido.slice(0, 1).toUpperCase()}
                         </div>
@@ -147,24 +157,25 @@ export default async function UsuariosPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-3 hidden sm:table-cell">
-                      <span className="text-gray-600 text-xs">{u.whatsapp ?? '—'}</span>
-                    </td>
                     <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          u.activo
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-500'
-                        }`}
-                      >
-                        {u.activo ? 'Activo' : 'Inactivo'}
-                      </span>
+                      {invitePending ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+                          <Clock size={11} />
+                          Invitación pendiente
+                        </span>
+                      ) : u.activo ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                          <MailCheck size={11} />
+                          Activo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                          Inactivo
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <button className="text-xs text-blue-600 hover:underline">
-                        Editar
-                      </button>
+                      <UsuarioAcciones usuarioId={u.id} invitePending={invitePending} />
                     </td>
                   </tr>
                 )

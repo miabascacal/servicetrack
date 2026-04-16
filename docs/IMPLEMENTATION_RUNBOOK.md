@@ -1,8 +1,8 @@
 # IMPLEMENTATION_RUNBOOK.md — ServiceTrack
 
 > Documento técnico y operativo para la implementación de ServiceTrack en clientes reales.
-> Última revisión: 2026-04-15
-> Sprint de referencia: Sprint 8 (Fase 1 completa — Taller+DMS implementado)
+> Última revisión: 2026-04-16
+> Sprint de referencia: Sprint 9 cerrado (estado OT en_proceso, crash /taller resuelto, flujo contextual Citas parcial)
 
 ---
 
@@ -20,9 +20,9 @@ No es un manual comercial. Es un documento de operación para quien ejecuta la i
 |---|---|
 | CRM (Clientes, Empresas, Vehículos) | ✅ Operativo |
 | Citas (Kanban) | ✅ Operativo |
-| Taller / OTs | ✅ Construido — `numero_ot_dms` implementado; eventos internos en bandeja activos; pendiente validación de flujo completo post-migración |
+| Taller / OTs | ✅ Operativo — `numero_ot_dms` implementado; estados OT canónicos (`en_proceso`); eventos internos activos; crash `/taller` resuelto; vincular OT desde cita funcional |
 | Refacciones | ✅ Construido |
-| Bandeja / Automatizaciones (UI) | 🔄 En desarrollo — usa datos mock, no conectada a Supabase real |
+| Bandeja / Automatizaciones (UI) | 🟡 Parcialmente operativa — `/bandeja` usa `conversation_threads` + `mensajes`; faltan webhook entrante, composición real y validación operativa |
 | WhatsApp — canal saliente | ✅ Operativo (`lib/whatsapp.ts`) |
 | WhatsApp — canal entrante (webhook) | ⬜ Pendiente — no implementado |
 | Email (Resend) | ✅ Operativo (`lib/email.ts`) |
@@ -52,7 +52,7 @@ No es un manual comercial. Es un documento de operación para quien ejecuta la i
 ```
 ┌─────────────────────────────────────────────────────┐
 │                     Vercel                          │
-│  Next.js 14 (App Router)                            │
+│  Next.js 16 (App Router)                            │
 │  ├── Frontend (RSC + Client Components)             │
 │  ├── API Routes (/api/*)                            │
 │  ├── Server Actions (app/actions/)                  │
@@ -84,7 +84,7 @@ El sistema no tiene servidor propio. Todo corre en Vercel (stateless) con Supaba
 
 | Elemento | Descripción |
 |---|---|
-| Framework | Next.js 14, App Router |
+| Framework | Next.js 16, App Router |
 | Lenguaje | TypeScript estricto (sin `any`) |
 | UI | shadcn/ui + TailwindCSS dark theme |
 | Hosting | Vercel (deploy automático desde `main`) |
@@ -104,16 +104,17 @@ El sistema no tiene servidor propio. Todo corre en Vercel (stateless) con Supaba
 
 PostgreSQL con RLS activo en todas las tablas. Ver sección 7 para detalle de tablas.
 
-Migraciones aplicadas:
-- `001_initial_schema.sql` ✅
-- `002_email_config.sql` ✅
-- `003_ai_foundation.sql` ✅
-- `004_messaging_adjustments.sql` — verificar si fue ejecutada (agrega columna `processing_status: 'skipped'` usada en mensajes salientes)
-- `005_taller_foundation.sql` ⬜ **PENDIENTE DE EJECUTAR** — crea `ordenes_trabajo` y `lineas_ot`
-- `006_ot_dms_and_taller_events.sql` ✅ ejecutada — agrega `numero_ot_dms` + expande CHECK constraint `canal` de `conversation_threads` para incluir `'interno'`
-- `007_canal_interno_enum.sql` ⬜ **PENDIENTE DE EJECUTAR** — agrega `'interno'` al ENUM `canal_mensaje` (fix mensajes internos OT) + trigger `message_count`
+Migraciones aplicadas en Supabase:
+- `001_initial_schema.sql` ✅ ejecutada
+- `002_email_config.sql` ⬜ **PENDIENTE** — sin esta tabla `/configuracion/email` falla silenciosamente
+- `003_ai_foundation.sql` ✅ ejecutada
+- `004_messaging_adjustments.sql` ✅ ejecutada — agrega `processing_status: 'skipped'` a `canal_mensaje` ENUM
+- `005_taller_foundation.sql` ✅ ejecutada — crea `ordenes_trabajo` y `lineas_ot`
+- `006_ot_dms_and_taller_events.sql` ✅ ejecutada — agrega `numero_ot_dms`; expande `canal` de `conversation_threads` con `'interno'`
+- `007_canal_interno_enum.sql` ✅ ejecutada — agrega `'interno'` al ENUM `canal_mensaje`; trigger `message_count`
+- `008_estado_ot_en_proceso.sql` ✅ ejecutada y validada — renombra ENUM `en_reparacion` → `en_proceso` (validado: `SELECT estado, COUNT(*) FROM ordenes_trabajo GROUP BY estado`)
 
-**Orden obligatorio:** ejecutar 005 antes de 006. Ejecutar 006 antes de desplegar el módulo Taller.
+**Orden obligatorio para nuevas instalaciones:** 001 → 002 → 003 → 004 → 005 → 006 → 007 → 008.
 
 ### 4.4 Cron Jobs
 
@@ -189,8 +190,8 @@ Modelos configurados por defecto en `ai_settings`:
 | Rol | Envío y recepción de mensajes WhatsApp |
 | Requiere | Cuenta Meta Business verificada + número de teléfono dedicado |
 | Proceso de aprobación | Puede tardar días a semanas — iniciar con anticipación |
-| Credenciales por número | `WA_PHONE_NUMBER_ID` + `WA_ACCESS_TOKEN` |
-| Webhook | `WA_VERIFY_TOKEN` — configurar en Meta Developer Console |
+| Credenciales por número | Se almacenan por sucursal en tabla `wa_numeros` (`phone_number_id` + `access_token`) |
+| Webhook | `WA_VERIFY_TOKEN` — variable global en Vercel, requerida solo al habilitar webhook |
 | Estado actual | ⬜ Pendiente para todos los clientes |
 
 **Nota crítica:** Sin aprobación de Meta no hay WhatsApp. Iniciar el proceso de onboarding de Meta Business al menos 2 semanas antes del go-live.
@@ -224,15 +225,15 @@ Modelos configurados por defecto en `ai_settings`:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Vercel + `.env.local` | Pública | Anon key de Supabase (RLS activo) | Todos los entornos |
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel + `.env.local` | **Secreta** | Service role — bypasea RLS — solo para server-side | Todos los entornos |
 | `RESEND_API_KEY` | Vercel | **Secreta** | API key de Resend para envío de emails | Todos los entornos |
-| `RESEND_FROM_EMAIL` | Vercel | Privada | Email remitente — ej: `noreply@agencia.com` | Todos los entornos |
+| `EMAIL_FROM` | Vercel | Privada | Email remitente por defecto del sistema — ej: `ServiceTrack <noreply@agencia.com>` | Todos los entornos |
 | `CRON_SECRET` | Vercel | **Secreta** | Protege el endpoint del cron job (`Authorization: Bearer`) | Todos los entornos |
 | `ANTHROPIC_API_KEY` | Vercel | **Secreta** | API key de Claude para clasificador IA | Todos los entornos |
-| `WA_PHONE_NUMBER_ID` | Vercel / tabla `wa_numeros` | **Secreta** | ID del número de teléfono en Meta — por número | Por sucursal (en BD) |
-| `WA_ACCESS_TOKEN` | Vercel / tabla `wa_numeros` | **Secreta** | Token de acceso Meta — por número | Por sucursal (en BD) |
+| `WA_PHONE_NUMBER_ID` | Tabla `wa_numeros` | **Secreta** | ID del número de teléfono en Meta — por número | Por sucursal (en BD) |
+| `WA_ACCESS_TOKEN` | Tabla `wa_numeros` | **Secreta** | Token de acceso Meta — por número | Por sucursal (en BD) |
 | `WA_VERIFY_TOKEN` | Vercel | **Secreta** | Token de verificación del webhook de Meta | Global |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Vercel | Pública | Links de Google Maps en mensajes de citas | Global |
 
-**Nota importante sobre credenciales WA:** `WA_PHONE_NUMBER_ID` y `WA_ACCESS_TOKEN` no son variables de entorno globales — se almacenan en la tabla `wa_numeros` de Supabase, una fila por número configurado. No hay credenciales WA hardcodeadas en código ni en Vercel. La tabla `wa_numeros` permite que cada sucursal tenga múltiples números (por módulo).
+**Nota importante sobre credenciales WA:** `WA_PHONE_NUMBER_ID` y `WA_ACCESS_TOKEN` no son variables de entorno globales — se almacenan en la tabla `wa_numeros` de Supabase, una fila por número configurado. No hay credenciales WA hardcodeadas en código ni en Vercel. La tabla `wa_numeros` permite que cada sucursal tenga múltiples números (por módulo). `WA_VERIFY_TOKEN` sí es variable de entorno global porque pertenece al handshake del webhook de Meta.
 
 ---
 
@@ -288,7 +289,7 @@ Un "cliente" de ServiceTrack es una agencia o grupo automotriz. Corresponde a un
 | Paso | Acción | Dónde |
 |---|---|---|
 | 1 | Crear proyecto Supabase (o reusar instancia SaaS con RLS) | Supabase Dashboard |
-| 2 | Ejecutar migraciones `001` → `006` en orden | Supabase SQL Editor |
+| 2 | Ejecutar migraciones `001` → `008` en orden (omitir `002` si no se usa email config aún) | Supabase SQL Editor |
 | 3 | Insertar fila en `grupos` con nombre del cliente | SQL o UI admin |
 | 4 | Crear sucursal(es) en `sucursales` con FK a `grupos.id` | SQL o UI admin |
 | 5 | Crear primer usuario admin en Supabase Auth | Supabase Dashboard → Auth |
@@ -563,7 +564,7 @@ No debería ocurrir — los índices parciales únicos en BD previenen duplicado
 | Riesgo | Severidad | Descripción | Mitigación |
 |---|---|---|---|
 | WA solo saliente | Alta | Sin webhook, los mensajes entrantes no se procesan ni registran | Implementar Sprint 8 Fase 2 antes de activar WA con clientes |
-| Bandeja con datos mock | Media | La UI de bandeja no refleja datos reales — confusión para demos/piloto. Eventos internos de OT SÍ se guardan en Supabase, pero la bandeja no los muestra hasta que se conecte. | Conectar a Supabase antes de piloto con cliente |
+| Bandeja operativa parcial | Media | `/bandeja` ya refleja datos reales, pero todavía no cubre webhook entrante, composición real ni validación operativa completa. | Cerrar webhook, validación manual y hardening antes de piloto con cliente |
 | `message_count` sin incremento | Baja | El contador denormalizado en `conversation_threads` no se actualiza | Implementar trigger o RPC en Fase 2 |
 | RLS por rol pendiente | Media | `ai_settings` y `outbound_queue` solo validan sucursal, no rol | Implementar con Sprint 2 (usePermisos) |
 | Token WA expirable | Alta | Access tokens de Meta pueden expirar — sistema falla silenciosamente | Implementar renovación de tokens o usar token permanente de negocio |
@@ -580,7 +581,7 @@ No debería ocurrir — los índices parciales únicos en BD previenen duplicado
 |---|---|---|
 | Webhook WhatsApp (`/api/webhooks/whatsapp/route.ts`) | Crítico — sin esto no hay mensajería bidireccional | Sprint 8 Fase 2 |
 | Flush de `outbound_queue` (cron) | Alto — mensajes diferidos nunca se envían | Sprint 8 |
-| Bandeja UI conectada a Supabase real | Alto — actualmente mock | Sprint 8 |
+| Madurez operativa de bandeja | Alto — ya conectada, pero faltan webhook, composición y validación real | Sprint 8 |
 | Clasificador de intención IA (`lib/ai/classify-intent.ts`) | Medio — bot no puede entender mensajes | Sprint 8 |
 | Detector de sentimiento (`lib/ai/detect-sentiment.ts`) | Medio | Sprint 8 |
 | `message_count` incremental (trigger o RPC) | Bajo | Sprint 8 Fase 2 |

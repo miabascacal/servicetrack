@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import {
   ChevronLeft, Building2, User, Phone, Mail, Hash, Pencil, Plus,
 } from 'lucide-react'
@@ -11,7 +11,8 @@ interface PageProps {
 
 export default async function EmpresaDetailPage({ params }: PageProps) {
   const { id } = await params
-  const admin = createAdminClient()
+  // createClient() aplica RLS — solo devuelve empresas de la sucursal del usuario autenticado
+  const admin = await createClient()
 
   const { data: empresa, error } = await admin
     .from('empresas')

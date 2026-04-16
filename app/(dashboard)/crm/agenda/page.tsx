@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatDateTime, cn } from '@/lib/utils'
 import { Calendar, Clock, User, Car, Phone, CheckCircle2, Circle, AlertCircle } from 'lucide-react'
@@ -30,8 +29,8 @@ interface PageProps {
 
 export default async function AgendaPage({ searchParams }: PageProps) {
   const { filtro = 'hoy' } = await searchParams
+  // createClient() aplica RLS — solo devuelve actividades de la sucursal del usuario autenticado
   const supabase = await createClient()
-  const admin = createAdminClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -41,7 +40,7 @@ export default async function AgendaPage({ searchParams }: PageProps) {
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString()
   const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7).toISOString()
 
-  let query = admin
+  let query = supabase
     .from('actividades')
     .select(`
       id, tipo, descripcion, estado, prioridad, fecha_vencimiento, realizada_at, creado_at,

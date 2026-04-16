@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { formatDate } from '@/lib/utils'
 import {
   ChevronLeft,
@@ -79,11 +78,11 @@ interface TimelineItem {
 export default async function ClienteDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params
   const { area = 'todos' } = await searchParams
-  const supabase = createAdminClient()
+  // createClient() aplica RLS — solo devuelve datos de la sucursal del usuario autenticado
+  const supabase = await createClient()
 
   // Obtener rol del usuario autenticado para pasar a componentes interactivos
-  const authClient = await createClient()
-  const { data: { user: authUser } } = await authClient.auth.getUser()
+  const { data: { user: authUser } } = await supabase.auth.getUser()
   let rolUsuario = 'viewer'
   if (authUser) {
     const { data: usr } = await supabase

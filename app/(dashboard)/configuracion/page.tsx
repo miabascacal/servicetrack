@@ -1,13 +1,13 @@
 import Link from 'next/link'
-import { Settings, Users, ClipboardList, Building2, AlertTriangle, MessageCircle, Mail } from 'lucide-react'
+import { Settings, Users, ClipboardList, Building2, AlertTriangle, MessageCircle, Mail, UserCog } from 'lucide-react'
 
 const MODULOS = [
   {
     href: '/usuarios',
-    icon: Users,
+    icon: UserCog,
     color: 'bg-blue-100 text-blue-600',
     titulo: 'Usuarios y Permisos',
-    descripcion: 'Administra usuarios, roles y accesos del sistema',
+    descripcion: 'Invita usuarios, gestiona roles y accesos del sistema',
     disponible: true,
   },
   {

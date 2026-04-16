@@ -70,8 +70,7 @@ export default async function EmailConfigPage() {
     .eq('id', user.id)
     .single()
 
-  const admin = createAdminClient()
-  const { data: configs } = await admin
+  const { data: configs } = await supabase
     .from('email_config')
     .select('*')
     .eq('sucursal_id', usuario?.sucursal_id ?? '')

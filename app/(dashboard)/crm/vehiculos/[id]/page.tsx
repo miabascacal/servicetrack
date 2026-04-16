@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import {
   ChevronLeft, Car, User, Pencil, Hash, Calendar,
   Gauge, Shield, Palette, FileText, MapPin,
@@ -42,11 +41,11 @@ function Campo({ icon: Icon, label, value }: {
 
 export default async function VehiculoDetailPage({ params }: PageProps) {
   const { id } = await params
-  const admin = createAdminClient()
+  // createClient() aplica RLS — solo devuelve datos de la sucursal del usuario autenticado
+  const admin = await createClient()
 
   // Obtener rol del usuario autenticado para pasar a componentes interactivos
-  const authClient = await createClient()
-  const { data: { user: authUser } } = await authClient.auth.getUser()
+  const { data: { user: authUser } } = await admin.auth.getUser()
   let rolUsuario = 'viewer'
   if (authUser) {
     const { data: usr } = await admin

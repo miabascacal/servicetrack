@@ -4,6 +4,13 @@
 -- Arquitectura multi-tenant: Grupo → Razón Social → Sucursal
 -- Clientes universales a nivel Grupo (sin duplicados)
 -- Ejecutar en orden. RLS activo en todas las tablas.
+-- IMPORTANTE: este archivo es un snapshot base y NO refleja el estado completo actual del proyecto.
+-- La fuente de verdad del estado runtime real son las migraciones en `supabase/migrations/`.
+-- A la fecha existen divergencias conocidas respecto a este archivo, por ejemplo:
+-- `002_email_config.sql`, `003_ai_foundation.sql`, `004_messaging_adjustments.sql`,
+-- `006_ot_dms_and_taller_events.sql`, `007_canal_interno_enum.sql`,
+-- `008_estado_ot_en_proceso.sql`, además de tablas/campos como `email_config`,
+-- `conversation_threads`, ajustes en `mensajes` y el estado OT canónico `en_proceso`.
 -- ============================================================
 
 -- ── EXTENSIONES ──────────────────────────────────────────────

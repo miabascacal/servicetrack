@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-15 — Sprint 9: estado OT en_proceso, normalización mayúsculas, flujo contextual citas→nuevo cliente, Abrir OT en en_agencia. Migración 008 lista, pendiente de ejecutar_
+_Actualizado: 2026-04-16 — FASE 1 seguridad multi-tenant parcialmente cerrada (pages críticas migradas a createClient, hardening pendiente en actions/rutas admin). FASE 1.5 acceso multiusuario implementada en código, pendiente deploy/config/validación. Bandeja conectada a datos reales de Supabase de forma parcial. Roadmap reordenado._
 
 ---
 
@@ -49,6 +49,19 @@ _Actualizado: 2026-04-15 — Sprint 9: estado OT en_proceso, normalización may�
 - [x] WA automático al confirmar/cancelar cita
 - [x] Refacciones: `/partes` conectado a Supabase (`maestro_partes`)
 - [x] Refacciones: `/cotizaciones` conectado a Supabase (`cotizaciones`)
+- [x] Sprint 9 — Estado OT canónico: `en_proceso` (migración 008 ejecutada + TypeScript + UI alineados)
+- [x] Sprint 9 — Normalización MAYÚSCULAS: clientes (crear+editar), empresas (crear+editar), vehículos (crear+editar), OT diagnóstico + numero_ot_dms
+- [x] Sprint 9 — OT: `version` agregado a `createVehiculoAction` y `createVehiculoYVincularAction`
+- [x] Sprint 9 — OT: `updateOTAction` acepta `numero_ot_dms` para edición posterior
+- [x] Sprint 9 — Cita detalle: bloque "Orden de Trabajo" visible en estados `en_agencia` y `show`
+- [x] Sprint 9 — `vincularOTCitaAction`: vincular OT existente a una cita con validaciones de sucursal+cliente+vehículo
+- [x] Sprint 9 — `VincularOTCita.tsx`: componente cliente para buscar y vincular OT desde detalle de cita
+- [x] Sprint 9 — Nueva cita: link "Crear cliente nuevo" cuando la búsqueda retorna cero resultados
+- [x] Sprint 9 — Wizard nuevo cliente: soporte `return_to` para redirigir a `/citas/nuevo?cliente_id=...` tras crear cliente
+- [x] Sprint 9 — `vincularOTCitaAction`: comentario explícito de regla vehiculo_id null-permisiva
+- [x] Sprint 9 — Crash `/taller` resuelto: fallback ESTADO_CONFIG + guard formatDateTime
+- [x] FASE 1 — Seguridad multi-tenant: 10 page components migrados de `createAdminClient()` a `await createClient()` con RLS → **NO cerrada por completo**: faltan hardening en `app/actions/*`, rutas admin y validación con segundo usuario real
+- [x] Bug 0c — `createAdminClient()` en `citas/[id]` — migrado a `createClient()` como parte de FASE 1 sistémica → pendiente validación multi-tenant
 
 ---
 
@@ -80,7 +93,7 @@ Columnas en `mensajes`: `thread_id`, `message_source`, `wa_message_id`, `ai_inte
 Índices: `idx_mensajes_thread`, `idx_mensajes_wa_message_id` (UNIQUE), `idx_mensajes_processing`
 
 ### A5. ✅ Sprint 9 — IMPLEMENTADO 2026-04-15
-- `estado_ot` ENUM: `en_reparacion` → `en_proceso` (migración 008, pendiente de ejecutar en Supabase)
+- `estado_ot` ENUM: `en_reparacion` → `en_proceso` — migración 008 ✅ ejecutada y validada en Supabase (2026-04-16)
 - Normalización MAYÚSCULAS: `nombre`/`apellido`/`apellido_2` (create+update clientes), `nombre` empresa (create+update), `marca`/`modelo`/`version`/`color` vehículos (create+update), `diagnostico`/`numero_ot_dms` OT (create+update)
 - Cita: bloque "Orden de Trabajo" en detalle de cita (estados `en_agencia`/`show`): crear nueva OT o vincular OT existente
 - `vincularOTCitaAction` en `app/actions/taller.ts`: validaciones de sucursal+cliente+vehículo
@@ -90,22 +103,97 @@ Columnas en `mensajes`: `thread_id`, `message_source`, `wa_message_id`, `ai_inte
 - `version` en `createVehiculoAction` y `createVehiculoYVincularAction`
 - `updateOTAction` acepta `numero_ot_dms` para edición posterior
 
-### A6. 🚨 PENDIENTE INMEDIATO — Ejecutar migración 008 en Supabase
+### A6. ✅ COMPLETADO — Migración 008 ejecutada y validada (2026-04-16)
 **Archivo**: `supabase/migrations/008_estado_ot_en_proceso.sql`
-Ejecutar en SQL Editor de Supabase antes del próximo deploy:
-```sql
-ALTER TYPE estado_ot RENAME VALUE 'en_reparacion' TO 'en_proceso';
-```
-⚠ Si el deploy ocurre antes de ejecutar esto, OTs en estado `en_reparacion` en BD quedarán inconsistentes con el TypeScript.
+ENUM `estado_ot` contiene: `recibido`, `diagnostico`, `en_proceso`, `listo`, `entregado`, `cancelado`.
+Validado con: `SELECT estado, COUNT(*) FROM ordenes_trabajo GROUP BY estado` → `diagnostico=2, en_proceso=2`. Sin `en_reparacion`.
+
+### A7. ✅ COMPLETADO — Crash /taller resuelto en producción (2026-04-16)
+**Archivo**: `app/(dashboard)/taller/page.tsx`
+Dos fixes aplicados:
+- `ESTADO_CONFIG[row.estado as EstadoOT] ?? { label: row.estado ?? 'SIN ESTADO', ... }` — fallback defensivo cuando llega valor inesperado o null
+- `{row.created_at ? formatDateTime(row.created_at) : '—'}` — guard contra `Invalid Date` en `Intl.DateTimeFormat`
+Requiere deploy a Vercel para activarse en producción.
 
 ### B. Ejecutar migración 002_email_config.sql (sigue pendiente)
 **Archivo**: `supabase/migrations/002_email_config.sql`
 Sin esta tabla, la pantalla `/configuracion/email` falla silenciosamente.
 
-### C. ✅ Variables de entorno en Vercel — COMPLETAS 2026-04-13
-Todas en All Environments: `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (onboarding@resend.dev temporal),
-`CRON_SECRET`, `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`,
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+### C. 🟡 Variables de entorno y configuración externa — PARCIAL
+Base ya identificada en código: `RESEND_API_KEY`, `EMAIL_FROM`, `CRON_SECRET`, `ANTHROPIC_API_KEY`,
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+`NEXT_PUBLIC_SITE_URL`.
+
+Pendiente validar en producción:
+- `NEXT_PUBLIC_SITE_URL` apuntando al dominio real
+- URLs de redirect en Supabase Auth para invitación / reset / set-password
+- Variables presentes en All Environments de Vercel
+
+---
+
+## 🔴 PENDIENTE — ACCESO MULTIUSUARIO (FASE 1.5 — antes de cualquier feature nueva)
+
+**Estado real en código:** ya existen flujo de invitación con `redirectTo`, pantalla `set-password`,
+`forgot-password`, reenviar invitación, reset de contraseña y navegación de Usuarios dentro de
+Configuración. Lo pendiente ya no es construirlo, sino desplegarlo, configurarlo y validarlo end-to-end.
+
+### M1. 🔴 CRÍTICO — Validar link de invitación en ambiente real
+
+El link que recibe el usuario invitado falla con `access_denied` / `otp_expired` / `invalid or expired`.
+El usuario no puede activar su cuenta.
+**Acción:** diagnosticar configuración de Auth en Supabase Dashboard — redirect URL, tiempo de expiración del OTP, URL del sitio.
+
+### M2. 🟡 Vista de usuarios invitados / pendientes — validar runtime
+
+El código ya consulta `auth.users.email_confirmed_at` para distinguir pendiente vs activo.
+Falta validarlo con usuarios reales y revisar comportamiento en producción.
+
+### M3. 🟡 Reenviar invitación — validar runtime
+
+La acción ya existe en `app/actions/usuarios.ts`.
+Falta validar delivery real, redirects y expiración.
+
+### M4. 🟡 Reset de contraseña desde Usuarios — validar runtime
+
+La acción admin ya existe.
+Falta validar envío real y flujo completo de recuperación.
+
+### M5. 🟡 Recuperación de contraseña por mail — validar runtime
+
+El flujo ya existe en login + `/forgot-password` + `/set-password`.
+Falta validación real en producción.
+
+### M6. ✅ Mover "Usuarios" a Configuración
+
+Resuelto en código: ya no aparece en el sidebar principal; el acceso quedó dentro de Configuración.
+
+### M7. Validación real multi-tenant con segundo usuario funcional
+
+Una vez resueltas M1-M6, crear un segundo usuario real, asignarlo a la misma sucursal con rol `asesor_servicio`, y validar:
+- Solo ve OTs, citas y clientes de su sucursal
+- No ve configuración de WhatsApp/email
+- No puede eliminar registros
+
+**Prerequisito de go-live.** Sin esto, el aislamiento multi-tenant es código no verificado.
+
+---
+
+## 🔴 PENDIENTE — HARDENING DE SEGURIDAD EN ACTIONS
+
+### S1. `createAdminClient()` sigue activo en acciones sensibles
+
+Persisten acciones server-side con `createAdminClient()` que todavía requieren validación más estricta
+por sucursal y por rol antes de dar FASE 1 por cerrada.
+
+### S2. Rutas admin sin guard de rol
+
+`/usuarios`, `/configuracion`, `/configuracion/whatsapp` y `/configuracion/email` necesitan validación
+operativa para confirmar que usuarios no-admin no entren ni ejecuten acciones sensibles.
+
+### S3. Validación por `id` en acciones críticas
+
+Hay acciones que recuperan o mutan registros por `id` y dependen de validaciones parciales.
+Revisar antes de seguir con features nuevas para evitar riesgo cross-sucursal.
 
 ---
 
@@ -248,16 +336,8 @@ _(Baja prioridad si ya accesibles desde perfil)_
 
 ## 🐛 BUGS / DEUDA TÉCNICA ENCONTRADA EN ANÁLISIS (2026-04-13)
 
-### Bug 0c — `createAdminClient()` en `citas/[id]` para queries de OT (DEUDA TÉCNICA — 2026-04-15)
-`app/(dashboard)/citas/[id]/page.tsx` usa `createAdminClient()` (service_role) para todas las
-consultas de la página, incluyendo las queries de `ordenes_trabajo` y `citas`.
-**Riesgo:** bypass total de RLS — si la URL de una cita es accedida directamente, el servidor
-podría devolver OTs de otras sucursales sin que las policies lo impidan.
-**Mitigación actual:** la página es Server Component dentro del layout autenticado; en la práctica
-el usuario autenticado solo ve sus datos porque los filtros de negocio están en la query.
-**Acción futura:** migrar a `createClient()` con RLS cuando se estabilice el flujo de auth por
-sucursal y las policies de `citas` y `ordenes_trabajo` estén verificadas con usuarios reales.
-→ Ver también: decisión técnica "Admin client" en tabla de decisiones más abajo.
+### ✅ Bug 0c — RESUELTO 2026-04-16
+`app/(dashboard)/citas/[id]/page.tsx` migrado a `await createClient()` como parte de FASE 1 sistémica.
 
 ### Bug 0 — RLS por rol pendiente en tablas de capa IA (NUEVO — 2026-04-13)
 Las policies de `ai_settings` y `outbound_queue` (migración 003) solo validan `sucursal_id`.
@@ -286,10 +366,11 @@ La tabla `email_config` NO existe en la BD todavía. La configuración de email 
 fallará silenciosamente.
 → **Ejecutar en Supabase SQL Editor antes de continuar con cualquier módulo de email.**
 
-### Bug 4 — Bandeja (`/bandeja`) usa datos DEMO, no Supabase
-El código tiene el comentario: "Demo data — in production this comes from Supabase mensajes table".
-La bandeja NO está conectada a datos reales.
-→ **PRIORIDAD ACTIVA — Sprint 8 Fase 3: bandeja real mínima en progreso.**
+### Bug 4 — Bandeja (`/bandeja`) ya usa Supabase, pero sigue incompleta operativamente
+La ruta `app/(dashboard)/bandeja/page.tsx` ya consulta `conversation_threads` y `mensajes`.
+La deuda real ya no es "conectar mock data", sino cerrar webhook entrante, composición real,
+validación manual y hardening alrededor de mensajería.
+→ **Actualizar documentación legacy que todavía la describe como mock.**
 
 ### Bug 5 — `hooks/` del proyecto tiene solo archivos de Next.js hooks (no app hooks)
 TECH_STACK.md documenta `useCitas.ts`, `useOTs.ts`, `useActividades.ts`, `useRealtime.ts`
@@ -322,7 +403,7 @@ Sigue sin verificarse.
 | WA provider | Meta Cloud API directa (no Twilio / 360dialog) |
 | Email | Resend (no SendGrid) |
 | `components/` | Estructura real: `app/_components/` (no `/components` en raíz) |
-| Admin client | Refacciones y taller usan `createAdminClient()` para evitar RLS en listados |
+| Admin client | ~~Refacciones y taller usan `createAdminClient()` para evitar RLS en listados~~ → **PARCIALMENTE RESUELTO 2026-04-16**: los page components críticos usan `createClient()` con RLS. Aún queda hardening en `app/actions/*`, config admin y validación multiusuario real |
 
 ---
 
@@ -331,6 +412,7 @@ Sigue sin verificarse.
 ### Por sprint (según IMPLEMENTATION_PLAN.md):
 
 **Sprint 3 pendiente (CRM):**
+- **Mi Agenda — vista calendario** — cambiar entre mes/semana/día con un clic. Mostrar actividades agendadas por fecha_vencimiento. Base para operación diaria. → **FASE 2.2** ⬜ No iniciada.
 - Driver 360: timeline cronológico del cliente
 - Actividades: crear actividad desde cualquier módulo (NuevaActividad.tsx existe pero sin verificar integración)
 - Outlook/Gmail sync (requiere Azure app + OAuth)
@@ -342,6 +424,9 @@ Sigue sin verificarse.
 - F04 No-show recovery: bot WA con opciones de reagendamiento
 - F05 Campaña proactiva: detectar vehículos próximos a mantenimiento
 - F06 Recepción Express completa: pre-llegada WA, check-in QR, firma digital
+- **Flujo contextual completo en Nueva Cita** — si cliente no existe: crear cliente → empresa → vehículo inline sin salir de la ruta, y regresar con `cliente_id` preseleccionado. Fase 1a (link "Crear cliente") ✅. Fases 1b (empresa inline), 1c (vehículo inline), 1d (auto-preseleccionar único vehículo) ⬜ pendientes.
+- **Vista calendario para Citas** — vista de disponibilidad al crear cita: horas del día con slots ocupados/libres. Cambiar entre mes/semana/día con un clic. No drag & drop aún. → **FASE 2.3** ⬜ No iniciada.
+- **Validación de KM en nueva OT** — verificar que `km_ingreso` sea ≥ último KM registrado en el vehículo. ⬜ No implementado.
 
 **Sprint 5 pendiente (TALLER):**
 - Líneas OT (lineas_ot): agregar trabajo/partes a una OT
@@ -349,6 +434,9 @@ Sigue sin verificarse.
 - Escalación automática: OT >4h sin actualizar → notificación asesor → gerente → bot
 - Venta perdida: asesor detecta necesidad → flujo recuperación
 - CSI automático al cerrar OT
+- **Vista calendario para Taller** — vista de carga de trabajo por asesor: OTs como bloques entre `created_at` y `promesa_entrega`. Conceptualmente separada del calendario de Citas — va en pasada posterior, no junto con él. → **FASE 4.4** ⬜ No iniciada.
+- **Columna `updated_by`** en `ordenes_trabajo` — trazabilidad de quién cambió el estado. Requiere nueva migración. Documentado como TODO en `updateEstadoOTAction`. ⬜ Pendiente de migración.
+- **Alertas de promesa vencida** — marcar visualmente OTs con `promesa_entrega < NOW()` en lista de taller. Valor alto, esfuerzo bajo. ⬜ No implementado.
 
 **Sprint 6 pendiente (REFACCIONES):**
 - PDF de cotización auto-generado con logo
@@ -359,16 +447,13 @@ Sigue sin verificarse.
 
 ---
 
-## 🎯 PRIORIDAD ACTIVA — Sprint 8 Fase 3: Bandeja real mínima
+## 🎯 PRIORIDAD ACTIVA — Cerrar seguridad, acceso y validación antes de abrir features nuevas
 
-Motivo: UI actual usa mock data. BD lista (`mensajes`, `conversation_threads`). Avanzar sin Meta.
+Motivo: el repo ya trae bandeja parcial con datos reales y el acceso multiusuario ya está implementado
+en código, pero todavía faltan deploy, configuración externa y validación manual.
 
-Debe mostrar:
-- Lista de conversaciones (desde `conversation_threads`)
-- Cliente vinculado
-- Último mensaje + fecha de última actividad
-- Canal (`whatsapp` | `email` | etc.)
-- Estado del hilo (`open` | `waiting_customer` | `waiting_agent`)
-- Quién envió el último mensaje (`last_message_source`)
-
-**Siguiente acción:** implementar `app/(dashboard)/bandeja/page.tsx` con datos reales.
+Orden recomendado:
+- Ejecutar migración `002_email_config.sql`
+- Hardening de seguridad en actions y rutas admin
+- Validar multiusuario real con segundo usuario
+- Recién después seguir con webhook WhatsApp, IA y madurez de bandeja
