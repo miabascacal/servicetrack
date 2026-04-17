@@ -10,6 +10,31 @@ import { cn } from '@/lib/utils'
 
 type AuthStatus = 'active' | 'pending' | 'inactive' | 'missing'
 
+type UsuarioRow = {
+  id: string
+  nombre: string
+  apellido: string | null
+  email: string
+  whatsapp: string | null
+  activo: boolean
+  sucursal_id: string | null
+}
+
+type UsuarioRolRow = {
+  id: string
+  activo: boolean
+  sucursal_id: string | null
+  usuario_id: string
+  rol_id: string
+}
+
+type RolRow = {
+  id: string
+  nombre: string
+  es_super_admin: boolean
+  activo: boolean
+}
+
 export default async function UsuariosPage() {
   const supabase = await createClient()
   const admin = createAdminClient()
@@ -45,18 +70,15 @@ export default async function UsuariosPage() {
     )
   }
 
-  const [usuariosResponse, rolesResponse, authResponse] = await Promise.all([
+  const [usuariosResponse, usuarioRolesResponse, rolesResponse, authResponse] = await Promise.all([
     admin
       .from('usuarios')
-      .select(`
-        id, nombre, apellido, email, whatsapp, activo, sucursal_id,
-        usuario_roles (
-          id, activo, sucursal_id,
-          rol:roles ( id, nombre, es_super_admin )
-        )
-      `)
+      .select('id, nombre, apellido, email, whatsapp, activo, sucursal_id')
       .eq('sucursal_id', ctx.sucursal_id)
       .order('nombre'),
+    admin
+      .from('usuario_roles')
+      .select('id, activo, sucursal_id, usuario_id, rol_id'),
     admin
       .from('roles')
       .select('id, nombre, es_super_admin, activo')
@@ -67,13 +89,16 @@ export default async function UsuariosPage() {
   ])
 
   const usuariosError = usuariosResponse.error
+  const usuarioRolesError = usuarioRolesResponse.error
   const rolesError = rolesResponse.error
   const authError = authResponse.error
 
-  const usuarios = usuariosResponse.data ?? []
-  const roles = rolesResponse.data ?? []
+  const usuarios = (usuariosResponse.data ?? []) as UsuarioRow[]
+  const usuarioRoles = (usuarioRolesResponse.data ?? []) as UsuarioRolRow[]
+  const roles = (rolesResponse.data ?? []) as RolRow[]
   const authUsers = authResponse.data?.users ?? []
 
+  const rolesById = new Map(roles.map((rol) => [rol.id, rol]))
   const authById = new Map(authUsers.map((u) => [u.id, u]))
   const authByEmail = new Map(
     authUsers
@@ -90,11 +115,16 @@ export default async function UsuariosPage() {
     else if (authUser) authStatus = 'pending'
     else if (!u.activo) authStatus = 'inactive'
 
-    return { ...u, authStatus, authUser }
+    const rolesActivos = usuarioRoles
+      .filter((ur) => ur.usuario_id === u.id && ur.activo && (!ur.sucursal_id || ur.sucursal_id === u.sucursal_id))
+      .map((ur) => ({ ...ur, rol: rolesById.get(ur.rol_id) ?? null }))
+
+    return { ...u, authStatus, authUser, rolesActivos }
   })
 
   const totalActivos = usuariosConEstado.filter((u) => u.activo && u.authStatus === 'active').length
   const totalPendientes = usuariosConEstado.filter((u) => u.authStatus === 'pending').length
+  const rolesSchemaMissing = !!rolesError || !!usuarioRolesError
 
   return (
     <div className="space-y-6">
@@ -112,15 +142,23 @@ export default async function UsuariosPage() {
         </Link>
       </div>
 
-      {(usuariosError || rolesError || authError) && (
+      {(usuariosError || usuarioRolesError || rolesError || authError) && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <div className="space-y-1">
             <p className="font-medium">La pantalla cargó con advertencias.</p>
             {usuariosError && <p className="text-amber-800">Usuarios: {usuariosError.message}</p>}
+            {usuarioRolesError && <p className="text-amber-800">Usuario roles: {usuarioRolesError.message}</p>}
             {rolesError && <p className="text-amber-800">Roles: {rolesError.message}</p>}
             {authError && <p className="text-amber-800">Supabase Auth: {authError.message}</p>}
           </div>
+        </div>
+      )}
+
+      {rolesSchemaMissing && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          La lista de usuarios ya puede cargarse sin depender de relaciones embebidas, pero el módulo de roles sigue
+          incompleto en esta base. Mientras no existan `roles` y `usuario_roles`, la columna de rol mostrará `Sin rol`.
         </div>
       )}
 
@@ -135,7 +173,7 @@ export default async function UsuariosPage() {
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-2xl font-bold text-yellow-500">{totalPendientes}</p>
-          <p className="text-xs text-gray-500 mt-1">InvitaciÃ³n pendiente</p>
+          <p className="text-xs text-gray-500 mt-1">Invitación pendiente</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-2xl font-bold text-gray-900">{roles.length}</p>
@@ -172,16 +210,6 @@ export default async function UsuariosPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {usuariosConEstado.map((u) => {
-                type UsuarioRolRow = {
-                  id: string
-                  activo: boolean
-                  sucursal_id: string | null
-                  rol: { id: string; nombre: string; es_super_admin: boolean } | null
-                }
-
-                const rolesActivos = ((u.usuario_roles as unknown) as UsuarioRolRow[]).filter((ur) => {
-                  return ur.activo && (!ur.sucursal_id || ur.sucursal_id === u.sucursal_id)
-                })
                 const apellidoInicial = (u.apellido ?? '').slice(0, 1).toUpperCase()
                 const invitePending = u.authStatus === 'pending'
 
@@ -208,10 +236,10 @@ export default async function UsuariosPage() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex flex-wrap gap-1">
-                        {rolesActivos.length === 0 ? (
+                        {u.rolesActivos.length === 0 ? (
                           <span className="text-xs text-gray-400">Sin rol</span>
                         ) : (
-                          rolesActivos.map((ur) => (
+                          u.rolesActivos.map((ur) => (
                             <span
                               key={ur.id}
                               className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
@@ -228,7 +256,7 @@ export default async function UsuariosPage() {
                       {u.authStatus === 'pending' ? (
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
                           <Clock size={11} />
-                          InvitaciÃ³n pendiente
+                          Invitación pendiente
                         </span>
                       ) : u.authStatus === 'active' && u.activo ? (
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">

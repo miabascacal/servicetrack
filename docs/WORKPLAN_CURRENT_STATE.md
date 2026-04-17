@@ -242,6 +242,7 @@ Los siguientes flujos ya existen en código, pero todavía requieren validación
 
 **Riesgo práctico corregido en código:** el reenvío no era usable porque dependía solo del email local y la UI podía marcar falsos "pendientes" si fallaba `listUsers()`. Ahora `/usuarios` muestra error visible si no puede consultar Auth y el reenvío valida que el usuario exista en Auth, siga pendiente y no esté desalineado por ID/email.
 **Bug raíz corregido en `/usuarios`:** la pantalla estaba leyendo `usuarios` con `createClient()` bajo RLS, pero `usuarios` no tiene policy de lectura. Con RLS activa eso devolvía lista vacía. El fix mínimo seguro fue mover la lectura de `/usuarios` a `createAdminClient()` con guard explícito de admin y filtros por `sucursal_id` / `grupo_id`.
+**Estado real actual validado:** en producción apareció un bloqueo adicional más específico: PostgREST no encuentra relación `usuarios -> usuario_roles` y reporta que no existe `public.roles`. Esto indica que el esquema de roles/permisos esperado por el código no está presente en la BD real desplegada. Se desacopló `/usuarios` de relaciones embebidas para que vuelva a listar usuarios reales aunque falten `roles` / `usuario_roles`, y `/usuarios/roles` ahora muestra degradación explícita hasta ejecutar el SQL pendiente.
 
 **Fix requerido:** FASE 1.5 completa.
 

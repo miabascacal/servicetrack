@@ -197,6 +197,21 @@ Pendiente inmediato después del deploy de `/usuarios`.
 La ruta usa `createClient()` sobre `roles`; hay que confirmar si reproduce el mismo patrón de RLS
 que dejó vacía la pantalla principal de usuarios.
 
+### M9. Esquema de roles/permisos ausente en BD real
+
+Estado validado en producción:
+- PostgREST no encuentra relación `usuarios -> usuario_roles`
+- PostgREST reporta que no existe `public.roles`
+
+Conclusión:
+- el problema visible actual ya no es solo RLS
+- la BD real no trae completo el esquema esperado por `/usuarios` y `/usuarios/roles`
+- falta ejecutar SQL de `roles`, `rol_permisos`, `usuario_roles` y `usuario_permisos_override`
+
+Fix mínimo seguro ya aplicado en código:
+- `/usuarios` ya no depende de relaciones embebidas para listar usuarios
+- `/usuarios/roles` degrada con mensaje explícito hasta que exista el esquema
+
 ---
 
 ## 🔴 PENDIENTE — HARDENING DE SEGURIDAD EN ACTIONS
