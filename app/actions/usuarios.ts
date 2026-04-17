@@ -15,17 +15,72 @@ function getSiteUrl() {
 
 async function getAdminCtx() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' as const }
 
   let ctx: import('@/lib/ensure-usuario').UsuarioCtx
-  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
-  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+  try {
+    ctx = await ensureUsuario(supabase, user.id, user.email ?? '')
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Error al obtener perfil' }
+  }
 
-  if (!tieneRol(ctx.rol, 'admin'))
-    return { error: 'Sin permisos para esta operación' as const }
+  if (!tieneRol(ctx.rol, 'admin')) {
+    return { error: 'Sin permisos para esta operaciÃ³n' as const }
+  }
 
   return { ctx }
+}
+
+type AuthLookupResult =
+  | {
+      ok: true
+      authUser: {
+        id: string
+        email?: string
+        email_confirmed_at: string | null
+      }
+      matchesUsuarioId: boolean
+    }
+  | { ok: false; error: string }
+
+async function getAuthUserForUsuario(
+  admin: ReturnType<typeof createAdminClient>,
+  usuarioId: string,
+  email: string
+): Promise<AuthLookupResult> {
+  const { data: authList, error } = await admin.auth.admin.listUsers({ perPage: 1000 })
+
+  if (error) {
+    return { ok: false, error: `No se pudo consultar Supabase Auth: ${error.message}` }
+  }
+
+  const normalizedEmail = email.trim().toLowerCase()
+  const authUserById = (authList.users ?? []).find((u) => u.id === usuarioId)
+  const authUserByEmail = (authList.users ?? []).find(
+    (u) => (u.email ?? '').trim().toLowerCase() === normalizedEmail
+  )
+  const authUser = authUserById ?? authUserByEmail
+
+  if (!authUser) {
+    return {
+      ok: false,
+      error:
+        'El usuario existe en la tabla interna pero no aparece en Supabase Auth. Revisa la sincronizaciÃ³n antes de reenviar.',
+    }
+  }
+
+  return {
+    ok: true,
+    authUser: {
+      id: authUser.id,
+      email: authUser.email,
+      email_confirmed_at: authUser.email_confirmed_at ?? null,
+    },
+    matchesUsuarioId: authUser.id === usuarioId,
+  }
 }
 
 export async function invitarUsuarioAction(formData: FormData) {
@@ -42,7 +97,6 @@ export async function invitarUsuarioAction(formData: FormData) {
   const admin = createAdminClient()
   const redirectTo = `${getSiteUrl()}/auth/callback?next=/set-password`
 
-  // Invite via Supabase Auth — sends email with magic link
   const { data: invited, error: eInvite } = await admin.auth.admin.inviteUserByEmail(email, {
     data: { nombre, apellido },
     redirectTo,
@@ -55,18 +109,15 @@ export async function invitarUsuarioAction(formData: FormData) {
 
   if (!invited?.user?.id) return { error: 'No se pudo crear el usuario' }
 
-  // Crear fila en usuarios para que el perfil exista desde el primer día
-  const { error: eUsr } = await admin
-    .from('usuarios')
-    .upsert({
-      id: invited.user.id,
-      sucursal_id: auth.ctx.sucursal_id,
-      nombre,
-      apellido,
-      email,
-      rol,
-      activo: true,
-    })
+  const { error: eUsr } = await admin.from('usuarios').upsert({
+    id: invited.user.id,
+    sucursal_id: auth.ctx.sucursal_id,
+    nombre,
+    apellido,
+    email,
+    rol,
+    activo: true,
+  })
 
   if (eUsr) return { error: `Usuario invitado pero hubo un error en el perfil: ${eUsr.message}` }
 
@@ -74,7 +125,6 @@ export async function invitarUsuarioAction(formData: FormData) {
   return { success: true, email }
 }
 
-// Reenvía la invitación a un usuario que no la ha aceptado aún.
 export async function reenviarInvitacionAction(formData: FormData) {
   const auth = await getAdminCtx()
   if ('error' in auth) return { error: auth.error }
@@ -84,31 +134,49 @@ export async function reenviarInvitacionAction(formData: FormData) {
 
   const admin = createAdminClient()
 
-  // Obtener email del usuario desde la tabla usuarios
   const { data: usr, error: eUsr } = await admin
     .from('usuarios')
-    .select('email')
+    .select('email, nombre, apellido')
     .eq('id', usuarioId)
     .single()
 
-  if (eUsr || !usr?.email) return { error: 'No se encontró el usuario' }
+  if (eUsr || !usr?.email) return { error: 'No se encontrÃ³ el usuario' }
+
+  const authLookup = await getAuthUserForUsuario(admin, usuarioId, usr.email)
+  if (!authLookup.ok) return { error: authLookup.error }
+
+  if (!authLookup.matchesUsuarioId) {
+    return {
+      error:
+        'El email existe en Supabase Auth pero con otro ID. No se reenviÃ³ la invitaciÃ³n para evitar desalinear usuarios.',
+    }
+  }
+
+  if (authLookup.authUser.email_confirmed_at) {
+    return { error: 'Este usuario ya activÃ³ su cuenta. Usa "Reset contraseÃ±a" en su lugar.' }
+  }
+
+  if (!authLookup.authUser.email) {
+    return { error: 'El usuario pendiente no tiene email en Supabase Auth.' }
+  }
 
   const redirectTo = `${getSiteUrl()}/auth/callback?next=/set-password`
-
-  // inviteUserByEmail en usuario no confirmado = reenvío; en confirmado = error "already registered"
-  const { error: eInvite } = await admin.auth.admin.inviteUserByEmail(usr.email, { redirectTo })
+  const { error: eInvite } = await admin.auth.admin.inviteUserByEmail(authLookup.authUser.email, {
+    data: { nombre: usr.nombre, apellido: usr.apellido },
+    redirectTo,
+  })
 
   if (eInvite) {
-    if (eInvite.message?.includes('already registered') || eInvite.message?.includes('already'))
-      return { error: 'Este usuario ya activó su cuenta — usa "Resetear contraseña" en su lugar' }
+    if (eInvite.message?.includes('already registered') || eInvite.message?.includes('already')) {
+      return { error: 'Este usuario ya activÃ³ su cuenta. Usa "Reset contraseÃ±a" en su lugar.' }
+    }
     return { error: `No se pudo reenviar: ${eInvite.message}` }
   }
 
   revalidatePath('/usuarios')
-  return { success: true }
+  return { success: true, email: authLookup.authUser.email }
 }
 
-// Envía email de reset de contraseña a un usuario (acción de admin).
 export async function resetPasswordAdminAction(formData: FormData) {
   const auth = await getAdminCtx()
   if ('error' in auth) return { error: auth.error }
@@ -124,7 +192,7 @@ export async function resetPasswordAdminAction(formData: FormData) {
     .eq('id', usuarioId)
     .single()
 
-  if (eUsr || !usr?.email) return { error: 'No se encontró el usuario' }
+  if (eUsr || !usr?.email) return { error: 'No se encontrÃ³ el usuario' }
 
   const supabase = await createClient()
   const { error } = await supabase.auth.resetPasswordForEmail(usr.email, {

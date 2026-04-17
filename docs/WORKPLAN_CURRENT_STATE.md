@@ -173,12 +173,21 @@ cancelado → (final)
 | 1.5.6 | **Set-password page** — `/set-password` para invitados y resets | ✅ |
 | 1.5.7 | **Usuarios fuera del sidebar** — removido de `NAV_ITEMS`; accesible desde `/configuracion` | ✅ |
 | 1.5.8 | **Validación multi-tenant con segundo usuario** | ⬜ Pendiente — requiere deploy + Supabase Auth config |
+| 1.5.9 | **Deploy fix `/usuarios` vacío** — lectura admin filtrada por `sucursal_id` / `grupo_id` para sortear RLS sin policy en `usuarios` | ⬜ Pendiente |
+| 1.5.10 | **Revisión `/usuarios/roles`** — confirmar si repite patrón similar de RLS por usar `createClient()` sobre `roles` | ⬜ Pendiente inmediato |
 
 **Prerequisitos para activar en producción:**
 - [ ] Deploy a Vercel
 - [ ] Supabase Auth dashboard → Site URL: `https://servicetrack-one.vercel.app`
 - [ ] Supabase Auth dashboard → Redirect URLs: agregar `https://servicetrack-one.vercel.app/auth/callback`
 - [ ] Vercel env var: `NEXT_PUBLIC_SITE_URL=https://servicetrack-one.vercel.app`
+
+**FASE 1.5 NO debe cerrarse todavía. Checklist de cierre obligatorio:**
+- [ ] Deploy del fix de `/usuarios`
+- [ ] Validación manual de `/usuarios` en producción
+- [ ] Reprueba completa de flujo: invitación → usuario pendiente visible → reenviar invitación → set-password → reset contraseña → login
+- [ ] Validación de aislamiento por sucursal con segundo usuario real
+- [ ] Revisión de `/usuarios/roles` por posible patrón similar de RLS
 
 ### FASE 2 — PRODUCTO USABLE (mayor impacto sobre capacidad del equipo para operar)
 
@@ -224,12 +233,15 @@ cancelado → (final)
 
 ### 🟡 PENDIENTE — Acceso multiusuario incompleto
 
-Los siguientes flujos de gestión de usuarios no existen o están rotos:
-- Vista de usuarios invitados/pendientes — no hay columna de estado en `/usuarios`
-- Reenviar invitación — no hay acción
-- Reset de contraseña desde admin — no hay acción
-- Recuperación de contraseña por mail — no hay flujo de "olvidé mi contraseña" en login
-- "Usuarios" en sidebar principal — debería estar solo dentro de Configuración
+Los siguientes flujos ya existen en código, pero todavía requieren validación manual end-to-end:
+- Vista de usuarios invitados/pendientes — `/usuarios` ya detecta `email_confirmed_at` desde Supabase Auth y distingue también casos sin registro Auth
+- Reenviar invitación — existe acción y fue endurecida para validar estado real en Auth antes de reenviar
+- Reset de contraseña desde admin — existe acción
+- Recuperación de contraseña por mail — existe flujo de "olvidé mi contraseña" en login
+- "Usuarios" en sidebar principal — ya fue movido dentro de Configuración
+
+**Riesgo práctico corregido en código:** el reenvío no era usable porque dependía solo del email local y la UI podía marcar falsos "pendientes" si fallaba `listUsers()`. Ahora `/usuarios` muestra error visible si no puede consultar Auth y el reenvío valida que el usuario exista en Auth, siga pendiente y no esté desalineado por ID/email.
+**Bug raíz corregido en `/usuarios`:** la pantalla estaba leyendo `usuarios` con `createClient()` bajo RLS, pero `usuarios` no tiene policy de lectura. Con RLS activa eso devolvía lista vacía. El fix mínimo seguro fue mover la lectura de `/usuarios` a `createAdminClient()` con guard explícito de admin y filtros por `sucursal_id` / `grupo_id`.
 
 **Fix requerido:** FASE 1.5 completa.
 

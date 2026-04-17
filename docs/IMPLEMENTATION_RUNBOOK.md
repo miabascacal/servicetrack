@@ -12,6 +12,8 @@ Este runbook describe los pasos técnicos, configuraciones y validaciones necesa
 
 No es un manual comercial. Es un documento de operación para quien ejecuta la implementación.
 
+**Regla operativa permanente:** cualquier cambio en configuración técnica externa debe documentarse el mismo día en los manuales vigentes del proyecto. Esto incluye, como mínimo, variables de entorno, URLs de Supabase Auth, dominios/redirects, tokens de webhook, configuración de Resend y dependencias equivalentes de terceros.
+
 ---
 
 ## 2. Estado actual del producto
@@ -211,7 +213,7 @@ Modelos configurados por defecto en `ai_settings`:
 |---|---|
 | Rol | Envío de emails transaccionales |
 | Variable | `RESEND_API_KEY` |
-| Remitente actual | `onboarding@resend.dev` (temporal, sin dominio propio) |
+| Remitente actual | `EMAIL_FROM` → fallback `ServiceTrack <onboarding@resend.dev>` si no existe variable |
 | Dominio propio | Requiere verificación DNS en Resend Dashboard |
 | Estado | ✅ Configurada en Vercel |
 
@@ -224,6 +226,7 @@ Modelos configurados por defecto en `ai_settings`:
 | `NEXT_PUBLIC_SUPABASE_URL` | Vercel + `.env.local` | Pública | URL del proyecto Supabase | Todos los entornos |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Vercel + `.env.local` | Pública | Anon key de Supabase (RLS activo) | Todos los entornos |
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel + `.env.local` | **Secreta** | Service role — bypasea RLS — solo para server-side | Todos los entornos |
+| `NEXT_PUBLIC_SITE_URL` | Vercel + `.env.local` | Pública | Base URL usada por flujos Auth para `redirectTo` (`/auth/callback?next=/set-password`) | Requerida en dev y prod |
 | `RESEND_API_KEY` | Vercel | **Secreta** | API key de Resend para envío de emails | Todos los entornos |
 | `EMAIL_FROM` | Vercel | Privada | Email remitente por defecto del sistema — ej: `ServiceTrack <noreply@agencia.com>` | Todos los entornos |
 | `CRON_SECRET` | Vercel | **Secreta** | Protege el endpoint del cron job (`Authorization: Bearer`) | Todos los entornos |
@@ -234,6 +237,89 @@ Modelos configurados por defecto en `ai_settings`:
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Vercel | Pública | Links de Google Maps en mensajes de citas | Global |
 
 **Nota importante sobre credenciales WA:** `WA_PHONE_NUMBER_ID` y `WA_ACCESS_TOKEN` no son variables de entorno globales — se almacenan en la tabla `wa_numeros` de Supabase, una fila por número configurado. No hay credenciales WA hardcodeadas en código ni en Vercel. La tabla `wa_numeros` permite que cada sucursal tenga múltiples números (por módulo). `WA_VERIFY_TOKEN` sí es variable de entorno global porque pertenece al handshake del webhook de Meta.
+
+### 6.1 Configuración real de Auth detectada en código
+
+El flujo actual de autenticación y recuperación usa estas piezas:
+
+- `app/actions/auth.ts` → `forgotPasswordAction()` llama `supabase.auth.resetPasswordForEmail()`
+- `app/actions/usuarios.ts` → invitación, reenvío y reset admin construyen `redirectTo`
+- `app/auth/callback/route.ts` → procesa `code` o `token_hash`/`type` y redirige a `next`
+
+**Redirect URL real usada por el código:**
+
+```text
+{SITE_URL}/auth/callback?next=/set-password
+```
+
+Donde `SITE_URL` se resuelve así:
+
+1. `NEXT_PUBLIC_SITE_URL`
+2. `https://${VERCEL_URL}` si existe
+3. `http://localhost:3000` como fallback local
+
+**Ruta callback real:**
+
+```text
+/auth/callback
+```
+
+**Destino actual para invitación / recovery / set password:**
+
+```text
+/auth/callback?next=/set-password
+```
+
+### 6.2 Configuración requerida en Supabase Auth
+
+En Supabase Dashboard → Authentication → URL Configuration:
+
+- **Site URL**
+  Debe apuntar al dominio base del entorno activo.
+  Ejemplos:
+  - Desarrollo local: `http://localhost:3000`
+  - Producción actual: `https://servicetrack-one.vercel.app`
+  - Cliente futuro con dominio propio: `https://app.cliente.com`
+
+- **Redirect URLs**
+  Deben incluir, como mínimo:
+  - `http://localhost:3000/auth/callback`
+  - `https://servicetrack-one.vercel.app/auth/callback`
+  - `https://app.cliente.com/auth/callback` para cada dominio futuro
+
+Si `Site URL` o las `Redirect URLs` no coinciden con el entorno real, los links de invitación o recuperación pueden fallar con `access_denied`, `otp_expired` o `auth_callback_failed`.
+
+### 6.3 Qué aplica por entorno
+
+| Entorno | Requerido | Notas |
+|---|---|---|
+| Desarrollo local | `.env.local` con `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SITE_URL=http://localhost:3000` | Permite probar login, forgot-password y callback local |
+| Producción actual | Vercel con todas las variables base + `NEXT_PUBLIC_SITE_URL=https://servicetrack-one.vercel.app` | Debe coincidir con Supabase Auth `Site URL` / redirect |
+| Cliente futuro con dominio propio | Mismas variables de producción, cambiando `NEXT_PUBLIC_SITE_URL` y `EMAIL_FROM` al dominio del cliente | También requiere actualizar Supabase Auth URLs y, si aplica, dominio verificado en Resend |
+
+### 6.4 Variables requeridas hoy en Vercel
+
+**Base obligatoria del sistema:**
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_SITE_URL`
+- `CRON_SECRET`
+
+**Email:**
+
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+
+**IA:**
+
+- `ANTHROPIC_API_KEY` solo si se activará la capa IA
+
+**WhatsApp:**
+
+- `WA_VERIFY_TOKEN` solo cuando se implemente el webhook
+- `WA_PHONE_NUMBER_ID` y `WA_ACCESS_TOKEN` no van en Vercel; viven en `wa_numeros`
 
 ---
 
@@ -336,6 +422,9 @@ Si no hay número para el módulo específico, `lib/whatsapp.ts` hace fallback a
 - [ ] `006_ot_dms_and_taller_events.sql` ejecutada (agrega `numero_ot_dms` + expande constraint `canal`)
 - [ ] `007_canal_interno_enum.sql` ejecutada (agrega `'interno'` al ENUM + trigger `message_count`)
 - [ ] Variables de entorno configuradas en Vercel (todos los entornos)
+- [ ] `NEXT_PUBLIC_SITE_URL` definido para el entorno actual
+- [ ] Supabase Auth → `Site URL` alineado al dominio actual
+- [ ] Supabase Auth → `Redirect URLs` incluye `/auth/callback`
 - [ ] Deploy a producción exitoso (`npm run build` sin errores)
 - [ ] Cron job visible en Vercel Dashboard → Cron Jobs
 
@@ -352,12 +441,16 @@ Si no hay número para el módulo específico, `lib/whatsapp.ts` hace fallback a
 - [ ] Al menos una sucursal en `sucursales`
 - [ ] Usuario admin creado en Supabase Auth + fila en `usuarios`
 - [ ] Login funcional verificado
+- [ ] Invitación de usuario abre `/auth/callback?next=/set-password` sin error
+- [ ] Forgot-password redirige correctamente a `/set-password`
 
 ---
 
 ## 11. Checklist de go-live
 
 - [ ] Login funcional para todos los usuarios iniciales
+- [ ] Forgot-password funcional en producción
+- [ ] Link de invitación funcional en producción
 - [ ] RLS verificado: usuario de sucursal A no ve datos de sucursal B
 - [ ] Crear cita de prueba → verificar que aparece en kanban
 - [ ] Cambiar estado de cita → verificar que dispara WA (si WA está configurado)
@@ -534,9 +627,18 @@ ORDER BY send_after;
 ### Email no llega
 
 1. Verificar `RESEND_API_KEY` en Vercel
-2. Revisar que el dominio del remitente esté verificado en Resend
-3. Revisar carpeta spam del destinatario
-4. Verificar en Resend Dashboard → Logs
+2. Verificar `EMAIL_FROM` en Vercel
+3. Revisar que el dominio del remitente esté verificado en Resend
+4. Revisar carpeta spam del destinatario
+5. Verificar en Resend Dashboard → Logs
+
+### Invitación / recovery falla
+
+1. Verificar `NEXT_PUBLIC_SITE_URL` en Vercel o `.env.local`
+2. Verificar Supabase Auth → `Site URL`
+3. Verificar Supabase Auth → `Redirect URLs` incluye `/auth/callback`
+4. Verificar que el link recibido entra por `/auth/callback?next=/set-password`
+5. Si cae en `/login?error=auth_callback_failed`, revisar que el token no haya expirado y que el dominio del link coincida con el entorno configurado
 
 ### Cron no se ejecuta
 

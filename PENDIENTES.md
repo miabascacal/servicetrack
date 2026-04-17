@@ -137,6 +137,13 @@ Pendiente validar en producción:
 `forgot-password`, reenviar invitación, reset de contraseña y navegación de Usuarios dentro de
 Configuración. Lo pendiente ya no es construirlo, sino desplegarlo, configurarlo y validarlo end-to-end.
 
+**FASE 1.5 sigue pendiente de cierre hasta completar, sin excepción:**
+- deploy del fix de `/usuarios`
+- validación manual de `/usuarios` en producción
+- reprueba completa: invitación, usuario pendiente visible, reenviar invitación, set-password, reset contraseña, login
+- validación de aislamiento por sucursal
+- revisión posterior de `/usuarios/roles` por posible patrón similar de RLS
+
 ### M1. 🔴 CRÍTICO — Validar link de invitación en ambiente real
 
 El link que recibe el usuario invitado falla con `access_denied` / `otp_expired` / `invalid or expired`.
@@ -145,12 +152,20 @@ El usuario no puede activar su cuenta.
 
 ### M2. 🟡 Vista de usuarios invitados / pendientes — validar runtime
 
-El código ya consulta `auth.users.email_confirmed_at` para distinguir pendiente vs activo.
+El código ya consulta `auth.users.email_confirmed_at` para distinguir pendiente vs activo
+y ahora también distingue casos sin registro en Supabase Auth.
+Se corrigió además el bug raíz de pantalla vacía: `/usuarios` leía la tabla `usuarios`
+con `createClient()` pese a que la tabla no tiene policy de lectura bajo RLS.
+Ahora la vista usa `createAdminClient()` con guard de admin y filtro por contexto.
 Falta validarlo con usuarios reales y revisar comportamiento en producción.
 
 ### M3. 🟡 Reenviar invitación — validar runtime
 
-La acción ya existe en `app/actions/usuarios.ts`.
+La acción ya existe en `app/actions/usuarios.ts` y se endureció para:
+- validar que el usuario exista en Supabase Auth
+- bloquear reenvío si ya activó cuenta
+- detectar desalineación ID/email
+- mostrar errores explícitos en UI
 Falta validar delivery real, redirects y expiración.
 
 ### M4. 🟡 Reset de contraseña desde Usuarios — validar runtime
@@ -175,6 +190,12 @@ Una vez resueltas M1-M6, crear un segundo usuario real, asignarlo a la misma suc
 - No puede eliminar registros
 
 **Prerequisito de go-live.** Sin esto, el aislamiento multi-tenant es código no verificado.
+
+### M8. `/usuarios/roles` — revisar patrón de RLS
+
+Pendiente inmediato después del deploy de `/usuarios`.
+La ruta usa `createClient()` sobre `roles`; hay que confirmar si reproduce el mismo patrón de RLS
+que dejó vacía la pantalla principal de usuarios.
 
 ---
 
