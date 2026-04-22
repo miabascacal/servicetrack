@@ -10,7 +10,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-const SYSTEM_FROM = process.env.EMAIL_FROM ?? 'ServiceTrack <onboarding@resend.dev>'
+const SYSTEM_FROM = process.env.EMAIL_FROM ?? process.env.RESEND_FROM_EMAIL ?? 'ServiceTrack <onboarding@resend.dev>'
 
 export type EmailTipo =
   | 'confirmacion_cita'
