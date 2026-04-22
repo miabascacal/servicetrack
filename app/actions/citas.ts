@@ -10,6 +10,7 @@ import {
   enviarMensajeWA,
   mensajeConfirmacionCita,
   mensajeCitaCancelada,
+  mensajeRecordatorio2h,
 } from '@/lib/whatsapp'
 import { enviarEmail } from '@/lib/email'
 
@@ -147,8 +148,7 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
           entidad_tipo:     'cita',
           entidad_id:       citaId,
           cliente_id:       c.cliente.id,
-          // Sprint 8 Fase 1: propagar contexto para persistencia conversacional
-          usuario_asesor_id: user.id,   // usuarios.id == auth UUID (ver ensure-usuario.ts)
+          usuario_asesor_id: user.id,
           contexto_tipo:    'cita',
           contexto_id:      citaId,
         })
@@ -161,6 +161,53 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
           sucursal_id: c.sucursal_id,
           modulo:      'citas',
         })
+      }
+
+      // Encolar recordatorio 2h antes de la cita (best-effort)
+      try {
+        const fechaCita    = c.fecha_cita as unknown as string
+        const horaCita     = (cita as unknown as { hora_cita: string }).hora_cita
+        const citaDatetime = new Date(`${fechaCita}T${horaCita}-06:00`)
+        const sendAfter    = new Date(citaDatetime.getTime() - 2 * 60 * 60 * 1000)
+
+        if (sendAfter > new Date()) {
+          const msg2h = mensajeRecordatorio2h({
+            nombre:  c.cliente.nombre,
+            hora:    horaCita.slice(0, 5),
+            agencia: c.sucursal?.nombre ?? 'la agencia',
+          })
+          type QueueInsert = {
+            sucursal_id: string; canal: string; workflow_key: string
+            destinatario_tipo: string; destinatario_id: string
+            destinatario_telefono: string | null; destinatario_email: string | null
+            contenido: string; message_source: string; send_after: string
+            estado: string; approval_required: boolean; intentos: number
+            max_intentos: number; referencia_tipo: string; referencia_id: string
+          }
+          const base: Omit<QueueInsert, 'canal' | 'destinatario_telefono' | 'destinatario_email'> = {
+            sucursal_id:       c.sucursal_id,
+            workflow_key:      'recordatorio_2h_cita',
+            destinatario_tipo: 'cliente',
+            destinatario_id:   c.cliente.id,
+            contenido:         msg2h,
+            message_source:    'agent_bot',
+            send_after:        sendAfter.toISOString(),
+            estado:            'pending',
+            approval_required: false,
+            intentos:          0,
+            max_intentos:      3,
+            referencia_tipo:   'cita',
+            referencia_id:     citaId,
+          }
+          const rows: QueueInsert[] = []
+          if (c.cliente.whatsapp)
+            rows.push({ ...base, canal: 'whatsapp', destinatario_telefono: c.cliente.whatsapp, destinatario_email: null })
+          if (c.cliente.email)
+            rows.push({ ...base, canal: 'email', destinatario_telefono: null, destinatario_email: c.cliente.email })
+          if (rows.length) void adminSupabase.from('outbound_queue').insert(rows)
+        }
+      } catch {
+        // Best-effort: no falla la confirmación
       }
     }
 

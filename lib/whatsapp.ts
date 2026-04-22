@@ -275,3 +275,31 @@ export function mensajeCitaCancelada(params: {
     `Para reagendar, responde este mensaje o contáctanos directamente.`,
   ].join('\n')
 }
+
+export function mensajeRecordatorio2h(params: {
+  nombre:  string
+  hora:    string
+  agencia: string
+}): string {
+  return [
+    `Hola ${params.nombre} 👋`,
+    ``,
+    `Te recordamos que *hoy en 2 horas* tienes cita en *${params.agencia}* a las *${params.hora} hrs* 🚗`,
+    ``,
+    `Si necesitas cambiar tu cita, responde este mensaje.`,
+  ].join('\n')
+}
+
+export function mensajeNoShow(params: {
+  nombre:  string
+  hora:    string
+  agencia: string
+}): string {
+  return [
+    `Hola ${params.nombre} 👋`,
+    ``,
+    `Notamos que no pudiste llegar a tu cita de las *${params.hora} hrs* en *${params.agencia}*.`,
+    ``,
+    `¿Te gustaría reagendar? Responde este mensaje y con gusto te ayudamos.`,
+  ].join('\n')
+}

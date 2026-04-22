@@ -26,12 +26,13 @@ export type ThreadCanal = 'whatsapp' | 'email' | 'facebook' | 'instagram' | 'int
 export type ThreadContextoTipo = 'general' | 'cita' | 'ot' | 'cotizacion' | 'lead'
 
 export interface GetOrCreateThreadParams {
-  sucursal_id:   string
-  cliente_id:    string
-  canal:         ThreadCanal
+  sucursal_id:    string
+  cliente_id:     string
+  canal:          ThreadCanal
   contexto_tipo?: ThreadContextoTipo   // default: 'general'
-  contexto_id?:  string               // sin valor → hilo sin contexto específico
-  assignee_id?:  string               // asesor asignado al crear el hilo
+  contexto_id?:   string               // sin valor → hilo sin contexto específico
+  assignee_id?:   string               // asesor asignado al crear el hilo
+  thread_origin?: 'inbound' | 'outbound_manual' | 'outbound_bot' | 'import'
 }
 
 export interface GetOrCreateThreadResult {
@@ -82,7 +83,7 @@ export async function getOrCreateThread(
       canal:        params.canal,
       contexto_tipo,
       contexto_id:  params.contexto_id  ?? null,
-      thread_origin: 'outbound_manual',
+      thread_origin: params.thread_origin ?? 'outbound_manual',
       estado:       'open',
       assignee_id:  params.assignee_id ?? null,
     })

@@ -28,7 +28,7 @@ async function getAdminCtx() {
   }
 
   if (!tieneRol(ctx.rol, 'admin')) {
-    return { error: 'Sin permisos para esta operaciÃ³n' as const }
+    return { error: 'Sin permisos para esta operación' as const }
   }
 
   return { ctx }
@@ -68,7 +68,7 @@ async function getAuthUserForUsuario(
     return {
       ok: false,
       error:
-        'El usuario existe en la tabla interna pero no aparece en Supabase Auth. Revisa la sincronizaciÃ³n antes de reenviar.',
+        'El usuario existe en la tabla interna pero no aparece en Supabase Auth. Revisa la sincronización antes de reenviar.',
     }
   }
 
@@ -140,7 +140,7 @@ export async function reenviarInvitacionAction(formData: FormData) {
     .eq('id', usuarioId)
     .single()
 
-  if (eUsr || !usr?.email) return { error: 'No se encontrÃ³ el usuario' }
+  if (eUsr || !usr?.email) return { error: 'No se encontró el usuario' }
 
   const authLookup = await getAuthUserForUsuario(admin, usuarioId, usr.email)
   if (!authLookup.ok) return { error: authLookup.error }
@@ -148,12 +148,12 @@ export async function reenviarInvitacionAction(formData: FormData) {
   if (!authLookup.matchesUsuarioId) {
     return {
       error:
-        'El email existe en Supabase Auth pero con otro ID. No se reenviÃ³ la invitaciÃ³n para evitar desalinear usuarios.',
+        'El email existe en Supabase Auth pero con otro ID. No se reenvió la invitación para evitar desalinear usuarios.',
     }
   }
 
   if (authLookup.authUser.email_confirmed_at) {
-    return { error: 'Este usuario ya activÃ³ su cuenta. Usa "Reset contraseÃ±a" en su lugar.' }
+    return { error: 'Este usuario ya activó su cuenta. Usa "Reset contraseña" en su lugar.' }
   }
 
   if (!authLookup.authUser.email) {
@@ -168,7 +168,7 @@ export async function reenviarInvitacionAction(formData: FormData) {
 
   if (eInvite) {
     if (eInvite.message?.includes('already registered') || eInvite.message?.includes('already')) {
-      return { error: 'Este usuario ya activÃ³ su cuenta. Usa "Reset contraseÃ±a" en su lugar.' }
+      return { error: 'Este usuario ya activó su cuenta. Usa "Reset contraseña" en su lugar.' }
     }
     return { error: `No se pudo reenviar: ${eInvite.message}` }
   }
@@ -192,7 +192,7 @@ export async function resetPasswordAdminAction(formData: FormData) {
     .eq('id', usuarioId)
     .single()
 
-  if (eUsr || !usr?.email) return { error: 'No se encontrÃ³ el usuario' }
+  if (eUsr || !usr?.email) return { error: 'No se encontró el usuario' }
 
   const supabase = await createClient()
   const { error } = await supabase.auth.resetPasswordForEmail(usr.email, {

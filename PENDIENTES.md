@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-16 — FASE 1 seguridad multi-tenant parcialmente cerrada (pages críticas migradas a createClient, hardening pendiente en actions/rutas admin). FASE 1.5 acceso multiusuario implementada en código, pendiente deploy/config/validación. Bandeja conectada a datos reales de Supabase de forma parcial. Roadmap reordenado._
+_Actualizado: 2026-04-22 — Encoding fixes usuarios, edit-rol page, recordatorio 2h, no-show detection. Pendiente: ejecutar migración 009 en Supabase + deploy._
 
 ---
 
@@ -14,12 +14,12 @@ _Actualizado: 2026-04-16 — FASE 1 seguridad multi-tenant parcialmente cerrada 
 | Sprint 5 | TALLER | 25% | 🔴 Base construida |
 | Sprint 6 | REFACCIONES | 30% | 🔴 Base construida |
 | Sprint 7 | VENTAS | 2% | 🔴 Placeholder |
-| Sprint 8 | BANDEJA + IA | 35% | 🟡 Fase 1 implementada, WA sin validar, bandeja en progreso |
+| Sprint 8 | BANDEJA + IA | 60% | 🟡 FASE 5 completo en código + recordatorio 2h + no-show. Nada activo en producción — requiere número WA + config Meta + deploy |
 | Sprint 9 | ATENCIÓN A CLIENTES | 0% | ⬜ Sin empezar |
 | Sprint 10 | CSI | 0% | ⬜ Sin empezar |
 | Sprint 11 | SEGUROS | 0% | ⬜ Sin empezar |
 
-**Avance global: ~24% del producto completo.**
+**Avance global: ~27% del producto completo** (código implementado; WhatsApp e IA MVP completos en código pero sin activar en producción).
 
 ---
 
@@ -80,7 +80,7 @@ Constraints actualizados: `message_source` → `agent`, `processing_status` → 
 ⬜ **WhatsApp Business API / número no operativo**
 - `wa_numeros` vacío — sin `phone_number_id` ni `access_token` de Meta
 - Validación end-to-end de mensajería pendiente por dependencia externa
-- No bloquea desarrollo interno: bandeja real ✅, webhook (pendiente Sprint 8 Fase 2), clasificador IA (pendiente)
+- No bloquea desarrollo interno: bandeja real ✅, webhook ✅ (código implementado, requiere número Meta activo), clasificador IA ✅
 
 **Causa:** Problema con proveedor — número no dado de alta / posible estafa.
 **Impacto:** No se puede probar envío real, integración Meta, ni recepción (webhook).
@@ -91,6 +91,57 @@ Constraints actualizados: `message_source` → `agent`, `processing_status` → 
 Tablas creadas: `mensajes`, `ai_settings`, `conversation_threads`, `outbound_queue`, `automation_logs`
 Columnas en `mensajes`: `thread_id`, `message_source`, `wa_message_id`, `ai_intent`, `ai_intent_confidence`, `ai_sentiment`, `processing_status`
 Índices: `idx_mensajes_thread`, `idx_mensajes_wa_message_id` (UNIQUE), `idx_mensajes_processing`
+
+### A9. ✅ Sesión 2026-04-22 — Fixes + automatizaciones complementarias
+
+**Encoding fixes (código visible en UI):**
+- `UsuarioAcciones.tsx`: 6 strings mojibake corregidos (Invitación, invitación, contraseña, Sin acción)
+- `usuarios/page.tsx`: 1 string mojibake corregido (módulo)
+
+**Nueva página: `/usuarios/roles/[id]`**
+- `app/(dashboard)/usuarios/roles/[id]/page.tsx` — server component, carga rol + permisos
+- `app/(dashboard)/usuarios/roles/[id]/EditRolClient.tsx` — client component, matriz editable
+- Usa `updateRolPermisosAction` de `app/actions/roles.ts` (ya existía)
+- Roles `super_admin` muestran mensaje explicativo en lugar de la matriz
+
+**Automatizaciones completadas:**
+- `lib/whatsapp.ts` — añadidos `mensajeRecordatorio2h` y `mensajeNoShow`
+- `app/actions/citas.ts` — al confirmar cita, encola recordatorio 2h en `outbound_queue` con `send_after = cita - 2h` (best-effort)
+- `app/api/cron/recordatorios-citas/route.ts` — añade detección de no-show: citas de ayer en `confirmada` → actualiza a `no_show` + envía WA/email
+
+**Roadmap BLOQUE 5 documentado en WORKPLAN** como FASE 6 (Mi Agenda, Calendario Citas, Taller calendario, Workflow Studio, AI Copilot, Agentes por módulo)
+
+**Pendiente externo (sin código necesario):**
+- Migración 009 en Supabase (roles/permisos)
+- Deploy a Vercel (activa todos los cambios)
+
+### A8. ✅ FASE 5 Sprint — IMPLEMENTADO 2026-04-22 (código completo, requiere deploy + config externa)
+
+**Webhook WA entrante** (`app/api/webhooks/whatsapp/route.ts`):
+- GET handshake con `WA_VERIFY_TOKEN`
+- POST: dedup por `wa_message_id`, resuelve sucursal vía `wa_numeros.phone_number_id`, busca cliente por teléfono, crea/reutiliza `conversation_threads` con `thread_origin: 'inbound'`, persiste en `mensajes` (`processing_status: 'pending'`)
+- Si `ai_settings.activo=TRUE`: clasifica intent + sentimiento inline y actualiza mensaje; escala hilo a `waiting_agent` si confianza < threshold
+
+**IA MVP**:
+- `lib/ai/types.ts` — tipos compartidos `IntentTipo`, `SentimentTipo`
+- `lib/ai/classify-intent.ts` — 8 intents (Claude Haiku), respuesta JSON validada
+- `lib/ai/detect-sentiment.ts` — 4 sentimientos (Claude Haiku), respuesta JSON validada
+
+**Outbound Queue Flush** (`app/api/cron/outbound-queue-flush/route.ts`):
+- Cron cada 15 min (nuevo en `vercel.json`)
+- Procesa `outbound_queue` estados `pending` (sin aprobación requerida) + `approved`, con `send_after ≤ NOW()`
+- Respeta horario del bot por sucursal desde `ai_settings.horario_bot_inicio/fin` (default 08:00-19:30 UTC-6)
+- WA via `enviarMensajeWA`, email vía Resend raw
+- Retry exponencial: 15→30→60 min hasta `max_intentos`; después marca `failed`
+- Log a `automation_logs` vía `upsert` con `idempotency_key`
+
+**`lib/threads.ts`** — agregado parámetro `thread_origin` opcional (default: `'outbound_manual'`)
+
+**Pendiente para activar:**
+- ⬜ `WA_VERIFY_TOKEN` en Vercel
+- ⬜ Configurar webhook en Meta Business Manager (URL + suscripción a `messages`)
+- ⬜ Poblar `wa_numeros` cuando el número Meta esté activo
+- ⬜ Smoke test: mensaje entrante → `mensajes` + `conversation_threads` en BD
 
 ### A5. ✅ Sprint 9 — IMPLEMENTADO 2026-04-15
 - `estado_ot` ENUM: `en_reparacion` → `en_proceso` — migración 008 ✅ ejecutada y validada en Supabase (2026-04-16)
@@ -131,71 +182,56 @@ Pendiente validar en producción:
 
 ---
 
-## 🔴 PENDIENTE — ACCESO MULTIUSUARIO (FASE 1.5 — antes de cualquier feature nueva)
+## 🟡 PENDIENTE DEPLOY — ACCESO MULTIUSUARIO (FASE 1.5)
 
-**Estado real en código:** ya existen flujo de invitación con `redirectTo`, pantalla `set-password`,
-`forgot-password`, reenviar invitación, reset de contraseña y navegación de Usuarios dentro de
-Configuración. Lo pendiente ya no es construirlo, sino desplegarlo, configurarlo y validarlo end-to-end.
+**Diagnóstico resuelto 2026-04-22:**
+- `/usuarios` vacío: tabla `usuarios` tenía RLS activo pero sin ninguna policy SELECT.
+- "table not found" roles/usuario_roles: RLS activo pero políticas fallaron al crearse (se referenciaban funciones que no existían aún en el script de schema).
+- Fix: migración `009_roles_permisos_schema.sql` — añade policy SELECT a `usuarios`, recrea `roles`/`rol_permisos`/`usuario_roles` con RLS correcto, grants a `authenticated`.
 
-**FASE 1.5 sigue pendiente de cierre hasta completar, sin excepción:**
-- deploy del fix de `/usuarios`
-- validación manual de `/usuarios` en producción
-- reprueba completa: invitación, usuario pendiente visible, reenviar invitación, set-password, reset contraseña, login
-- validación de aislamiento por sucursal
-- revisión posterior de `/usuarios/roles` por posible patrón similar de RLS
+**Para cerrar FASE 1.5:**
+1. ⬜ Ejecutar migración 009 en Supabase SQL Editor
+2. ⬜ Deploy a Vercel
+3. ⬜ Validar `/usuarios` muestra lista real
+4. ⬜ Validar flujo completo: invitar → pendiente visible → reenviar → set-password → login
+5. ⬜ Validar `/usuarios/roles` carga sin error
+6. ⬜ Crear rol desde `/usuarios/roles/nuevo` → permisos guardados
+7. ⬜ Validar aislamiento sucursal con segundo usuario real (M7)
 
-### M1. 🔴 CRÍTICO — Validar link de invitación en ambiente real
+### M1. ✅ Fix link de invitación — código listo, pendiente deploy
 
-El link que recibe el usuario invitado falla con `access_denied` / `otp_expired` / `invalid or expired`.
-El usuario no puede activar su cuenta.
-**Acción:** diagnosticar configuración de Auth en Supabase Dashboard — redirect URL, tiempo de expiración del OTP, URL del sitio.
+`redirectTo` explícito en `inviteUserByEmail` apuntando a `/auth/callback?next=/set-password`.
+Supabase Auth ya configurado con Site URL + Redirect URLs (confirmado por usuario).
 
-### M2. 🟡 Vista de usuarios invitados / pendientes — validar runtime
+### M2. ✅ Vista usuarios pendientes — código listo, pendiente migración 009 + deploy
 
-El código ya consulta `auth.users.email_confirmed_at` para distinguir pendiente vs activo
-y ahora también distingue casos sin registro en Supabase Auth.
-Se corrigió además el bug raíz de pantalla vacía: `/usuarios` leía la tabla `usuarios`
-con `createClient()` pese a que la tabla no tiene policy de lectura bajo RLS.
-Ahora la vista usa `createAdminClient()` con guard de admin y filtro por contexto.
-Falta validarlo con usuarios reales y revisar comportamiento en producción.
+`email_confirmed_at` de Supabase Auth → badge "Invitación pendiente". La tabla `usuarios` now tendrá SELECT policy tras migración 009.
 
-### M3. 🟡 Reenviar invitación — validar runtime
+### M3. ✅ Reenviar invitación — código listo, pendiente deploy
 
-La acción ya existe en `app/actions/usuarios.ts` y se endureció para:
-- validar que el usuario exista en Supabase Auth
-- bloquear reenvío si ya activó cuenta
-- detectar desalineación ID/email
-- mostrar errores explícitos en UI
-Falta validar delivery real, redirects y expiración.
+`reenviarInvitacionAction` en `app/actions/usuarios.ts`. Valida estado en Auth antes de reenviar.
 
-### M4. 🟡 Reset de contraseña desde Usuarios — validar runtime
+### M4. ✅ Reset de contraseña desde admin — código listo, pendiente deploy
 
-La acción admin ya existe.
-Falta validar envío real y flujo completo de recuperación.
+`resetPasswordAdminAction` en `app/actions/usuarios.ts`.
 
-### M5. 🟡 Recuperación de contraseña por mail — validar runtime
+### M5. ✅ Recuperación de contraseña por mail — código listo, pendiente deploy
 
-El flujo ya existe en login + `/forgot-password` + `/set-password`.
-Falta validación real en producción.
+`/forgot-password` + `forgotPasswordAction` + `/set-password` + `setPasswordAction`.
 
-### M6. ✅ Mover "Usuarios" a Configuración
+### M6. ✅ "Usuarios" movido a Configuración
 
-Resuelto en código: ya no aparece en el sidebar principal; el acceso quedó dentro de Configuración.
+Removido del sidebar. Accesible desde `/configuracion`.
 
-### M7. Validación real multi-tenant con segundo usuario funcional
+### M7. ⬜ Validación multi-tenant con segundo usuario real
 
-Una vez resueltas M1-M6, crear un segundo usuario real, asignarlo a la misma sucursal con rol `asesor_servicio`, y validar:
-- Solo ve OTs, citas y clientes de su sucursal
-- No ve configuración de WhatsApp/email
-- No puede eliminar registros
+Prerequisito de go-live. Requiere migración 009 + deploy.
+Crear segundo usuario, asignar a sucursal, verificar que NO ve datos de otras sucursales.
 
-**Prerequisito de go-live.** Sin esto, el aislamiento multi-tenant es código no verificado.
+### M8. ✅ `/usuarios/roles` — resuelto con migración 009
 
-### M8. `/usuarios/roles` — revisar patrón de RLS
-
-Pendiente inmediato después del deploy de `/usuarios`.
-La ruta usa `createClient()` sobre `roles`; hay que confirmar si reproduce el mismo patrón de RLS
-que dejó vacía la pantalla principal de usuarios.
+Tablas `roles`/`rol_permisos` ya en migración. La página usa `admin` client para reads (correcto).
+`actions/roles.ts` usa `createClient()` que funcionará con las nuevas RLS policies.
 
 ### M9. Esquema de roles/permisos ausente en BD real
 

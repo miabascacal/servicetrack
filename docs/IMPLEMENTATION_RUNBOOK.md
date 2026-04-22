@@ -24,14 +24,15 @@ No es un manual comercial. Es un documento de operación para quien ejecuta la i
 | Citas (Kanban) | ✅ Operativo |
 | Taller / OTs | ✅ Operativo — `numero_ot_dms` implementado; estados OT canónicos (`en_proceso`); eventos internos activos; crash `/taller` resuelto; vincular OT desde cita funcional |
 | Refacciones | ✅ Construido |
-| Bandeja / Automatizaciones (UI) | 🟡 Parcialmente operativa — `/bandeja` usa `conversation_threads` + `mensajes`; faltan webhook entrante, composición real y validación operativa |
-| WhatsApp — canal saliente | ✅ Operativo (`lib/whatsapp.ts`) |
-| WhatsApp — canal entrante (webhook) | ⬜ Pendiente — no implementado |
+| Bandeja / Automatizaciones (UI) | 🟡 Parcialmente operativa — `/bandeja` usa `conversation_threads` + `mensajes`; webhook implementado pero no activo; sin composición real ni validación operativa |
+| WhatsApp — canal saliente | ✅ Operativo (`lib/whatsapp.ts`) — bloqueado por `wa_numeros` sin número activo |
+| WhatsApp — canal entrante (webhook) | 🟡 Código completo (`app/api/webhooks/whatsapp/route.ts`) — no activo: requiere deploy + `WA_VERIFY_TOKEN` + Meta config |
 | Email (Resend) | ✅ Operativo (`lib/email.ts`) |
 | Cron — recordatorios 24h | ✅ Operativo (`vercel.json` + `/api/cron/recordatorios-citas`) |
-| IA — clasificador de intención | ⬜ Pendiente (`lib/ai/classify-intent.ts`) |
-| IA — detector de sentimiento | ⬜ Pendiente (`lib/ai/detect-sentiment.ts`) |
-| Cola de mensajes diferidos (outbound_queue) | ✅ Tabla en BD — lógica de flush pendiente |
+| Cron — flush outbound_queue | 🟡 Código completo (`/api/cron/outbound-queue-flush`) — no activo: requiere deploy |
+| IA — clasificador de intención | 🟡 Código completo (`lib/ai/classify-intent.ts`) — no activo: `ai_settings.activo=FALSE` |
+| IA — detector de sentimiento | 🟡 Código completo (`lib/ai/detect-sentiment.ts`) — no activo: mismo control |
+| Cola de mensajes diferidos (outbound_queue) | ✅ Tabla en BD + lógica de flush implementada — no activa: requiere deploy |
 | Configuración WhatsApp por sucursal | ✅ Operativo (`/configuracion/whatsapp`) |
 | Módulos placeholder (Ventas, CSI, Seguros, Reportes, Atención) | ⬜ Sin implementar |
 

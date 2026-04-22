@@ -27,7 +27,7 @@ export function UsuarioAcciones({ usuarioId, authStatus, authStatusKnown }: Prop
       setMsg(null)
       const result = await reenviarInvitacionAction(fd)
       if (result?.error) setMsg({ text: result.error, ok: false })
-      else setMsg({ text: `InvitaciÃ³n reenviada a ${result?.email ?? 'usuario'}`, ok: true })
+      else setMsg({ text: `Invitación reenviada a ${result?.email ?? 'usuario'}`, ok: true })
     })
   }
 
@@ -66,21 +66,21 @@ export function UsuarioAcciones({ usuarioId, authStatus, authStatusKnown }: Prop
         <button
           onClick={handleReenviar}
           disabled={isPending}
-          title="Reenviar invitaciÃ³n"
+          title="Reenviar invitación"
           className="flex items-center gap-1 text-xs text-blue-600 hover:bg-blue-50 disabled:opacity-50 px-2 py-1 rounded transition-colors"
         >
           <RefreshCw size={12} className={isPending ? 'animate-spin' : ''} />
-          {isPending ? 'Reenviando...' : 'Reenviar invitaciÃ³n'}
+          {isPending ? 'Reenviando...' : 'Reenviar invitación'}
         </button>
       ) : authStatus === 'active' ? (
         <button
           onClick={handleReset}
           disabled={isPending}
-          title="Enviar email de reset de contraseÃ±a"
+          title="Enviar email de reset de contraseña"
           className="flex items-center gap-1 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-50 px-2 py-1 rounded transition-colors"
         >
           <KeyRound size={12} className={isPending ? 'animate-spin' : ''} />
-          {isPending ? 'Enviando...' : 'Reset contraseÃ±a'}
+          {isPending ? 'Enviando...' : 'Reset contraseña'}
         </button>
       ) : authStatus === 'missing' ? (
         <span className="inline-flex items-center gap-1 text-xs text-red-600">
@@ -88,7 +88,7 @@ export function UsuarioAcciones({ usuarioId, authStatus, authStatusKnown }: Prop
           Revisar Auth
         </span>
       ) : (
-        <span className="text-xs text-gray-400">Sin acciÃ³n</span>
+        <span className="text-xs text-gray-400">Sin acción</span>
       )}
     </div>
   )

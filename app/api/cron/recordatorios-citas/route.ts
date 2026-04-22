@@ -9,7 +9,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { enviarMensajeWA, mensajeRecordatorioCita } from '@/lib/whatsapp'
+import { enviarMensajeWA, mensajeRecordatorioCita, mensajeNoShow } from '@/lib/whatsapp'
 import { enviarEmail } from '@/lib/email'
 
 export const runtime = 'nodejs'
@@ -98,5 +98,67 @@ export async function GET(request: Request) {
   }
 
   console.log(`Recordatorios citas ${fechaManana}: ${enviados} enviados, ${errores} errores`)
-  return NextResponse.json({ fecha: fechaManana, total: rows.length, enviados, errores })
+
+  // ── Detección de no-show: citas de ayer aún en estado 'confirmada' ─────────
+  const ayer = new Date()
+  ayer.setDate(ayer.getDate() - 1)
+  const fechaAyer = ayer.toISOString().split('T')[0]
+
+  const { data: noShows } = await supabase
+    .from('citas')
+    .select(`
+      id, hora_cita, fecha_cita, sucursal_id,
+      cliente:clientes ( id, nombre, whatsapp, email ),
+      sucursal:sucursales ( nombre )
+    `)
+    .eq('fecha_cita', fechaAyer)
+    .eq('estado', 'confirmada')
+
+  let noShowsActualizados = 0
+
+  for (const ns of (noShows as unknown as CitaRow[]) ?? []) {
+    if (!ns.cliente) continue
+
+    // Actualizar estado a no_show
+    await supabase
+      .from('citas')
+      .update({ estado: 'no_show' })
+      .eq('id', ns.id)
+
+    const msg = mensajeNoShow({
+      nombre:  ns.cliente.nombre,
+      hora:    ns.hora_cita.slice(0, 5),
+      agencia: ns.sucursal?.nombre ?? 'la agencia',
+    })
+
+    if (ns.cliente.whatsapp) {
+      void enviarMensajeWA({
+        sucursal_id: ns.sucursal_id,
+        modulo:      'citas',
+        telefono:    ns.cliente.whatsapp,
+        mensaje:     msg,
+        tipo:        'custom',
+        entidad_tipo: 'cita',
+        entidad_id:   ns.id,
+        cliente_id:   ns.cliente.id,
+      })
+    }
+    if (ns.cliente.email) {
+      await enviarEmail({
+        to:   ns.cliente.email,
+        tipo: 'recordatorio_cita',
+        datos: {
+          nombre:  ns.cliente.nombre,
+          hora:    ns.hora_cita.slice(0, 5),
+          agencia: ns.sucursal?.nombre ?? 'la agencia',
+          fecha:   ns.fecha_cita,
+        },
+      })
+    }
+
+    noShowsActualizados++
+  }
+
+  console.log(`No-shows ${fechaAyer}: ${noShowsActualizados} actualizados`)
+  return NextResponse.json({ fecha: fechaManana, total: rows.length, enviados, errores, noShowsActualizados })
 }

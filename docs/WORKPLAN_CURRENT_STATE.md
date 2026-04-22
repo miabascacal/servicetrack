@@ -1,9 +1,9 @@
 # WORKPLAN_CURRENT_STATE.md — ServiceTrack
 > **FUENTE DE VERDAD ÚNICA del proyecto. Todo análisis, bug, decisión y mejora debe integrarse aquí.**
 > Documento de estado consolidado para arquitectos, asistentes IA y equipo de desarrollo.
-> **Última actualización:** 2026-04-16 (FASE 1 parcialmente cerrada en pages + FASE 1.5 implementada en código y pendiente de deploy/config/validación)
+> **Última actualización:** 2026-04-22 (sesión: encoding fixes usuarios, edit-rol page, recordatorio 2h, no-show detection, roadmap BLOQUE 5 documentado)
 > **Sprint cerrado:** Sprint 9
-> **Estado general:** ~26% del producto completo — CRM+Citas+Taller operativos, automatizaciones Fase 1 activas, sin WhatsApp real (dependencia externa).
+> **Estado general:** ~27% del producto completo — CRM+Citas+Taller operativos, automatizaciones Fase 1 activas, sin WhatsApp real (dependencia externa).
 
 ---
 
@@ -20,10 +20,11 @@ ServiceTrack es un SaaS vertical automotriz (Next.js 16 + Supabase + Vercel). El
 - Recordatorios de citas automáticos por email (cron 9 AM).
 - Flujo contextual parcial: si no existe cliente al crear cita, se puede crear y regresar.
 
-**Lo que está roto o pendiente de deploy:**
+**Lo que está roto o pendiente de deploy/activación:**
 - `/taller` — crash resuelto en código, **requiere deploy a Vercel para activarse**.
-- Bandeja UI — ya conecta a `conversation_threads` + `mensajes`, pero sigue pendiente madurez funcional (sin webhook WA entrante, sin compose real y con hardening pendiente).
-- **Acceso multiusuario roto** — el link de invitación falla con `access_denied` / `otp_expired`. Sin segundo usuario funcional no se puede validar aislamiento multi-tenant real.
+- **Acceso multiusuario roto** — el link de invitación falla con `access_denied` / `otp_expired`. Migración 009 creada pero sin ejecutar. Sin segundo usuario funcional no se puede validar aislamiento multi-tenant real.
+- Bandeja UI — conecta a `conversation_threads` + `mensajes`, pero incompleta: webhook WA implementado en código pero sin activar (requiere número Meta + config externa), sin compose/respuesta real.
+- **WhatsApp + IA MVP** — código completo (webhook, classify-intent, detect-sentiment, outbound-queue-flush), pero nada activo en producción: requiere deploy + `wa_numeros` poblado + `WA_VERIFY_TOKEN` + habilitar `ai_settings`.
 
 ---
 
@@ -93,6 +94,7 @@ cancelado → (final)
 | `006_ot_dms_and_taller_events.sql` | Columna `numero_ot_dms`; `canal='interno'` en `conversation_threads` | ✅ Ejecutada |
 | `007_canal_interno_enum.sql` | `'interno'` en ENUM `canal_mensaje`; trigger `message_count` | ✅ Ejecutada |
 | `008_estado_ot_en_proceso.sql` | Renombra ENUM `en_reparacion` → `en_proceso` | ✅ Ejecutada y validada |
+| `009_roles_permisos_schema.sql` | Política SELECT en `usuarios`; crea `roles`, `rol_permisos`, `usuario_roles` con RLS correcto; grants a `authenticated` | 🔴 **Pendiente — ejecutar en Supabase** |
 
 ### 2.5 Automatizaciones y mensajería
 
@@ -102,9 +104,10 @@ cancelado → (final)
 | Cron recordatorios citas 24h (9 AM Vercel) | ✅ Operativo |
 | WhatsApp saliente (`lib/whatsapp.ts`) | ✅ Implementado — **bloqueado: `wa_numeros` vacío** |
 | Eventos internos OT en bandeja | ✅ Operativo (`canal='interno'`, `processing_status='skipped'`) |
-| Webhook WhatsApp entrante | ⬜ No implementado |
-| Clasificador de intención IA | ⬜ No implementado |
-| Flush de `outbound_queue` | ⬜ No implementado |
+| Webhook WhatsApp entrante | 🟡 Código completo (`app/api/webhooks/whatsapp/route.ts`) — **no activo**: requiere deploy + `WA_VERIFY_TOKEN` + config Meta + `wa_numeros` poblado |
+| Clasificador de intención IA (`lib/ai/classify-intent.ts`) | 🟡 Código completo — **no activo**: `ai_settings.activo=FALSE` por defecto; ninguna fila `ai_settings` configurada en producción |
+| Detector de sentimiento IA (`lib/ai/detect-sentiment.ts`) | 🟡 Código completo — **no activo**: mismo control que intent |
+| Flush de `outbound_queue` (cron cada 15 min) | 🟡 Código completo (`app/api/cron/outbound-queue-flush/route.ts`) — **no activo**: requiere deploy para que Vercel registre el cron |
 
 ### 2.6 Variables de entorno (Vercel — All Environments)
 
@@ -159,9 +162,11 @@ cancelado → (final)
   - páginas y acciones administrativas sin guard de rol suficiente en la capa de ruta/página
   - falta validación end-to-end con segundo usuario real de otra sucursal
 
-### FASE 1.5 — ACCESO MULTIUSUARIO 🟡 IMPLEMENTADO EN CÓDIGO, PENDIENTE DE DEPLOY / CONFIG / VALIDACIÓN
+### FASE 1.5 — ACCESO MULTIUSUARIO 🟡 CÓDIGO COMPLETO — PENDIENTE MIGRACIÓN + DEPLOY + VALIDACIÓN
 
-> Pendiente: deploy a Vercel + configurar Supabase Auth dashboard + validar con segundo usuario real.
+> **Diagnóstico resuelto 2026-04-22:** El error "Could not find the table public.roles" y el related error de `usuario_roles` eran causados por RLS activo sin políticas (policies fallaron al crearse porque `get_mi_grupo_id()` se definía DESPUÉS de las policies en SUPABASE_SCHEMA.sql). La tabla `usuarios` tampoco tenía SELECT policy, por lo que la lista siempre retornaba vacía con `createClient()`.
+>
+> **Fix:** Migración `009_roles_permisos_schema.sql` creada. Pendiente de ejecutar en Supabase.
 
 | # | Tarea | Estado |
 |---|-------|--------|
@@ -172,22 +177,29 @@ cancelado → (final)
 | 1.5.5 | **Recuperación de contraseña por mail** — `/forgot-password` + `forgotPasswordAction` | ✅ |
 | 1.5.6 | **Set-password page** — `/set-password` para invitados y resets | ✅ |
 | 1.5.7 | **Usuarios fuera del sidebar** — removido de `NAV_ITEMS`; accesible desde `/configuracion` | ✅ |
-| 1.5.8 | **Validación multi-tenant con segundo usuario** | ⬜ Pendiente — requiere deploy + Supabase Auth config |
-| 1.5.9 | **Deploy fix `/usuarios` vacío** — lectura admin filtrada por `sucursal_id` / `grupo_id` para sortear RLS sin policy en `usuarios` | ⬜ Pendiente |
-| 1.5.10 | **Revisión `/usuarios/roles`** — confirmar si repite patrón similar de RLS por usar `createClient()` sobre `roles` | ⬜ Pendiente inmediato |
+| 1.5.9 | **Fix `/usuarios` vacío + schema RLS** — migración 009 creada: política SELECT en `usuarios`, tablas `roles`/`rol_permisos`/`usuario_roles` con RLS correcto | ✅ Código — 🔴 Pendiente ejecutar migración |
+| 1.5.10 | **Fix `/usuarios/roles`** — tablas ya en migración 009; `roles/page.tsx` usa `admin` client (correcto) | ✅ Resuelto con migración 009 |
+| 1.5.11 | **Página editar rol** — `/usuarios/roles/[id]` — permite editar permisos de un rol existente | ✅ Creado: `roles/[id]/page.tsx` + `EditRolClient.tsx` |
+| 1.5.12 | **Fix encoding UsuarioAcciones.tsx + page.tsx** — textos mojibake corregidos | ✅ Resuelto |
+| 1.5.8 | **Validación multi-tenant con segundo usuario** | ⬜ Pendiente — requiere migración + deploy + segundo usuario real |
 
-**Prerequisitos para activar en producción:**
-- [ ] Deploy a Vercel
-- [ ] Supabase Auth dashboard → Site URL: `https://servicetrack-one.vercel.app`
-- [ ] Supabase Auth dashboard → Redirect URLs: agregar `https://servicetrack-one.vercel.app/auth/callback`
-- [ ] Vercel env var: `NEXT_PUBLIC_SITE_URL=https://servicetrack-one.vercel.app`
+**Prerequisitos para activar en producción (en orden):**
+- [ ] **1. Ejecutar migración 009** en Supabase SQL Editor (`supabase/migrations/009_roles_permisos_schema.sql`)
+- [ ] **2. Deploy a Vercel** — activa fixes de FASE 1 + FASE 1.5
+- [ ] **3. Supabase Auth dashboard** → Site URL: `https://servicetrack-one.vercel.app` (ya confirmado según contexto)
+- [ ] **4. Supabase Auth dashboard** → Redirect URLs: `https://servicetrack-one.vercel.app/auth/callback` (ya confirmado)
+- [ ] **5. Vercel env var**: `NEXT_PUBLIC_SITE_URL=https://servicetrack-one.vercel.app` (ya confirmado)
 
-**FASE 1.5 NO debe cerrarse todavía. Checklist de cierre obligatorio:**
-- [ ] Deploy del fix de `/usuarios`
-- [ ] Validación manual de `/usuarios` en producción
-- [ ] Reprueba completa de flujo: invitación → usuario pendiente visible → reenviar invitación → set-password → reset contraseña → login
-- [ ] Validación de aislamiento por sucursal con segundo usuario real
-- [ ] Revisión de `/usuarios/roles` por posible patrón similar de RLS
+**Checklist de cierre post-deploy:**
+- [ ] `/usuarios` muestra lista de usuarios (no vacía)
+- [ ] Invitar usuario → badge "Invitación pendiente" aparece
+- [ ] Reenviar invitación funciona
+- [ ] Usuario invitado acepta → se establece contraseña → login → accede
+- [ ] Reset contraseña desde admin funciona
+- [ ] `/forgot-password` → email llega → link redirige a `/set-password`
+- [ ] `/usuarios/roles` carga sin error "table not found"
+- [ ] Crear nuevo rol → guarda permisos correctamente
+- [ ] Validar aislamiento: segundo usuario en sucursal X NO ve datos de sucursal Y
 
 ### FASE 2 — PRODUCTO USABLE (mayor impacto sobre capacidad del equipo para operar)
 
@@ -216,35 +228,61 @@ cancelado → (final)
 | 4.2 | **Columna `updated_by`** en `ordenes_trabajo` | Requiere migración. TODO en `updateEstadoOTAction` | Bajo |
 | 4.3 | **Auditoría de cambios** | Historial de quién editó qué campo | Medio |
 | 4.4 | **Vista calendario para Taller** | Carga de trabajo por asesor — OTs como bloques entre `created_at` y `promesa_entrega`. Conceptualmente distinta del calendario de Citas — va en pasada separada posterior. | Alto |
-| 4.5 | **Webhook WhatsApp entrante** | Sprint 8 Fase 2 | Alto |
-| 4.6 | **Clasificador IA** | Sprint 8 Fase 2 | Alto |
-| 4.7 | **Módulos Ventas, CSI, Seguros, Atención** | Placeholders vacíos | Muy alto |
+| 4.5 | **Módulos Ventas, CSI, Seguros, Atención** | Placeholders vacíos | Muy alto |
+
+### FASE 6 — ROADMAP SIGUIENTE (pendiente de implementación)
+
+> No construir hasta tener FASE 1.5 + FASE 5 validados en producción.
+
+| # | Feature | Descripción | Dependencia | Esfuerzo |
+|---|---------|-------------|-------------|---------|
+| 6.1 | **Mi Agenda — vista calendario** | Vista mes/semana/día para actividades del usuario. Cambiar entre vistas con un clic. Mostrar actividades agendadas por `fecha_vencimiento`. Base para operación diaria. | FASE 2 activa | Alto |
+| 6.2 | **Calendario operativo de Citas** | Vista de disponibilidad al crear cita — horas del día con slots disponibles/ocupados. No drag & drop. | FASE 2 activa | Alto |
+| 6.3 | **Taller — Vista calendario** | Carga de trabajo por asesor. OTs como bloques entre `created_at` y `promesa_entrega`. Pasada separada posterior al calendario de Citas. | FASE 4 activa | Alto |
+| 6.4 | **Workflow Studio / Automation Builder** | Constructor visual de flujos de automatización por sucursal. Basado en `outbound_queue` + `automation_logs`. Paso previo: operacionalizar la bandeja. | FASE 5 activa + bandeja madura | Muy alto |
+| 6.5 | **AI Automation Copilot** | Asistente que sugiere flujos, detecta patrones en `automation_logs` y propone mejoras. Usa Claude. | Workflow Studio activo | Muy alto |
+| 6.6 | **Agentes por módulo** | Agentes Claude especializados por contexto: Citas, Taller, Refacciones, Ventas. Cada uno con su prompt, herramientas y límites de acción. | FASE 5 + bandeja madura | Muy alto |
+| 6.7 | **Bandeja operativa madura** | Compose/respuesta real, filtros, asignación de conversación, estado leído/no leído. | Webhook WA activo | Medio |
+
+**Orden recomendado:** 6.2 → 6.1 → 6.7 → 6.3 → 6.4 → 6.5 → 6.6
+
+### FASE 5 — WHATSAPP + AUTOMATIZACIONES + IA MVP 🟡 CÓDIGO COMPLETO — PENDIENTE ACTIVACIÓN
+
+> **Estado 2026-04-22:** Todo el código de FASE 5 está implementado y TypeScript pasa sin errores. Nada está activo en producción. La activación requiere deploy + configuración externa (número Meta, `wa_numeros`, `WA_VERIFY_TOKEN`, `ai_settings`).
+>
+> **Prerequisito de activación:** FASE 1.5 completamente validada es el orden recomendado, pero el código fue implementado de forma anticipada. La activación del webhook y el bot puede hacerse independientemente una vez que haya número Meta activo.
+>
+> **Nota:** WhatsApp-first para el cliente final — NO soporte B2B para compradores del sistema.
+
+| # | Tarea | Estado código | Estado producción |
+|---|-------|--------------|------------------|
+| 5.1 | **WhatsApp saliente real** (`lib/whatsapp.ts`) | ✅ Código completo | 🔴 Sin `wa_numeros` — dependencia externa |
+| 5.2 | **Webhook entrante** (`app/api/webhooks/whatsapp/route.ts`) | ✅ Código completo | 🔴 No activo — requiere deploy + `WA_VERIFY_TOKEN` + Meta config |
+| 5.3 | **Automatizaciones determinísticas** (citas → WA) | ✅ Código completo | 🔴 No activo — mismo bloqueante que 5.1 |
+| 5.3b | **Recordatorio 2h** (`outbound_queue` al confirmar cita) | ✅ Código completo — encola en `outbound_queue` con `send_after = cita - 2h` | 🔴 No activo — depende de flush cron activo |
+| 5.3c | **No-show detection** (cron diario detecta citas `confirmada` de ayer, envía WA, actualiza estado) | ✅ Código completo — en `recordatorios-citas/route.ts` | 🔴 No activo — depende de WA activo |
+| 5.4 | **Bandeja operativa** (compose, respuesta, filtros) | ⬜ No implementado | ⬜ — |
+| 5.5 | **IA: clasificador de intención** (`lib/ai/classify-intent.ts`) | ✅ Código completo | 🔴 No activo — `ai_settings.activo=FALSE` y sin `ai_settings` en BD |
+| 5.6 | **IA: detector de sentimiento** (`lib/ai/detect-sentiment.ts`) | ✅ Código completo | 🔴 No activo — mismo control que 5.5 |
+| 5.7 | **Handoff bot → humano** (en webhook, umbral `confidence_threshold`) | ✅ Código completo | 🔴 No activo — depende de 5.2 y 5.5 |
+| 5.8 | **Flush `outbound_queue`** (`app/api/cron/outbound-queue-flush/route.ts`) | ✅ Código completo | 🔴 No activo — requiere deploy para que Vercel registre el cron |
+| 5.9 | **Workflow Studio / AI Copilot** | ⬜ No implementado | ⬜ — pasada futura |
 
 ---
 
 ## 5. BUGS ACTIVOS EN PRODUCCIÓN
 
-### 🔴 CRÍTICO — Sistema de invitaciones de usuario roto
+### 🟡 PENDIENTE DEPLOY — Sistema multiusuario: fix completo en código, pendiente migración + deploy
 
-**Descripción:** El link de invitación enviado por Supabase Auth falla con `access_denied`, `otp_expired` o `invalid or expired`. El usuario invitado no puede activar su cuenta.
-**Impacto:** El sistema es de un solo usuario en la práctica. No se puede onboardear un segundo usuario, ni validar el aislamiento multi-tenant real.
-**Prerequisito de go-live:** Sin esto, cualquier prueba de multi-tenant es inválida.
-**Fix requerido:** FASE 1.5.1 — diagnosticar flujo de invitación Supabase (redirect URL, expiración del token, configuración de Auth en dashboard).
+**Diagnóstico resuelto 2026-04-22:**
+- "Could not find the table public.roles" / "Could not find a relationship usuarios → usuario_roles": las tablas existen en el schema original pero sus políticas RLS fallaron al crearse (referenciaban `get_mi_grupo_id()` antes de que la función existiera). Con RLS activo y sin policies → acceso denegado → PostgREST reporta "table not found".
+- `/usuarios` siempre vacío: la tabla `usuarios` tiene RLS habilitado pero sin ninguna política SELECT. `createClient()` (user JWT) no podía leer nada.
 
-### 🟡 PENDIENTE — Acceso multiusuario incompleto
+**Fixes aplicados en código (2026-04-22):**
+- Migración `009_roles_permisos_schema.sql` creada: añade SELECT policy a `usuarios`, recrea `roles`/`rol_permisos`/`usuario_roles` con RLS correcto y grants a `authenticated`.
+- Bugs de encoding corregidos en `app/actions/usuarios.ts`.
 
-Los siguientes flujos ya existen en código, pero todavía requieren validación manual end-to-end:
-- Vista de usuarios invitados/pendientes — `/usuarios` ya detecta `email_confirmed_at` desde Supabase Auth y distingue también casos sin registro Auth
-- Reenviar invitación — existe acción y fue endurecida para validar estado real en Auth antes de reenviar
-- Reset de contraseña desde admin — existe acción
-- Recuperación de contraseña por mail — existe flujo de "olvidé mi contraseña" en login
-- "Usuarios" en sidebar principal — ya fue movido dentro de Configuración
-
-**Riesgo práctico corregido en código:** el reenvío no era usable porque dependía solo del email local y la UI podía marcar falsos "pendientes" si fallaba `listUsers()`. Ahora `/usuarios` muestra error visible si no puede consultar Auth y el reenvío valida que el usuario exista en Auth, siga pendiente y no esté desalineado por ID/email.
-**Bug raíz corregido en `/usuarios`:** la pantalla estaba leyendo `usuarios` con `createClient()` bajo RLS, pero `usuarios` no tiene policy de lectura. Con RLS activa eso devolvía lista vacía. El fix mínimo seguro fue mover la lectura de `/usuarios` a `createAdminClient()` con guard explícito de admin y filtros por `sucursal_id` / `grupo_id`.
-**Estado real actual validado:** en producción apareció un bloqueo adicional más específico: PostgREST no encuentra relación `usuarios -> usuario_roles` y reporta que no existe `public.roles`. Esto indica que el esquema de roles/permisos esperado por el código no está presente en la BD real desplegada. Se desacopló `/usuarios` de relaciones embebidas para que vuelva a listar usuarios reales aunque falten `roles` / `usuario_roles`, y `/usuarios/roles` ahora muestra degradación explícita hasta ejecutar el SQL pendiente.
-
-**Fix requerido:** FASE 1.5 completa.
+**Pendiente:** ejecutar migración 009 en Supabase + deploy a Vercel.
 
 ### 🟡 MIGRADO — Exposición cross-sucursal en page components
 
@@ -266,7 +304,7 @@ Gaps entre lo que el backend hace correctamente y lo que el usuario experimenta 
 | **Validación KM en nueva OT** | ⬜ Sin validación | ⬜ Sin validación | Puede ingresar KM menor al histórico del vehículo |
 | **Flujo contextual completo en Nueva Cita** | 🟡 Fase 1a implementada (`return_to` para cliente) | ⬜ No hay flujo inline para empresa ni vehículo | El usuario tiene que navegar fuera de la ruta de nueva cita |
 | **Disponibilidad en Citas** | ⬜ No existe lógica de disponibilidad | ⬜ Solo kanban — sin vista de horarios ni bloqueo de slots | No se puede ver ni reservar por disponibilidad |
-| **Bandeja conectada a BD** | ✅ `mensajes` + `conversation_threads` operativas | 🟡 UI ya usa datos reales, pero sigue incompleta para operación full (sin webhook entrante, sin respuesta real) | Feature parcialmente usable |
+| **Bandeja conectada a BD** | ✅ `mensajes` + `conversation_threads` operativas | 🟡 UI ya usa datos reales. Webhook entrante implementado en código pero sin activar. Sin compose/respuesta real. | Feature parcialmente usable |
 | **Invitaciones de usuario** | ✅ Supabase Auth gestiona invitaciones | 🔴 Link falla con `access_denied`/`otp_expired` — usuario no puede activar cuenta | El sistema es de un solo usuario de facto |
 | **Mi Agenda — calendario** | ✅ `actividades` con `fecha_vencimiento` en BD | ⬜ Solo lista plana sin vista de día/semana/mes | Operación diaria ineficiente sin vista de tiempo |
 | **Calendario de Citas** | ⬜ Sin lógica de disponibilidad | ⬜ Solo kanban — no hay vista por horario | No se puede visualizar disponibilidad al crear cita |
@@ -299,22 +337,31 @@ Gaps entre lo que el backend hace correctamente y lo que el usuario experimenta 
 
 ## 6. DEPENDENCIAS Y PASOS ANTES DE PRODUCCIÓN REAL
 
-### Para activar WhatsApp (dependencia externa — no es deuda de código)
-1. Tener cuenta Meta Business verificada
-2. Número de teléfono dedicado aprobado por Meta
-3. Poblar tabla `wa_numeros` con `phone_number_id`, `access_token`, `sucursal_id`, `modulo`
-4. Configurar `WA_VERIFY_TOKEN` en Vercel
-5. Implementar `app/api/webhooks/whatsapp/route.ts` (Sprint 8 Fase 2)
-6. Smoke test: enviar mensaje → verificar fila en `mensajes` + `conversation_threads`
+### Para activar WhatsApp (código ya completo — solo configuración externa pendiente)
+1. Tener cuenta Meta Business verificada con número de teléfono aprobado por Meta
+2. Poblar tabla `wa_numeros`: insertar fila con `phone_number_id`, `access_token`, `sucursal_id`, `modulo='general'`, `activo=true`
+3. Configurar `WA_VERIFY_TOKEN` en Vercel (cualquier string secreto)
+4. Deploy a Vercel (activa el cron y el webhook)
+5. En Meta Business Manager → WhatsApp → Configuración → Webhook: URL `https://servicetrack-one.vercel.app/api/webhooks/whatsapp`, Verify Token = valor de `WA_VERIFY_TOKEN`, suscribirse al evento `messages`
+6. Smoke test saliente: confirmar cita → mensaje aparece en `mensajes` + `wa_mensajes_log`
+7. Smoke test entrante: enviar WA al número → verificar fila en `mensajes` con `direccion='entrante'` + `conversation_threads` creado/actualizado
 
 ### Para activar dominio propio en email
 1. Verificar dominio en Resend Dashboard (registros DNS)
 2. Actualizar `EMAIL_FROM` en Vercel de `ServiceTrack <onboarding@resend.dev>` a `noreply@dominio.com`
 
-### Para activar bot IA
-1. Implementar `lib/ai/classify-intent.ts` y `lib/ai/detect-sentiment.ts`
-2. Implementar flush de `outbound_queue` (`app/api/cron/outbound-queue-flush/route.ts`)
-3. Habilitar bot: `UPDATE ai_settings SET activo = TRUE WHERE sucursal_id = '...'`
+### Para activar bot IA (código ya implementado)
+1. ✅ `lib/ai/classify-intent.ts` — clasificador de intención (Claude Haiku)
+2. ✅ `lib/ai/detect-sentiment.ts` — detector de sentimiento (Claude Haiku)
+3. ✅ `app/api/cron/outbound-queue-flush/route.ts` — cron de flush en `vercel.json`
+4. Verificar que `ANTHROPIC_API_KEY` esté en Vercel (All Environments) — ya configurada según tabla §2.6
+5. Habilitar bot: `UPDATE ai_settings SET activo = TRUE WHERE sucursal_id = '...'`
+
+### Para activar webhook WhatsApp (código ya implementado)
+1. Configurar `WA_VERIFY_TOKEN` en Vercel (cualquier string secreto)
+2. En Meta Business Manager → WhatsApp → Webhook: URL `https://servicetrack-one.vercel.app/api/webhooks/whatsapp`, Verify Token = el valor de `WA_VERIFY_TOKEN`
+3. Suscribirse al evento `messages`
+4. Poblar `wa_numeros` con `phone_number_id`, `access_token`, `sucursal_id`, `modulo='general'`
 
 ---
 
@@ -358,10 +405,20 @@ Gaps entre lo que el backend hace correctamente y lo que el usuario experimenta 
 |--------|------|----------------------|---------------------------|
 | Crash `/taller` resuelto (page.tsx) | Código | **Sí — pendiente** | No |
 | Todos los fixes Sprint 9 | Código | Sí (si no se hizo) | No |
-| Migración 002 email_config | Solo BD | No | **Sí — pendiente** |
+| Migración 009 (roles/permisos/RLS) | BD | No | **Sí — pendiente** |
+| Migración 002 email_config | BD | No | **Sí — pendiente** |
+| FASE 1.5 (usuarios/invitaciones) | Código | **Sí — pendiente** | No (usa 009) |
+| Webhook WA (`app/api/webhooks/whatsapp/route.ts`) | Código | **Sí** | No (usa config externa) |
+| Cron flush (`app/api/cron/outbound-queue-flush/route.ts`) | Código | **Sí** (activa el cron en Vercel) | No |
+| IA MVP (`lib/ai/classify-intent.ts`, `lib/ai/detect-sentiment.ts`) | Código | **Sí** | No (requiere `ai_settings` habilitado) |
+| `vercel.json` (nuevo cron outbound-queue-flush) | Config | **Sí** | No |
 | Flujo contextual completo (fases 1b-1d) | Código | Sí | No |
 | `updated_by` en ordenes_trabajo | BD + Código | Sí | Sí |
-| Columna en tabla nueva | BD + Código | Sí | Sí |
+| Encoding fixes `UsuarioAcciones.tsx` + `usuarios/page.tsx` | Código | **Sí — pendiente** | No |
+| `/usuarios/roles/[id]` — edit rol page | Código | **Sí — pendiente** | No (usa tablas de 009) |
+| Recordatorio 2h en `outbound_queue` al confirmar cita | Código | **Sí — pendiente** | No |
+| No-show detection en cron `recordatorios-citas` | Código | **Sí — pendiente** | No |
+| `mensajeRecordatorio2h` + `mensajeNoShow` en `lib/whatsapp.ts` | Código | **Sí — pendiente** | No |
 
 ---
 
@@ -393,11 +450,33 @@ Gaps entre lo que el backend hace correctamente y lo que el usuario experimenta 
 - [ ] Admin puede ver estado (pendiente/activo) de todos los usuarios invitados
 - [ ] "Usuarios" ya no aparece en el sidebar principal
 
-### Post-activación WhatsApp
-- [ ] Tabla `wa_numeros` tiene al menos una fila con `phone_number_id` + `access_token`
+### Post-activación FASE 5 (WhatsApp + IA)
+
+**WhatsApp saliente:**
+- [ ] `wa_numeros` tiene fila con `phone_number_id` + `access_token` + `activo=true`
 - [ ] Confirmar cita envía WA al cliente
-- [ ] Mensaje aparece en tabla `mensajes` con `canal='whatsapp'`
+- [ ] Fila aparece en `mensajes` con `canal='whatsapp'`, `direccion='saliente'`
 - [ ] `conversation_threads` tiene hilo creado o actualizado
+- [ ] `wa_mensajes_log` tiene fila con `status='enviado'`
+
+**Webhook entrante:**
+- [ ] `WA_VERIFY_TOKEN` configurado en Vercel
+- [ ] Meta webhook verificado (GET handshake devuelve challenge correctamente)
+- [ ] Meta suscrito al evento `messages`
+- [ ] Mensaje entrante de cliente → fila en `mensajes` con `direccion='entrante'`, `message_source='customer'`
+- [ ] `conversation_threads` actualizado con `last_customer_message_at`
+- [ ] Dedup funciona: reenviar mismo mensaje de Meta no crea fila duplicada
+
+**Cron outbound-queue-flush:**
+- [ ] Vercel muestra el cron en el dashboard (`*/15 * * * *`)
+- [ ] Insertar fila manualmente en `outbound_queue` con `estado='pending'`, `approval_required=false`, `send_after=NOW()` → se procesa en siguiente corrida
+- [ ] Fila procesada → `estado='sent'`, fila en `automation_logs`
+
+**IA (requiere número WA activo + mensaje entrante real):**
+- [ ] Insertar fila en `ai_settings` con `activo=true` para la sucursal
+- [ ] Mensaje entrante de texto → `ai_intent` y `ai_sentiment` poblados en `mensajes`
+- [ ] `processing_status='processed'` en el mensaje
+- [ ] Mensaje con confianza baja → `conversation_threads.estado='waiting_agent'`
 
 ---
 
@@ -413,3 +492,6 @@ Gaps entre lo que el backend hace correctamente y lo que el usuario experimenta 
 | ADR-06 | `vincularOTCitaAction` — regla vehiculo_id null-permisiva | Solo bloquear conflictos explícitos; no penalizar registros incompletos | 2026-04-15 |
 | ADR-07 | Crash `/taller`: fallback defensivo en render, no en query | La query siempre selecciona `estado`; el crash era en el render con valor desconocido | 2026-04-16 |
 | ADR-08 | Migración sistémica `createAdminClient()` → `createClient()` en todos los page components | RLS via `get_mi_sucursal_id()` es más robusto que filtros manuales; server actions conservan admin intencionalmente | 2026-04-16 |
+| ADR-09 | Migración 009 para roles/permisos en lugar de cambiar el código | Las tablas ya estaban definidas en el schema; el bug era en la BD (RLS sin policies), no en la lógica de negocio. Código no necesita cambios. | 2026-04-22 |
+| ADR-10 | Webhook WA clasifica IA inline (síncrono) en lugar de diferido por cron | Haiku es suficientemente rápido (<2s) para no bloquear el webhook (<20s límite Meta). Mensajes sin AI activo quedan en `processing_status='pending'` — pueden clasificarse retroactivamente. | 2026-04-22 |
+| ADR-11 | Lookup de cliente en webhook por `whatsapp.eq.{phone}` OR `whatsapp.eq.+{phone}` | Meta envía teléfonos sin `+`. Los registros en `clientes` pueden tener o no el prefijo. Solución pragmática para MVP sin normalización forzada en BD. | 2026-04-22 |
