@@ -3,15 +3,16 @@ import { Plus, TrendingUp, DollarSign, Target, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
-type EstadoLead = 'nuevo' | 'contactado' | 'interesado' | 'cotizacion' | 'ganado' | 'perdido'
+// Valores exactos del ENUM estado_lead en BD
+type EstadoLead = 'nuevo' | 'contactado' | 'cotizado' | 'negociando' | 'cerrado_ganado' | 'cerrado_perdido'
 
 const COLUMNAS: { estado: EstadoLead; label: string; color: string; dot: string; bg: string }[] = [
-  { estado: 'nuevo',      label: 'Nuevo',         color: 'text-gray-600',   dot: 'bg-gray-400',   bg: 'bg-gray-50' },
-  { estado: 'contactado', label: 'Contactado',     color: 'text-blue-600',   dot: 'bg-blue-400',   bg: 'bg-blue-50' },
-  { estado: 'interesado', label: 'Interesado',     color: 'text-yellow-600', dot: 'bg-yellow-400', bg: 'bg-yellow-50' },
-  { estado: 'cotizacion', label: 'Cotización',     color: 'text-orange-600', dot: 'bg-orange-400', bg: 'bg-orange-50' },
-  { estado: 'ganado',     label: 'Ganado',         color: 'text-green-600',  dot: 'bg-green-500',  bg: 'bg-green-50' },
-  { estado: 'perdido',    label: 'Perdido',        color: 'text-red-600',    dot: 'bg-red-400',    bg: 'bg-red-50' },
+  { estado: 'nuevo',          label: 'Nuevo',       color: 'text-gray-600',   dot: 'bg-gray-400',   bg: 'bg-gray-50' },
+  { estado: 'contactado',     label: 'Contactado',  color: 'text-blue-600',   dot: 'bg-blue-400',   bg: 'bg-blue-50' },
+  { estado: 'cotizado',       label: 'Cotizado',    color: 'text-yellow-600', dot: 'bg-yellow-400', bg: 'bg-yellow-50' },
+  { estado: 'negociando',     label: 'Negociando',  color: 'text-orange-600', dot: 'bg-orange-400', bg: 'bg-orange-50' },
+  { estado: 'cerrado_ganado', label: 'Ganado',      color: 'text-green-600',  dot: 'bg-green-500',  bg: 'bg-green-50' },
+  { estado: 'cerrado_perdido',label: 'Perdido',     color: 'text-red-600',    dot: 'bg-red-400',    bg: 'bg-red-50' },
 ]
 
 const FUENTE_LABEL: Record<string, string> = {
@@ -23,12 +24,12 @@ type LeadRow = {
   id: string
   estado: EstadoLead
   fuente: string | null
-  nombre_lead: string | null
+  nombre: string | null        // columna real en tabla leads
   vehiculo_interes: string | null
   presupuesto_estimado: number | null
   creado_at: string
   cliente: { id: string; nombre: string; apellido: string } | null
-  usuario_asignado: { nombre: string; apellido: string } | null
+  asesor: { nombre: string; apellido: string } | null  // FK real: asesor_id
 }
 
 export default async function VentasPage() {
@@ -37,9 +38,9 @@ export default async function VentasPage() {
   const { data: leads } = await supabase
     .from('leads')
     .select(`
-      id, estado, fuente, nombre_lead, vehiculo_interes, presupuesto_estimado, creado_at,
+      id, estado, fuente, nombre, vehiculo_interes, presupuesto_estimado, creado_at,
       cliente:clientes ( id, nombre, apellido ),
-      usuario_asignado:usuarios!leads_usuario_asignado_id_fkey ( nombre, apellido )
+      asesor:usuarios!leads_asesor_id_fkey ( nombre, apellido )
     `)
     .order('creado_at', { ascending: false })
     .limit(200)
@@ -47,9 +48,9 @@ export default async function VentasPage() {
   const rows = (leads as unknown as LeadRow[]) ?? []
 
   const total = rows.length
-  const ganados = rows.filter(r => r.estado === 'ganado').length
-  const activos = rows.filter(r => !['ganado', 'perdido'].includes(r.estado)).length
-  const perdidos = rows.filter(r => r.estado === 'perdido').length
+  const ganados = rows.filter(r => r.estado === 'cerrado_ganado').length
+  const activos = rows.filter(r => !['cerrado_ganado', 'cerrado_perdido'].includes(r.estado)).length
+  const perdidos = rows.filter(r => r.estado === 'cerrado_perdido').length
 
   return (
     <div className="space-y-5 h-full flex flex-col">
@@ -107,7 +108,7 @@ export default async function VentasPage() {
                   {leadsCol.map(lead => {
                     const nombre = lead.cliente
                       ? `${lead.cliente.nombre} ${lead.cliente.apellido}`
-                      : lead.nombre_lead ?? 'Sin nombre'
+                      : lead.nombre ?? 'Sin nombre'
                     return (
                       <div
                         key={lead.id}
@@ -132,9 +133,9 @@ export default async function VentasPage() {
                           )}
                         </div>
 
-                        {lead.usuario_asignado && (
+                        {lead.asesor && (
                           <p className="text-[10px] text-gray-400">
-                            {lead.usuario_asignado.nombre} {lead.usuario_asignado.apellido}
+                            {lead.asesor.nombre} {lead.asesor.apellido}
                           </p>
                         )}
                       </div>

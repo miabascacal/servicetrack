@@ -16,11 +16,12 @@ type EnvioRow = {
   estado: string
   enviado_at: string | null
   respondido_at: string | null
-  csi_respuestas: { score: number | null }[]
+  csi_respuestas: { respuesta_numerica: number | null }[]  // columna real en BD
 }
 
+// Valores exactos del CHECK modulo_origen IN ('taller','ventas','citas')
 const MODULO_LABEL: Record<string, string> = {
-  ot: 'Taller', cita: 'Citas', venta: 'Ventas',
+  taller: 'Taller', ventas: 'Ventas', citas: 'Citas',
 }
 
 export default async function CsiPage() {
@@ -29,19 +30,19 @@ export default async function CsiPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('sucursal_id, grupo_id')
-    .eq('auth_user_id', user.id)
-    .single()
+  // usuarios.id = auth user UUID (no hay columna auth_user_id)
+  // grupo_id no está en usuarios — se resuelve via sucursal → razon_social
+  const { ensureUsuario } = await import('@/lib/ensure-usuario')
+  let ctx: { grupo_id: string; sucursal_id: string } | null = null
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') } catch { /* sin perfil */ }
 
-  const grupoId = (usuario as { grupo_id?: string } | null)?.grupo_id ?? null
+  const grupoId = ctx?.grupo_id ?? null
 
   const [{ data: encuestas }, { data: envios }] = await Promise.all([
     grupoId
       ? supabase.from('csi_encuestas').select('id, nombre, modulo_origen, activa, dias_espera, score_alerta').eq('grupo_id', grupoId).order('creado_at')
       : Promise.resolve({ data: [] }),
-    supabase.from('csi_envios').select('id, estado, enviado_at, respondido_at, csi_respuestas(score)').order('enviado_at', { ascending: false }).limit(100),
+    supabase.from('csi_envios').select('id, estado, enviado_at, respondido_at, csi_respuestas(respuesta_numerica)').order('enviado_at', { ascending: false }).limit(100),
   ])
 
   const rows = (encuestas as unknown as EncuestaRow[]) ?? []
@@ -52,7 +53,7 @@ export default async function CsiPage() {
   const pendientes = envioRows.filter(e => e.estado === 'enviada').length
   const scores = envioRows
     .flatMap(e => e.csi_respuestas)
-    .map(r => r.score)
+    .map(r => r.respuesta_numerica)
     .filter((s): s is number => s !== null)
   const avgScore = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '—'
 
@@ -142,8 +143,8 @@ export default async function CsiPage() {
                   <span className="text-sm text-gray-700">{envio.estado}</span>
                 </div>
                 <div className="flex items-center gap-4 text-xs text-gray-400">
-                  {envio.csi_respuestas?.[0]?.score != null && (
-                    <span className="font-medium text-yellow-600">⭐ {envio.csi_respuestas[0].score}</span>
+                  {envio.csi_respuestas?.[0]?.respuesta_numerica != null && (
+                    <span className="font-medium text-yellow-600">⭐ {envio.csi_respuestas[0].respuesta_numerica}</span>
                   )}
                   {envio.enviado_at && <span>{new Date(envio.enviado_at).toLocaleDateString('es-MX')}</span>}
                 </div>

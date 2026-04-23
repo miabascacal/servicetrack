@@ -14,12 +14,11 @@ export async function createAutomationRuleAction(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autenticado' }
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('sucursal_id')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario?.sucursal_id) return { error: 'Sin sucursal asignada' }
+  // usuarios.id = auth user UUID (no hay columna auth_user_id separada)
+  const { ensureUsuario } = await import('@/lib/ensure-usuario')
+  let ctx: { sucursal_id: string } | null = null
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') } catch { /* sin perfil */ }
+  if (!ctx?.sucursal_id) return { error: 'Sin sucursal asignada' }
 
   const nombre = (formData.get('nombre') as string)?.trim().toUpperCase()
   const descripcion = (formData.get('descripcion') as string)?.trim() ?? null
@@ -38,12 +37,12 @@ export async function createAutomationRuleAction(formData: FormData) {
   const { data, error } = await supabase
     .from('automation_rules')
     .insert({
-      sucursal_id: usuario.sucursal_id,
+      sucursal_id: ctx.sucursal_id,
       nombre,
       descripcion,
       trigger_tipo,
       acciones,
-      creada_por_id: user.id,
+      creada_por_id: user.id,  // usuarios.id = auth.users.id
     })
     .select('id')
     .single()

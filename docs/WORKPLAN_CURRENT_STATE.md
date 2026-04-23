@@ -240,13 +240,13 @@ cancelado → (final)
 | # | Feature | Estado |
 |---|---------|--------|
 | 6.1 | **Mi Agenda — vista calendario** semana/mes con actividades reales | ✅ `AgendaCalendario.tsx` en producción |
-| 6.2 | **Disponibilidad al crear cita** — slots 30 min, ocupados por fecha en DB | ✅ `DisponibilidadHoras.tsx` integrado en `/citas/nuevo` |
+| 6.2 | **Disponibilidad al crear cita** — slots 30 min, ocupados por fecha en DB | ✅ MVP: slots 08:00–18:00 hardcodeados. TODO: leer desde `configuracion_sucursal` cuando exista |
 | 6.3 | **Taller — Vista calendario** | ⬜ Pasada posterior separada |
 | 6.4 | **Workflow Studio** — lista + crear reglas en `automation_rules` DB | ✅ `/bandeja/workflow-studio` en producción |
 | 6.5 | **AI Automation Copilot** | ⬜ Pendiente — requiere Workflow Studio maduro |
 | 6.6 | **Agentes por módulo** | ⬜ Pendiente — requiere FASE 5 activa |
-| 6.7 | **Ventas MVP** — kanban leads 6 columnas, stats en tiempo real | ✅ `/ventas` en producción |
-| 6.8 | **CSI MVP** — encuestas, envíos, score promedio | ✅ `/csi` en producción |
+| 6.7 | **Ventas MVP** — kanban leads 6 columnas, stats en tiempo real | ✅ Corregido 2026-04-22: estados ENUM reales (`cotizado/negociando/cerrado_ganado/cerrado_perdido`), FK `asesor_id`, columna `nombre` |
+| 6.8 | **CSI MVP** — encuestas, envíos, score promedio | ✅ Corregido 2026-04-22: `respuesta_numerica`, modulos `taller/ventas/citas`, grupo via `ensureUsuario` |
 | 6.9 | **Seguros MVP** — pólizas con alertas de vencimiento | ✅ `/seguros` en producción |
 | 6.10 | **Bandeja operativa madura** | ⬜ Pendiente — requiere webhook WA activo |
 

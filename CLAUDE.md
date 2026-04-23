@@ -253,6 +253,10 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
   - OT: `diagnostico`, `numero_ot_dms` — create y update
   - NO normalizar: `email`, `whatsapp`, `notas_internas`, `promesa_entrega`, `tokens`
 - **Trazabilidad de estado OT:** `updated_at` manejado por trigger `t_ordenes_trabajo_updated` (migration 005). **TODO pendiente:** agregar columna `updated_by` UUID en migración futura cuando se requiera auditoría por usuario.
+- **`usuarios.id` = `auth.users.id`** — La tabla `usuarios` usa el UUID de auth como PK. NO existe columna `auth_user_id`. NUNCA hacer `.eq('auth_user_id', user.id)`. Siempre usar `ensureUsuario(supabase, user.id, user.email)` en server actions para obtener `sucursal_id` y `grupo_id`.
+- **`usuarios` NO tiene `grupo_id`** — grupo se resuelve via `sucursales → razones_sociales → grupos`. `ensureUsuario` ya maneja este join automáticamente.
+- **`estado_lead` ENUM real** (BD): `nuevo, contactado, cotizado, negociando, cerrado_ganado, cerrado_perdido`. Usar siempre estos valores. NO usar `interesado`, `cotizacion`, `ganado`, `perdido`.
+- **`csi_respuestas` score** — columna es `respuesta_numerica`, no `score`.
 
 ### Estado Sprint 8 — actualizado 2026-04-15
 
