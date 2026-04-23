@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-22 — Encoding fixes usuarios, edit-rol page, recordatorio 2h, no-show detection. Pendiente: ejecutar migración 009 en Supabase + deploy._
+_Actualizado: 2026-04-22 — Migraciones 001-009 aplicadas, deploy realizado, FASE 1.5 activa. Construyendo FASE 6: calendarios, Ventas, CSI, Seguros, Workflow Studio._
 
 ---
 
@@ -8,18 +8,18 @@ _Actualizado: 2026-04-22 — Encoding fixes usuarios, edit-rol page, recordatori
 | Sprint | Nombre | % real | Estado |
 |--------|--------|--------|--------|
 | Sprint 1 | AUTH + LAYOUT | 80% | 🟡 Casi completo |
-| Sprint 2 | USUARIOS & PERMISOS | 20% | 🔴 Incompleto |
+| Sprint 2 | USUARIOS & PERMISOS | 85% | 🟡 FASE 1.5 activa — pendiente validación manual |
 | Sprint 3 | CRM | 65% | 🟡 En progreso |
 | Sprint 4 | CITAS | 35% | 🟡 Base construida |
 | Sprint 5 | TALLER | 25% | 🔴 Base construida |
 | Sprint 6 | REFACCIONES | 30% | 🔴 Base construida |
-| Sprint 7 | VENTAS | 2% | 🔴 Placeholder |
+| Sprint 7 | VENTAS | 30% | 🔴 MVP en construcción 2026-04-22 |
 | Sprint 8 | BANDEJA + IA | 60% | 🟡 FASE 5 completo en código + recordatorio 2h + no-show. Nada activo en producción — requiere número WA + config Meta + deploy |
 | Sprint 9 | ATENCIÓN A CLIENTES | 0% | ⬜ Sin empezar |
 | Sprint 10 | CSI | 0% | ⬜ Sin empezar |
 | Sprint 11 | SEGUROS | 0% | ⬜ Sin empezar |
 
-**Avance global: ~27% del producto completo** (código implementado; WhatsApp e IA MVP completos en código pero sin activar en producción).
+**Avance global: ~35% del producto completo** (código implementado; WhatsApp e IA MVP completos en código pero sin activar en producción).
 
 ---
 

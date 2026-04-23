@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ChevronLeft, Save, Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { createCitaAction } from '@/app/actions/citas'
+import { DisponibilidadHoras } from '../DisponibilidadHoras'
 
 type ClienteOption = { id: string; nombre: string; apellido: string; whatsapp: string }
 type VehiculoOption = { id: string; marca: string; modelo: string; anio: number; placa: string | null }
@@ -27,6 +28,13 @@ export default function NuevaCitaPage() {
   // Vehicles for selected client
   const [vehiculos, setVehiculos] = useState<VehiculoOption[]>([])
   const [selectedVehiculoId, setSelectedVehiculoId] = useState('')
+
+  // Date / availability
+  const now = new Date()
+  const defaultDate = now.toISOString().split('T')[0]
+  const [fechaCita, setFechaCita] = useState(defaultDate)
+  const [horaCita, setHoraCita] = useState('')
+  const [citasOcupadas, setCitasOcupadas] = useState<{ hora_cita: string; estado: string }[]>([])
 
   // Load preselected client
   useEffect(() => {
@@ -58,6 +66,17 @@ export default function NuevaCitaPage() {
     return () => clearTimeout(timeout)
   }, [clienteQuery])
 
+  // Fetch occupied slots when date changes
+  useEffect(() => {
+    if (!fechaCita) return
+    const supabase = createClient()
+    supabase
+      .from('citas')
+      .select('hora_cita, estado')
+      .eq('fecha_cita', fechaCita)
+      .then(({ data }) => setCitasOcupadas(data ?? []))
+  }, [fechaCita])
+
   // Load vehicles when client selected
   useEffect(() => {
     if (!selectedCliente) { setVehiculos([]); setSelectedVehiculoId(''); return }
@@ -79,6 +98,7 @@ export default function NuevaCitaPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!selectedCliente) { setError('Selecciona un cliente'); return }
+    if (!horaCita) { setError('Selecciona un horario disponible'); return }
     setSaving(true)
     setError(null)
     const formData = new FormData(e.currentTarget)
@@ -88,12 +108,6 @@ export default function NuevaCitaPage() {
     if (result?.error) { setError(result.error); setSaving(false) }
     else if (result?.id) router.push(`/citas/${result.id}`)
   }
-
-  // Default date = today, default time = next hour
-  const now = new Date()
-  const defaultDate = now.toISOString().split('T')[0]
-  const defaultHour = String(now.getHours() + 1).padStart(2, '0')
-  const defaultTime = `${defaultHour}:00`
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
@@ -205,33 +219,32 @@ export default function NuevaCitaPage() {
       {/* Date & time */}
       <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
         <h2 className="text-sm font-semibold text-gray-900">Fecha y hora</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Fecha <span className="text-red-500">*</span>
-            </label>
-            <input
-              name="fecha_cita"
-              type="date"
-              required
-              defaultValue={defaultDate}
-              min={defaultDate}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Hora <span className="text-red-500">*</span>
-            </label>
-            <input
-              name="hora_cita"
-              type="time"
-              required
-              defaultValue={defaultTime}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Fecha <span className="text-red-500">*</span>
+          </label>
+          <input
+            name="fecha_cita"
+            type="date"
+            required
+            value={fechaCita}
+            min={defaultDate}
+            onChange={(e) => { setFechaCita(e.target.value); setHoraCita('') }}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Hora disponible <span className="text-red-500">*</span>
+          </label>
+          <DisponibilidadHoras
+            fecha={fechaCita}
+            citasOcupadas={citasOcupadas}
+            onSelect={setHoraCita}
+            horaSeleccionada={horaCita}
+          />
+        </div>
+        <input type="hidden" name="hora_cita" value={horaCita} />
       </div>
 
       {/* Motivo + notes */}

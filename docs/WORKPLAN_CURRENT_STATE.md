@@ -1,9 +1,9 @@
 # WORKPLAN_CURRENT_STATE.md — ServiceTrack
 > **FUENTE DE VERDAD ÚNICA del proyecto. Todo análisis, bug, decisión y mejora debe integrarse aquí.**
 > Documento de estado consolidado para arquitectos, asistentes IA y equipo de desarrollo.
-> **Última actualización:** 2026-04-22 (sesión: encoding fixes usuarios, edit-rol page, recordatorio 2h, no-show detection, roadmap BLOQUE 5 documentado)
+> **Última actualización:** 2026-04-22 (sesión: migraciones 001-009 confirmadas aplicadas, deploy realizado, FASE 1.5 activa, FASE 6 en construcción)
 > **Sprint cerrado:** Sprint 9
-> **Estado general:** ~27% del producto completo — CRM+Citas+Taller operativos, automatizaciones Fase 1 activas, sin WhatsApp real (dependencia externa).
+> **Estado general:** ~35% del producto completo — CRM+Citas+Taller+Usuarios operativos, automatizaciones email activas, Ventas/CSI/Seguros/Workflow Studio en construcción.
 
 ---
 
@@ -94,7 +94,11 @@ cancelado → (final)
 | `006_ot_dms_and_taller_events.sql` | Columna `numero_ot_dms`; `canal='interno'` en `conversation_threads` | ✅ Ejecutada |
 | `007_canal_interno_enum.sql` | `'interno'` en ENUM `canal_mensaje`; trigger `message_count` | ✅ Ejecutada |
 | `008_estado_ot_en_proceso.sql` | Renombra ENUM `en_reparacion` → `en_proceso` | ✅ Ejecutada y validada |
-| `009_roles_permisos_schema.sql` | Política SELECT en `usuarios`; crea `roles`, `rol_permisos`, `usuario_roles` con RLS correcto; grants a `authenticated` | 🔴 **Pendiente — ejecutar en Supabase** |
+| `009_roles_permisos_schema.sql` | Política SELECT en `usuarios`; crea `roles`, `rol_permisos`, `usuario_roles` con RLS correcto; grants a `authenticated` | ✅ Ejecutada 2026-04-22 |
+| `010_ventas_leads.sql` | Tablas `leads` + `ventas_perdidas` con RLS | ⬜ Pendiente crear |
+| `011_csi_schema.sql` | Tablas CSI: `csi_encuestas`, `csi_preguntas`, `csi_envios`, `csi_respuestas` | ⬜ Pendiente crear |
+| `012_seguros_schema.sql` | ENUMs `tipo_poliza`/`estado_poliza`; tablas `companias_seguro` + `seguros_vehiculo` | ⬜ Pendiente crear |
+| `013_workflow_studio.sql` | Tablas `automation_rules` + `automation_rule_logs` | ⬜ Pendiente crear |
 
 ### 2.5 Automatizaciones y mensajería
 
@@ -129,8 +133,9 @@ cancelado → (final)
 
 | Ítem | Archivo | Acción necesaria |
 |------|---------|-----------------|
-| Crash `/taller` — fallback ESTADO_CONFIG + guard formatDateTime | `app/(dashboard)/taller/page.tsx` | **Deploy a Vercel** |
-| Fixes Sprint 9 (estados OT, normalización, vincular OT, flujo contextual) | Múltiples | **Deploy a Vercel** (si no se ha hecho) |
+| Crash `/taller` — fallback ESTADO_CONFIG + guard formatDateTime | `app/(dashboard)/taller/page.tsx` | ✅ Deploy realizado 2026-04-22 |
+| FASE 1.5 (usuarios/invitaciones/roles) | Múltiples | ✅ Deploy realizado 2026-04-22 |
+| Fixes Sprint 9 (estados OT, normalización, vincular OT, flujo contextual) | Múltiples | ✅ Deploy realizado 2026-04-22 |
 
 ---
 
@@ -138,12 +143,12 @@ cancelado → (final)
 
 > Regla: no continuar agregando features hasta cerrar el gap entre comportamiento esperado del sistema y comportamiento real en UI (secciones 5 y 5b).
 
-### FASE 0 — BLOQUEANTE (hacer antes de cualquier otra cosa)
+### FASE 0 — BLOQUEANTE ✅ CERRADA 2026-04-22
 
-| # | Tarea | Tipo | Dependencia |
-|---|-------|------|-------------|
-| 0.1 | **Deploy a Vercel** — activa fixes Sprint 9 + crash /taller | Deploy | Ninguna |
-| 0.2 | **Ejecutar migración 002** (`email_config`) — sin esto `/configuracion/email` falla en silencio | Migración Supabase | Ninguna |
+| # | Tarea | Tipo | Estado |
+|---|-------|------|--------|
+| 0.1 | Deploy a Vercel — activa fixes Sprint 9 + crash /taller | Deploy | ✅ Realizado 2026-04-22 |
+| 0.2 | Ejecutar migraciones 001-009 | Migraciones Supabase | ✅ Todas aplicadas 2026-04-22 |
 
 ### FASE 1 — SEGURIDAD MULTI-TENANT 🟡 PARCIALMENTE CERRADA 2026-04-16
 
@@ -162,7 +167,7 @@ cancelado → (final)
   - páginas y acciones administrativas sin guard de rol suficiente en la capa de ruta/página
   - falta validación end-to-end con segundo usuario real de otra sucursal
 
-### FASE 1.5 — ACCESO MULTIUSUARIO 🟡 CÓDIGO COMPLETO — PENDIENTE MIGRACIÓN + DEPLOY + VALIDACIÓN
+### FASE 1.5 — ACCESO MULTIUSUARIO 🟡 ACTIVO EN PRODUCCIÓN — PENDIENTE VALIDACIÓN MANUAL
 
 > **Diagnóstico resuelto 2026-04-22:** El error "Could not find the table public.roles" y el related error de `usuario_roles` eran causados por RLS activo sin políticas (policies fallaron al crearse porque `get_mi_grupo_id()` se definía DESPUÉS de las policies en SUPABASE_SCHEMA.sql). La tabla `usuarios` tampoco tenía SELECT policy, por lo que la lista siempre retornaba vacía con `createClient()`.
 >
@@ -183,12 +188,10 @@ cancelado → (final)
 | 1.5.12 | **Fix encoding UsuarioAcciones.tsx + page.tsx** — textos mojibake corregidos | ✅ Resuelto |
 | 1.5.8 | **Validación multi-tenant con segundo usuario** | ⬜ Pendiente — requiere migración + deploy + segundo usuario real |
 
-**Prerequisitos para activar en producción (en orden):**
-- [ ] **1. Ejecutar migración 009** en Supabase SQL Editor (`supabase/migrations/009_roles_permisos_schema.sql`)
-- [ ] **2. Deploy a Vercel** — activa fixes de FASE 1 + FASE 1.5
-- [ ] **3. Supabase Auth dashboard** → Site URL: `https://servicetrack-one.vercel.app` (ya confirmado según contexto)
-- [ ] **4. Supabase Auth dashboard** → Redirect URLs: `https://servicetrack-one.vercel.app/auth/callback` (ya confirmado)
-- [ ] **5. Vercel env var**: `NEXT_PUBLIC_SITE_URL=https://servicetrack-one.vercel.app` (ya confirmado)
+**Estado en producción (2026-04-22):**
+- [x] **Migración 009** ejecutada en Supabase
+- [x] **Deploy a Vercel** realizado — `servicetrack-one.vercel.app`
+- [ ] **Validación manual** del flujo completo de invitaciones (pendiente)
 
 **Checklist de cierre post-deploy:**
 - [ ] `/usuarios` muestra lista de usuarios (no vacía)
@@ -230,9 +233,9 @@ cancelado → (final)
 | 4.4 | **Vista calendario para Taller** | Carga de trabajo por asesor — OTs como bloques entre `created_at` y `promesa_entrega`. Conceptualmente distinta del calendario de Citas — va en pasada separada posterior. | Alto |
 | 4.5 | **Módulos Ventas, CSI, Seguros, Atención** | Placeholders vacíos | Muy alto |
 
-### FASE 6 — ROADMAP SIGUIENTE (pendiente de implementación)
+### FASE 6 — UX / OPERACIÓN + MÓDULOS RESTANTES 🔄 EN CONSTRUCCIÓN 2026-04-22
 
-> No construir hasta tener FASE 1.5 + FASE 5 validados en producción.
+> FASE 1.5 activa en producción (pendiente validación manual). FASE 5 desplegada (pendiente número WA). Construcción en curso.
 
 | # | Feature | Descripción | Dependencia | Esfuerzo |
 |---|---------|-------------|-------------|---------|
@@ -246,7 +249,7 @@ cancelado → (final)
 
 **Orden recomendado:** 6.2 → 6.1 → 6.7 → 6.3 → 6.4 → 6.5 → 6.6
 
-### FASE 5 — WHATSAPP + AUTOMATIZACIONES + IA MVP 🟡 CÓDIGO COMPLETO — PENDIENTE ACTIVACIÓN
+### FASE 5 — WHATSAPP + AUTOMATIZACIONES + IA MVP 🟡 CÓDIGO COMPLETO EN PRODUCCIÓN — PENDIENTE ACTIVACIÓN EXTERNA
 
 > **Estado 2026-04-22:** Todo el código de FASE 5 está implementado y TypeScript pasa sin errores. Nada está activo en producción. La activación requiere deploy + configuración externa (número Meta, `wa_numeros`, `WA_VERIFY_TOKEN`, `ai_settings`).
 >

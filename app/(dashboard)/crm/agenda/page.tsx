@@ -3,6 +3,7 @@ import { formatDate, formatDateTime, cn } from '@/lib/utils'
 import { Calendar, Clock, User, Car, Phone, CheckCircle2, Circle, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { NuevaActividad } from './NuevaActividad'
+import { AgendaCalendario } from './AgendaCalendario'
 
 const TIPO_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = {
   llamada:           { label: 'Llamada',           icon: Phone },
@@ -24,11 +25,11 @@ const PRIORIDAD_CONFIG: Record<string, string> = {
 }
 
 interface PageProps {
-  searchParams: Promise<{ filtro?: string }>
+  searchParams: Promise<{ filtro?: string; vista?: string }>
 }
 
 export default async function AgendaPage({ searchParams }: PageProps) {
-  const { filtro = 'hoy' } = await searchParams
+  const { filtro = 'hoy', vista = 'lista' } = await searchParams
   // createClient() aplica RLS — solo devuelve actividades de la sucursal del usuario autenticado
   const supabase = await createClient()
 
@@ -80,10 +81,39 @@ export default async function AgendaPage({ searchParams }: PageProps) {
           <h1 className="text-xl font-semibold text-gray-900">Mi Agenda</h1>
           <p className="text-sm text-gray-500 mt-0.5">Actividades y tareas asignadas a ti</p>
         </div>
-        <NuevaActividad />
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <Link
+              href={`/crm/agenda?filtro=${filtro}&vista=lista`}
+              className={cn('px-3 py-1.5 text-xs font-medium rounded-md transition-colors', vista !== 'calendario' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500')}
+            >
+              Lista
+            </Link>
+            <Link
+              href={`/crm/agenda?filtro=${filtro}&vista=calendario`}
+              className={cn('px-3 py-1.5 text-xs font-medium rounded-md transition-colors', vista === 'calendario' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500')}
+            >
+              Calendario
+            </Link>
+          </div>
+          <NuevaActividad />
+        </div>
       </div>
 
-      {/* Tabs */}
+      {/* Vista calendario */}
+      {vista === 'calendario' && (
+        <AgendaCalendario actividades={(actividades ?? []).map(a => ({
+          id: a.id,
+          tipo: a.tipo,
+          descripcion: a.descripcion ?? '',
+          estado: a.estado,
+          prioridad: a.prioridad ?? 'normal',
+          fecha_vencimiento: a.fecha_vencimiento ?? null,
+        }))} />
+      )}
+
+      {/* Tabs de lista — solo si vista=lista */}
+      {vista !== 'calendario' && (
       <div className="flex items-center gap-1 border-b border-gray-200">
         {tabs.map((tab) => (
           <Link
@@ -99,17 +129,17 @@ export default async function AgendaPage({ searchParams }: PageProps) {
             {tab.label}
           </Link>
         ))}
-      </div>
+      </div>)}
 
-      {/* Activities */}
-      {!actividades || actividades.length === 0 ? (
+      {/* Activities — solo en vista lista */}
+      {vista !== 'calendario' && (!actividades || actividades.length === 0) ? (
         <div className="flex flex-col items-center justify-center h-48 bg-gray-50 rounded-xl border border-gray-200 text-center">
           <Calendar size={28} className="text-gray-300 mb-2" />
           <p className="text-sm text-gray-500">Sin actividades {filtro === 'hoy' ? 'para hoy' : filtro === 'semana' ? 'esta semana' : ''}</p>
         </div>
-      ) : (
+      ) : vista !== 'calendario' ? (
         <div className="space-y-2">
-          {actividades.map((a) => {
+          {(actividades ?? []).map((a) => {
             type ActRow = typeof a & {
               cliente: { id: string; nombre: string; apellido: string; whatsapp: string } | null
               vehiculo: { id: string; marca: string; modelo: string; anio: number } | null
@@ -204,7 +234,7 @@ export default async function AgendaPage({ searchParams }: PageProps) {
             )
           })}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
