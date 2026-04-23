@@ -54,7 +54,7 @@ export async function ensureUsuario(
       if (rs?.grupo_id) return {
         grupo_id:    rs.grupo_id,
         sucursal_id: usr.sucursal_id,
-        rol:         (usr as unknown as { rol: string | null }).rol ?? 'viewer',
+        rol:         (usr as unknown as { rol: string | null }).rol ?? 'asesor_servicio',
       }
     }
   }

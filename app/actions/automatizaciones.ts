@@ -66,3 +66,44 @@ export async function toggleAutomationRuleAction(id: string, activa: boolean) {
   revalidatePath('/bandeja/workflow-studio')
   return { ok: true }
 }
+
+export async function updateAutomationRuleAction(id: string, formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autenticado' }
+
+  const nombre = (formData.get('nombre') as string)?.trim().toUpperCase()
+  const descripcion = (formData.get('descripcion') as string)?.trim() ?? null
+  const trigger_tipo = formData.get('trigger_tipo') as TriggerTipo
+  const accionesRaw = formData.get('acciones') as string
+
+  if (!nombre || !trigger_tipo) return { error: 'Nombre y trigger son requeridos' }
+
+  let acciones: unknown[]
+  try { acciones = accionesRaw ? JSON.parse(accionesRaw) : [] }
+  catch { return { error: 'Formato de acciones inválido (JSON)' } }
+
+  const { error } = await supabase
+    .from('automation_rules')
+    .update({ nombre, descripcion, trigger_tipo, acciones, actualizada_at: new Date().toISOString() })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/bandeja/workflow-studio')
+  return { ok: true }
+}
+
+export async function deleteAutomationRuleAction(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autenticado' }
+
+  const { error } = await supabase
+    .from('automation_rules')
+    .delete()
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/bandeja/workflow-studio')
+  return { ok: true }
+}

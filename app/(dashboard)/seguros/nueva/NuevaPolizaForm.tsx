@@ -101,6 +101,14 @@ export default function NuevaPolizaForm({ companias, vehiculos }: Props) {
             Cliente vinculado: <span className="font-medium text-gray-700">{vehiculoSel.cliente.nombre} {vehiculoSel.cliente.apellido}</span>
           </p>
         )}
+        {vehiculos.length === 0 && (
+          <p className="text-xs text-gray-500">
+            Sin vehículos registrados.{' '}
+            <Link href="/crm/vehiculos/nuevo?return_to=/seguros/nueva" className="text-purple-600 hover:underline">
+              Registrar nuevo vehículo
+            </Link>
+          </p>
+        )}
       </div>
 
       {/* Póliza */}

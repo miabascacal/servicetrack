@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import Link from 'next/link'
 import { Star, Send, CheckCircle2, Clock, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -65,10 +66,13 @@ export default async function CsiPage() {
           <h1 className="text-xl font-semibold text-gray-900">CSI — Satisfacción del Cliente</h1>
           <p className="text-sm text-gray-500 mt-0.5">Encuestas post-servicio y seguimiento de NPS</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors">
+        <Link
+          href="/csi/nueva"
+          className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors"
+        >
           <Plus size={16} />
           Nueva encuesta
-        </button>
+        </Link>
       </div>
 
       {/* Stats */}

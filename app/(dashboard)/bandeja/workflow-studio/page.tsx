@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, Zap, Pause, ChevronLeft } from 'lucide-react'
+import { Plus, Zap, Pause, ChevronLeft, Edit2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ToggleRuleButton } from './ToggleRuleButton'
+import { DeleteRuleButton } from './DeleteRuleButton'
 
 const TRIGGER_LABELS: Record<string, string> = {
   cita_confirmada:   'Cita confirmada',
@@ -124,8 +125,17 @@ export default async function WorkflowStudioPage() {
                   </div>
                 </div>
 
-                {/* Toggle */}
-                <ToggleRuleButton id={rule.id} activa={rule.activa} />
+                {/* Actions */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link
+                    href={`/bandeja/workflow-studio/${rule.id}/edit`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-600 border border-indigo-200 hover:bg-indigo-50 transition-colors"
+                  >
+                    <Edit2 size={12} />Editar
+                  </Link>
+                  <DeleteRuleButton id={rule.id} />
+                  <ToggleRuleButton id={rule.id} activa={rule.activa} />
+                </div>
               </div>
             )
           })}

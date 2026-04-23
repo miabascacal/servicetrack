@@ -110,9 +110,10 @@ export default async function VentasPage() {
                       ? `${lead.cliente.nombre} ${lead.cliente.apellido}`
                       : lead.nombre ?? 'Sin nombre'
                     return (
-                      <div
+                      <Link
                         key={lead.id}
-                        className="bg-white rounded-lg border border-gray-200 p-3 space-y-2 hover:shadow-sm transition-shadow"
+                        href={`/ventas/${lead.id}`}
+                        className="block bg-white rounded-lg border border-gray-200 p-3 space-y-2 hover:shadow-sm hover:border-gray-300 transition-all"
                       >
                         <p className="text-sm font-medium text-gray-900 leading-tight">{nombre}</p>
 
@@ -138,7 +139,7 @@ export default async function VentasPage() {
                             {lead.asesor.nombre} {lead.asesor.apellido}
                           </p>
                         )}
-                      </div>
+                      </Link>
                     )
                   })}
 
@@ -154,3 +155,5 @@ export default async function VentasPage() {
     </div>
   )
 }
+
+
