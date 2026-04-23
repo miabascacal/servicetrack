@@ -99,20 +99,42 @@ export async function GET(request: Request) {
 
   console.log(`Recordatorios citas ${fechaManana}: ${enviados} enviados, ${errores} errores`)
 
-  // ── Detección de no-show: citas de ayer aún en estado 'confirmada' ─────────
-  const ayer = new Date()
+  // ── Detección de no-show: citas pasadas sin asistencia ──────────────────────
+  // 1) Citas de ayer aún confirmadas (full-day missed)
+  // 2) Citas de hoy cuya hora ya pasó hace ≥30 min (mismo día)
+  const ahora = new Date()
+  const ayer = new Date(ahora)
   ayer.setDate(ayer.getDate() - 1)
   const fechaAyer = ayer.toISOString().split('T')[0]
+  const hoy = ahora.toISOString().split('T')[0]
 
-  const { data: noShows } = await supabase
-    .from('citas')
-    .select(`
-      id, hora_cita, fecha_cita, sucursal_id,
-      cliente:clientes ( id, nombre, whatsapp, email ),
-      sucursal:sucursales ( nombre )
-    `)
-    .eq('fecha_cita', fechaAyer)
-    .eq('estado', 'confirmada')
+  // Hora límite: 30 minutos antes del momento actual (en formato HH:MM)
+  const cutoffDate = new Date(ahora.getTime() - 30 * 60 * 1000)
+  const cutoffHora = cutoffDate.toTimeString().slice(0, 5)
+
+  const [{ data: noShowsAyer }, { data: noShowsHoy }] = await Promise.all([
+    supabase
+      .from('citas')
+      .select(`
+        id, hora_cita, fecha_cita, sucursal_id,
+        cliente:clientes ( id, nombre, whatsapp, email ),
+        sucursal:sucursales ( nombre )
+      `)
+      .eq('fecha_cita', fechaAyer)
+      .eq('estado', 'confirmada'),
+    supabase
+      .from('citas')
+      .select(`
+        id, hora_cita, fecha_cita, sucursal_id,
+        cliente:clientes ( id, nombre, whatsapp, email ),
+        sucursal:sucursales ( nombre )
+      `)
+      .eq('fecha_cita', hoy)
+      .eq('estado', 'confirmada')
+      .lte('hora_cita', cutoffHora),
+  ])
+
+  const noShows = [...(noShowsAyer ?? []), ...(noShowsHoy ?? [])]
 
   let noShowsActualizados = 0
 

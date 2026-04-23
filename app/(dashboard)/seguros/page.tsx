@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Shield, AlertTriangle, CheckCircle2, XCircle, Plus } from 'lucide-react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 type PolizaRow = {
@@ -56,10 +57,13 @@ export default async function SegurosPage() {
           <h1 className="text-xl font-semibold text-gray-900">Seguros</h1>
           <p className="text-sm text-gray-500 mt-0.5">Pólizas vehiculares de clientes</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors">
+        <Link
+          href="/seguros/nueva"
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors"
+        >
           <Plus size={16} />
           Nueva póliza
-        </button>
+        </Link>
       </div>
 
       {/* Stats */}

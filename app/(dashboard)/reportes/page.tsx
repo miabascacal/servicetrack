@@ -1,3 +1,4 @@
+import { createClient } from '@/lib/supabase/server'
 import {
   Calendar,
   Wrench,
@@ -25,7 +26,7 @@ const MODULOS = [
     dot: 'bg-blue-500',
     href: '/reportes/citas',
     kpis: ['Tasa show vs no-show', 'Tiempo prom. confirmación', 'Bot actuó X veces', 'Fuentes de citas'],
-    disponible: true,
+    disponible: false,
   },
   {
     key: 'taller',
@@ -37,7 +38,7 @@ const MODULOS = [
     dot: 'bg-orange-500',
     href: '/reportes/taller',
     kpis: ['OTs abiertas / cerradas', 'Tiempo promedio de reparación', 'Ventas perdidas', 'Gasto por cliente'],
-    disponible: true,
+    disponible: false,
   },
   {
     key: 'partes',
@@ -49,7 +50,7 @@ const MODULOS = [
     dot: 'bg-indigo-500',
     href: '/reportes/partes',
     kpis: ['Cotizaciones enviadas / aprobadas', 'Tasa de conversión', 'Valor total aprobado', 'Piezas más cotizadas'],
-    disponible: true,
+    disponible: false,
   },
   {
     key: 'ventas',
@@ -113,15 +114,32 @@ const MODULOS = [
   },
 ]
 
-// Mock KPIs globales del día
-const KPI_GLOBALES = [
-  { label: 'Citas hoy', valor: '12', sub: '3 sin confirmar', icon: Calendar, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { label: 'OTs activas', valor: '8', sub: '2 en espera de partes', icon: Wrench, color: 'text-orange-600', bg: 'bg-orange-50' },
-  { label: 'Clientes atendidos', valor: '21', sub: 'esta semana', icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-  { label: 'Cotizaciones', valor: '6', sub: '2 pendientes de respuesta', icon: TrendingDown, color: 'text-green-600', bg: 'bg-green-50' },
-]
+export default async function ReportesPage() {
+  const supabase = await createClient()
 
-export default function ReportesPage() {
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+  const weekAgoStr = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+  const [
+    { count: citasHoy },
+    { count: otsActivas },
+    { count: clientesSemana },
+    { count: cotizaciones },
+  ] = await Promise.all([
+    supabase.from('citas').select('id', { count: 'exact', head: true }).eq('fecha_cita', todayStr),
+    supabase.from('ordenes_trabajo').select('id', { count: 'exact', head: true }).not('estado', 'in', '("entregado","cancelado")'),
+    supabase.from('citas').select('cliente_id', { count: 'exact', head: true }).gte('fecha_cita', weekAgoStr),
+    supabase.from('cotizaciones').select('id', { count: 'exact', head: true }).eq('estado', 'enviada'),
+  ])
+
+  const KPI_GLOBALES = [
+    { label: 'Citas hoy', valor: String(citasHoy ?? 0), sub: 'programadas para hoy', icon: Calendar, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'OTs activas', valor: String(otsActivas ?? 0), sub: 'en taller actualmente', icon: Wrench, color: 'text-orange-600', bg: 'bg-orange-50' },
+    { label: 'Visitas esta semana', valor: String(clientesSemana ?? 0), sub: 'últimos 7 días', icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: 'Cotizaciones enviadas', valor: String(cotizaciones ?? 0), sub: 'pendientes de respuesta', icon: TrendingDown, color: 'text-green-600', bg: 'bg-green-50' },
+  ]
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -156,7 +174,6 @@ export default function ReportesPage() {
               <div className={`bg-white rounded-xl border ${m.disponible ? m.border : 'border-gray-200'} p-5 h-full flex flex-col ${
                 m.disponible ? 'hover:shadow-md transition-shadow cursor-pointer' : 'opacity-60'
               }`}>
-                {/* Icon + label */}
                 <div className="flex items-center gap-3 mb-4">
                   <div className={`w-10 h-10 rounded-xl ${m.bg} flex items-center justify-center`}>
                     <Icon size={20} className={m.color} />
@@ -168,8 +185,6 @@ export default function ReportesPage() {
                     )}
                   </div>
                 </div>
-
-                {/* KPIs list */}
                 <ul className="space-y-1.5 flex-1">
                   {m.kpis.map((kpi) => (
                     <li key={kpi} className="flex items-center gap-2 text-xs text-gray-600">
@@ -178,8 +193,6 @@ export default function ReportesPage() {
                     </li>
                   ))}
                 </ul>
-
-                {/* CTA */}
                 {m.disponible && (
                   <div className={`mt-4 pt-3 border-t ${m.border} flex items-center justify-between`}>
                     <span className={`text-xs font-medium ${m.color}`}>Ver reporte</span>
@@ -188,7 +201,6 @@ export default function ReportesPage() {
                 )}
               </div>
             )
-
             return m.disponible ? (
               <Link key={m.key} href={m.href}>{card}</Link>
             ) : (
@@ -202,7 +214,7 @@ export default function ReportesPage() {
       <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
         <Clock size={16} className="text-blue-500 mt-0.5 shrink-0" />
         <p className="text-sm text-blue-700">
-          Los reportes de <strong>Ventas, Atención a Clientes, CSI, Seguros y Dashboards</strong> estarán disponibles en los siguientes sprints. Los datos se generan automáticamente conforme el equipo usa la plataforma.
+          Los reportes detallados estarán disponibles en los siguientes sprints. Los KPIs globales se actualizan en tiempo real.
         </p>
       </div>
     </div>
