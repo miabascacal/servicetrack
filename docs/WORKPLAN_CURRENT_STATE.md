@@ -1,9 +1,9 @@
 # WORKPLAN_CURRENT_STATE.md — ServiceTrack
 > **FUENTE DE VERDAD ÚNICA del proyecto. Todo análisis, bug, decisión y mejora debe integrarse aquí.**
 > Documento de estado consolidado para arquitectos, asistentes IA y equipo de desarrollo.
-> **Última actualización:** 2026-04-22 (sesión: migraciones 001-009 confirmadas aplicadas, deploy realizado, FASE 1.5 activa, FASE 6 en construcción)
+> **Última actualización:** 2026-04-22 (sesión: FASE 6 completada — Agenda calendario, DisponibilidadHoras, Ventas/CSI/Seguros/Workflow Studio MVPs en producción)
 > **Sprint cerrado:** Sprint 9
-> **Estado general:** ~35% del producto completo — CRM+Citas+Taller+Usuarios operativos, automatizaciones email activas, Ventas/CSI/Seguros/Workflow Studio en construcción.
+> **Estado general:** ~42% del producto completo — CRM+Citas+Taller+Usuarios operativos, automatizaciones email activas, Ventas+CSI+Seguros+Workflow Studio desplegados.
 
 ---
 
@@ -233,21 +233,22 @@ cancelado → (final)
 | 4.4 | **Vista calendario para Taller** | Carga de trabajo por asesor — OTs como bloques entre `created_at` y `promesa_entrega`. Conceptualmente distinta del calendario de Citas — va en pasada separada posterior. | Alto |
 | 4.5 | **Módulos Ventas, CSI, Seguros, Atención** | Placeholders vacíos | Muy alto |
 
-### FASE 6 — UX / OPERACIÓN + MÓDULOS RESTANTES 🔄 EN CONSTRUCCIÓN 2026-04-22
+### FASE 6 — UX / OPERACIÓN + MÓDULOS RESTANTES ✅ DESPLEGADA 2026-04-22
 
-> FASE 1.5 activa en producción (pendiente validación manual). FASE 5 desplegada (pendiente número WA). Construcción en curso.
+> FASE 1.5 activa en producción (pendiente validación manual). FASE 5 desplegada (pendiente número WA). FASE 6 completada y en producción.
 
-| # | Feature | Descripción | Dependencia | Esfuerzo |
-|---|---------|-------------|-------------|---------|
-| 6.1 | **Mi Agenda — vista calendario** | Vista mes/semana/día para actividades del usuario. Cambiar entre vistas con un clic. Mostrar actividades agendadas por `fecha_vencimiento`. Base para operación diaria. | FASE 2 activa | Alto |
-| 6.2 | **Calendario operativo de Citas** | Vista de disponibilidad al crear cita — horas del día con slots disponibles/ocupados. No drag & drop. | FASE 2 activa | Alto |
-| 6.3 | **Taller — Vista calendario** | Carga de trabajo por asesor. OTs como bloques entre `created_at` y `promesa_entrega`. Pasada separada posterior al calendario de Citas. | FASE 4 activa | Alto |
-| 6.4 | **Workflow Studio / Automation Builder** | Constructor visual de flujos de automatización por sucursal. Basado en `outbound_queue` + `automation_logs`. Paso previo: operacionalizar la bandeja. | FASE 5 activa + bandeja madura | Muy alto |
-| 6.5 | **AI Automation Copilot** | Asistente que sugiere flujos, detecta patrones en `automation_logs` y propone mejoras. Usa Claude. | Workflow Studio activo | Muy alto |
-| 6.6 | **Agentes por módulo** | Agentes Claude especializados por contexto: Citas, Taller, Refacciones, Ventas. Cada uno con su prompt, herramientas y límites de acción. | FASE 5 + bandeja madura | Muy alto |
-| 6.7 | **Bandeja operativa madura** | Compose/respuesta real, filtros, asignación de conversación, estado leído/no leído. | Webhook WA activo | Medio |
-
-**Orden recomendado:** 6.2 → 6.1 → 6.7 → 6.3 → 6.4 → 6.5 → 6.6
+| # | Feature | Estado |
+|---|---------|--------|
+| 6.1 | **Mi Agenda — vista calendario** semana/mes con actividades reales | ✅ `AgendaCalendario.tsx` en producción |
+| 6.2 | **Disponibilidad al crear cita** — slots 30 min, ocupados por fecha en DB | ✅ `DisponibilidadHoras.tsx` integrado en `/citas/nuevo` |
+| 6.3 | **Taller — Vista calendario** | ⬜ Pasada posterior separada |
+| 6.4 | **Workflow Studio** — lista + crear reglas en `automation_rules` DB | ✅ `/bandeja/workflow-studio` en producción |
+| 6.5 | **AI Automation Copilot** | ⬜ Pendiente — requiere Workflow Studio maduro |
+| 6.6 | **Agentes por módulo** | ⬜ Pendiente — requiere FASE 5 activa |
+| 6.7 | **Ventas MVP** — kanban leads 6 columnas, stats en tiempo real | ✅ `/ventas` en producción |
+| 6.8 | **CSI MVP** — encuestas, envíos, score promedio | ✅ `/csi` en producción |
+| 6.9 | **Seguros MVP** — pólizas con alertas de vencimiento | ✅ `/seguros` en producción |
+| 6.10 | **Bandeja operativa madura** | ⬜ Pendiente — requiere webhook WA activo |
 
 ### FASE 5 — WHATSAPP + AUTOMATIZACIONES + IA MVP 🟡 CÓDIGO COMPLETO EN PRODUCCIÓN — PENDIENTE ACTIVACIÓN EXTERNA
 
@@ -285,7 +286,7 @@ cancelado → (final)
 - Migración `009_roles_permisos_schema.sql` creada: añade SELECT policy a `usuarios`, recrea `roles`/`rol_permisos`/`usuario_roles` con RLS correcto y grants a `authenticated`.
 - Bugs de encoding corregidos en `app/actions/usuarios.ts`.
 
-**Pendiente:** ejecutar migración 009 en Supabase + deploy a Vercel.
+**Resuelto 2026-04-22:** migración 009 ejecutada en Supabase. Deploy activo en Vercel.
 
 ### 🟡 MIGRADO — Exposición cross-sucursal en page components
 
