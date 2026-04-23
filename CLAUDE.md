@@ -103,8 +103,10 @@ EMAIL_FROM=               # email desde el que se envían las notificaciones
 ```
 
 ### Migraciones pendientes en Supabase
-- Ejecutar `supabase/migrations/002_email_config.sql`
-- `003_ai_foundation.sql` ya fue ejecutada; la fuente real de cambios posteriores son las migraciones `004` a `008`
+- Ejecutar `supabase/migrations/002_email_config.sql` ⬜ pendiente
+- `003_ai_foundation.sql` — ✅ ejecutada
+- `004` a `008` — ✅ ejecutadas (mensajería, taller, DMS, ENUM estado_ot)
+- `010` a `013` — ✅ ejecutadas (ventas/leads, CSI, seguros, workflow_studio)
 
 ### WhatsApp Business API (Meta) — proceso largo
 - Requiere cuenta Meta Business verificada
@@ -116,7 +118,24 @@ EMAIL_FROM=               # email desde el que se envían las notificaciones
 - [ ] Vincular vehículo — preguntar empresa al vincular
 - [ ] Vista usuarios — mostrar estado de invitación
 - [ ] OT — verificar flujo completo — nunca se probó después de los fixes de estado
-- [ ] Módulos vacíos — Ventas, CSI, Seguros, Reportes, Atención
+- [x] Ventas: kanban MVP + /ventas/nuevo ✅ Sprint 9
+- [x] CSI: encuestas y envíos MVP ✅ Sprint 9
+- [x] Seguros: pólizas + /seguros/nueva ✅ Sprint 9
+- [x] Workflow Studio: CRUD de reglas ✅ Sprint 9
+- [x] Reportes: KPIs reales de BD ✅ Sprint 9
+
+### FASE 5 — Checklist de activación WhatsApp/IA (BLOQUEADO — dependencias externas)
+
+Para activar el canal WhatsApp, en este orden exacto:
+
+1. **Poblar `wa_numeros`** — INSERT con `sucursal_id`, `phone_number_id` y `access_token` del número aprobado por Meta
+2. **Configurar `WA_VERIFY_TOKEN`** en Vercel → Settings → Environment Variables (All Environments)
+3. **Configurar webhook en Meta Business** → App → WhatsApp → Configuration → Webhook URL: `https://servicetrack-one.vercel.app/api/webhooks/whatsapp` con el mismo `WA_VERIFY_TOKEN`
+4. **Activar bot** → INSERT en `ai_settings` con `sucursal_id` de la sucursal, `activo = TRUE`
+5. **Smoke test saliente** — desde citas, confirmar una cita y verificar que llega WA al cliente
+6. **Implementar webhook entrante** — `app/api/webhooks/whatsapp/route.ts` (pendiente de código)
+
+Ninguno de estos pasos requiere cambio de código (excepto el punto 6). Son configuración de infraestructura.
 
 ---
 
