@@ -11,6 +11,7 @@ import {
   mensajeConfirmacionCita,
   mensajeCitaCancelada,
   mensajeRecordatorio2h,
+  mensajeNoShow,
 } from '@/lib/whatsapp'
 import { enviarEmail } from '@/lib/email'
 
@@ -224,8 +225,7 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
           entidad_tipo:     'cita',
           entidad_id:       citaId,
           cliente_id:       c.cliente.id,
-          // Sprint 8 Fase 1: propagar contexto para persistencia conversacional
-          usuario_asesor_id: user.id,   // usuarios.id == auth UUID (ver ensure-usuario.ts)
+          usuario_asesor_id: user.id,
           contexto_tipo:    'cita',
           contexto_id:      citaId,
         })
@@ -238,6 +238,48 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
           sucursal_id: c.sucursal_id,
           modulo:      'citas',
         })
+      }
+    }
+
+    if (nuevoEstado === 'no_show') {
+      // Encolar seguimiento 24h después del no-show (best-effort)
+      try {
+        if (c.cliente.whatsapp) {
+          const sendAfter = new Date(Date.now() + 24 * 60 * 60 * 1000)
+          type QueueInsert = {
+            sucursal_id: string; canal: string; workflow_key: string
+            destinatario_tipo: string; destinatario_id: string
+            destinatario_telefono: string | null; destinatario_email: string | null
+            contenido: string; message_source: string; send_after: string
+            estado: string; approval_required: boolean; intentos: number
+            max_intentos: number; referencia_tipo: string; referencia_id: string
+          }
+          const row: QueueInsert = {
+            sucursal_id:          c.sucursal_id,
+            canal:                'whatsapp',
+            workflow_key:         'seguimiento_no_show',
+            destinatario_tipo:    'cliente',
+            destinatario_id:      c.cliente.id,
+            destinatario_telefono: c.cliente.whatsapp,
+            destinatario_email:   null,
+            contenido:            mensajeNoShow({
+              nombre:  c.cliente.nombre,
+              hora:    datosMensaje.hora,
+              agencia: datosMensaje.agencia,
+            }),
+            message_source:       'agent_bot',
+            send_after:           sendAfter.toISOString(),
+            estado:               'pending',
+            approval_required:    false,
+            intentos:             0,
+            max_intentos:         2,
+            referencia_tipo:      'cita',
+            referencia_id:        citaId,
+          }
+          void adminSupabase.from('outbound_queue').insert(row)
+        }
+      } catch {
+        // Best-effort: no falla la operación principal
       }
     }
   }

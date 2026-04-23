@@ -17,6 +17,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrCreateThread } from '@/lib/threads'
 import { classifyIntent } from '@/lib/ai/classify-intent'
 import { detectSentiment } from '@/lib/ai/detect-sentiment'
+import { generarRespuestaBot } from '@/lib/ai/bot-citas'
+import { enviarMensajeWA } from '@/lib/whatsapp'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -235,8 +237,69 @@ export async function POST(request: Request) {
             })
             .eq('id', msgRow.id)
 
-          // Escalar a humano si confianza baja
-          if (thread_id && intentResult.confidence < confidenceThreshold) {
+          // ── 6. Bot de citas (intent agendar_cita con alta confianza) ───────
+          if (
+            intentResult.intent === 'agendar_cita' &&
+            intentResult.confidence >= confidenceThreshold &&
+            cliente
+          ) {
+            // Obtener nombre del cliente para personalizar
+            const { data: clienteData } = await supabase
+              .from('clientes')
+              .select('nombre, apellido')
+              .eq('id', cliente.id)
+              .single()
+
+            try {
+              const botResult = await generarRespuestaBot(contenido, {
+                sucursal_id:    sucursal_id,
+                cliente_id:     cliente.id,
+                cliente_nombre: clienteData ? `${clienteData.nombre} ${clienteData.apellido}`.trim() : null,
+                thread_id,
+              })
+
+              if (botResult.respuesta) {
+                // Obtener teléfono del cliente para enviar WA
+                const { data: clienteTel } = await supabase
+                  .from('clientes')
+                  .select('whatsapp')
+                  .eq('id', cliente.id)
+                  .single()
+
+                if (clienteTel?.whatsapp) {
+                  void enviarMensajeWA({
+                    sucursal_id,
+                    modulo:         'citas',
+                    telefono:       clienteTel.whatsapp,
+                    mensaje:        botResult.respuesta,
+                    tipo:           'custom',
+                    cliente_id:     cliente.id,
+                    enviado_por_bot: true,
+                    contexto_tipo:  'general',
+                    contexto_id:    thread_id ?? undefined,
+                  })
+                }
+              }
+
+              // Actualizar estado del hilo
+              if (thread_id) {
+                const nuevoEstado = botResult.handoff ? 'waiting_agent' : 'bot_active'
+                await supabase
+                  .from('conversation_threads')
+                  .update({ estado: nuevoEstado })
+                  .eq('id', thread_id)
+              }
+            } catch {
+              // Bot falla silenciosamente — el mensaje queda para atención humana
+              if (thread_id) {
+                await supabase
+                  .from('conversation_threads')
+                  .update({ estado: 'waiting_agent' })
+                  .eq('id', thread_id)
+              }
+            }
+          } else if (thread_id && intentResult.confidence < confidenceThreshold) {
+            // Escalar a humano si confianza baja
             await supabase
               .from('conversation_threads')
               .update({ estado: 'waiting_agent' })
