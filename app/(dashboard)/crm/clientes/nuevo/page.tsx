@@ -306,14 +306,22 @@ export default function NuevoClientePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp <span className="text-red-500">*</span></label>
-              <input name="whatsapp" required type="tel" placeholder="+5255123456789"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
-              <p className="text-xs text-gray-400 mt-1">Formato: +52 seguido de 10 dígitos</p>
+              <div className="flex">
+                <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-gray-300 bg-gray-50 text-sm text-gray-500 font-mono">+52</span>
+                <input name="whatsapp" required type="tel" placeholder="5512345678" maxLength={10}
+                  pattern="[0-9]{10}"
+                  title="10 dígitos: lada (2-3 dígitos) + número"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-r-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">10 dígitos: lada + número (ej: 5512345678)</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono de contacto</label>
-              <input name="telefono_contacto" type="tel" placeholder="+5255123456789"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+              <div className="flex">
+                <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-gray-300 bg-gray-50 text-sm text-gray-500 font-mono">+52</span>
+                <input name="telefono_contacto" type="tel" placeholder="5512345678" maxLength={10}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-r-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email principal</label>

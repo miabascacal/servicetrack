@@ -10,6 +10,8 @@ import { DisponibilidadHoras } from '../DisponibilidadHoras'
 
 type ClienteOption = { id: string; nombre: string; apellido: string; whatsapp: string }
 type VehiculoOption = { id: string; marca: string; modelo: string; anio: number; placa: string | null }
+type AsesorOption = { id: string; nombre: string; apellido: string }
+type ConfigCitas  = { horario_inicio: string; horario_fin: string; intervalo_minutos: number }
 
 export default function NuevaCitaPage() {
   const router = useRouter()
@@ -35,6 +37,32 @@ export default function NuevaCitaPage() {
   const [fechaCita, setFechaCita] = useState(defaultDate)
   const [horaCita, setHoraCita] = useState('')
   const [citasOcupadas, setCitasOcupadas] = useState<{ hora_cita: string; estado: string }[]>([])
+
+  // Config de citas (horario/intervalo)
+  const [configCitas, setConfigCitas] = useState<ConfigCitas>({ horario_inicio: '08:00', horario_fin: '18:00', intervalo_minutos: 30 })
+
+  // Asesores
+  const [asesores, setAsesores] = useState<AsesorOption[]>([])
+  const [asesorId, setAsesorId] = useState('')
+
+  // Fetch config citas + asesores on mount
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from('configuracion_citas_sucursal')
+      .select('horario_inicio, horario_fin, intervalo_minutos')
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (data) setConfigCitas({ horario_inicio: data.horario_inicio, horario_fin: data.horario_fin, intervalo_minutos: data.intervalo_minutos })
+      })
+    supabase
+      .from('usuarios')
+      .select('id, nombre, apellido')
+      .eq('activo', true)
+      .order('nombre')
+      .then(({ data }) => setAsesores((data ?? []) as AsesorOption[]))
+  }, [])
 
   // Load preselected client
   useEffect(() => {
@@ -104,6 +132,7 @@ export default function NuevaCitaPage() {
     const formData = new FormData(e.currentTarget)
     formData.set('cliente_id', selectedCliente.id)
     formData.set('vehiculo_id', selectedVehiculoId)
+    if (asesorId) formData.set('asesor_id', asesorId)
     const result = await createCitaAction(formData)
     if (result?.error) { setError(result.error); setSaving(false) }
     else if (result?.id) router.push(`/citas/${result.id}`)
@@ -242,6 +271,9 @@ export default function NuevaCitaPage() {
             citasOcupadas={citasOcupadas}
             onSelect={setHoraCita}
             horaSeleccionada={horaCita}
+            horaInicio={configCitas.horario_inicio}
+            horaFin={configCitas.horario_fin}
+            intervaloMinutos={configCitas.intervalo_minutos}
           />
         </div>
         <input type="hidden" name="hora_cita" value={horaCita} />
@@ -259,6 +291,21 @@ export default function NuevaCitaPage() {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+        {asesores.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Asesor asignado</label>
+            <select
+              value={asesorId}
+              onChange={e => setAsesorId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Sin asesor asignado</option>
+              {asesores.map(a => (
+                <option key={a.id} value={a.id}>{a.nombre} {a.apellido}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
           <textarea

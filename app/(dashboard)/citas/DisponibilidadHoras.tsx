@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 
 interface CitaOcupada {
@@ -13,26 +13,47 @@ interface Props {
   citasOcupadas: CitaOcupada[]
   onSelect: (hora: string) => void
   horaSeleccionada?: string
+  horaInicio?: string      // HH:MM, default '08:00'
+  horaFin?: string         // HH:MM, default '18:00'
+  intervaloMinutos?: number // 15 | 30 | 60, default 30
 }
 
-// MVP: slots fijos 08:00–18:00 cada 30 min. TODO: leer horario desde configuracion_sucursal cuando exista esa tabla
-const HORAS = [
-  '08:00','08:30','09:00','09:30','10:00','10:30',
-  '11:00','11:30','12:00','12:30','13:00','13:30',
-  '14:00','14:30','15:00','15:30','16:00','16:30',
-  '17:00','17:30','18:00',
-]
+function generarSlots(inicio: string, fin: string, intervalo: number): string[] {
+  const slots: string[] = []
+  const [hI, mI] = inicio.split(':').map(Number)
+  const [hF, mF] = fin.split(':').map(Number)
+  let mins = hI * 60 + mI
+  const finMins = hF * 60 + mF
+  while (mins <= finMins) {
+    slots.push(`${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`)
+    mins += intervalo
+  }
+  return slots
+}
 
-export function DisponibilidadHoras({ fecha, citasOcupadas, onSelect, horaSeleccionada }: Props) {
+export function DisponibilidadHoras({
+  fecha,
+  citasOcupadas,
+  onSelect,
+  horaSeleccionada,
+  horaInicio = '08:00',
+  horaFin = '18:00',
+  intervaloMinutos = 30,
+}: Props) {
   const [seleccionada, setSeleccionada] = useState(horaSeleccionada ?? '')
 
   useEffect(() => {
     if (horaSeleccionada) setSeleccionada(horaSeleccionada)
   }, [horaSeleccionada])
 
+  const HORAS = useMemo(
+    () => generarSlots(horaInicio, horaFin, intervaloMinutos),
+    [horaInicio, horaFin, intervaloMinutos]
+  )
+
   const horasOcupadas = new Set(
     citasOcupadas
-      .filter(c => !['cancelada','no_show'].includes(c.estado))
+      .filter(c => !['cancelada', 'no_show'].includes(c.estado))
       .map(c => c.hora_cita.slice(0, 5))
   )
 

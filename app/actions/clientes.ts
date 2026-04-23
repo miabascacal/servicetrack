@@ -5,6 +5,15 @@ import { createClient } from '@/lib/supabase/server'
 import { ensureUsuario } from '@/lib/ensure-usuario'
 import { tieneRol } from '@/lib/permisos'
 
+// ── Normalizar WhatsApp ────────────────────────────────────────────────────
+function normalizarWA(raw: string): string | null {
+  const digits = raw.replace(/\D/g, '')
+  if (digits.length === 10) return '+52' + digits
+  if (digits.length === 12 && digits.startsWith('52')) return '+' + digits
+  if (digits.length === 13 && raw.startsWith('+52')) return raw
+  return null
+}
+
 // ── Create Cliente ─────────────────────────────────────────────────────────
 export async function createClienteAction(formData: FormData) {
   const supabase = await createClient()
@@ -18,11 +27,11 @@ export async function createClienteAction(formData: FormData) {
 
   const nombre = (formData.get('nombre') as string)?.trim().toUpperCase()
   const apellido = (formData.get('apellido') as string)?.trim().toUpperCase()
-  const whatsapp = (formData.get('whatsapp') as string)?.trim()
+  const waRaw = (formData.get('whatsapp') as string)?.trim()
+  const whatsapp = waRaw ? normalizarWA(waRaw) : null
 
-  if (!nombre || !apellido || !whatsapp) {
-    return { error: 'Nombre, apellido y WhatsApp son requeridos' }
-  }
+  if (!nombre || !apellido) return { error: 'Nombre y apellido son requeridos' }
+  if (!whatsapp) return { error: 'WhatsApp inválido: ingresa 10 dígitos (lada + número)' }
 
   const { data, error } = await supabase
     .from('clientes')
@@ -163,11 +172,11 @@ export async function updateClienteAction(id: string, formData: FormData) {
 
   const nombre = (formData.get('nombre') as string)?.trim().toUpperCase()
   const apellido = (formData.get('apellido') as string)?.trim().toUpperCase()
-  const whatsapp = (formData.get('whatsapp') as string)?.trim()
+  const waRaw = (formData.get('whatsapp') as string)?.trim()
+  const whatsapp = waRaw ? normalizarWA(waRaw) : null
 
-  if (!nombre || !apellido || !whatsapp) {
-    return { error: 'Nombre, apellido y WhatsApp son requeridos' }
-  }
+  if (!nombre || !apellido) return { error: 'Nombre y apellido son requeridos' }
+  if (!whatsapp) return { error: 'WhatsApp inválido: ingresa 10 dígitos (lada + número)' }
 
   const { error } = await supabase
     .from('clientes')

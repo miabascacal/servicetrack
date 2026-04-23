@@ -45,6 +45,7 @@ export async function createCitaAction(formData: FormData) {
   const vehiculo_id = (formData.get('vehiculo_id') as string) || null
   const servicio    = (formData.get('servicio')    as string)?.trim() || null
   const notas       = (formData.get('notas')       as string)?.trim() || null
+  const asesor_id   = (formData.get('asesor_id')   as string) || null
 
   const { data, error } = await supabase
     .from('citas')
@@ -56,6 +57,7 @@ export async function createCitaAction(formData: FormData) {
       hora_cita,
       servicio:    servicio    || null,
       notas:       notas       || null,
+      asesor_id:   asesor_id   || null,
       estado:      'pendiente_contactar' as unknown as EstadoCita,
     })
     .select('id')

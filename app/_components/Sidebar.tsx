@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   Users,
   Calendar,
+  CalendarDays,
   Wrench,
   Package,
   TrendingUp,
@@ -24,6 +25,7 @@ import { logoutAction } from '@/app/actions/auth'
 
 const NAV_ITEMS = [
   { label: 'CRM', href: '/crm', icon: Users },
+  { label: 'Mi Agenda', href: '/agenda', icon: CalendarDays },
   { label: 'Citas', href: '/citas', icon: Calendar },
   { label: 'Taller', href: '/taller', icon: Wrench },
   { label: 'Refacciones', href: '/refacciones', icon: Package },

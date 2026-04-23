@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Search, Plus, User, Building2, Car, ChevronRight } from 'lucide-react'
+// Note: Plus is still used in the contextual "Crear nuevo cliente" empty-state link
 import { createClient } from '@/lib/supabase/client'
 
 type VehiculoInfo = { id: string; marca: string; modelo: string; anio: number; placa: string | null }
@@ -179,18 +180,9 @@ export default function ClientesPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">CRM</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Busca clientes, empresas o vehículos</p>
-        </div>
-        <Link
-          href="/crm/clientes/nuevo"
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={16} />
-          Nuevo Cliente
-        </Link>
+      <div>
+        <h1 className="text-xl font-semibold text-gray-900">CRM</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Busca clientes, empresas o vehículos</p>
       </div>
 
       {/* Buscador */}
