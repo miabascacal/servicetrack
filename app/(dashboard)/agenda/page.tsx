@@ -26,17 +26,30 @@ function toDateStr(d: Date): string {
 }
 
 export default async function MiAgendaPage({ searchParams }: PageProps) {
-  const { vista: vistaParam = 'semana', fecha: fechaParam } = await searchParams
-  const vista: Vista =
-    vistaParam === 'mes' || vistaParam === 'semana' || vistaParam === 'dia'
-      ? vistaParam
-      : 'semana'
+  const { vista: vistaParam, fecha: fechaParam } = await searchParams
 
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return null
+
+  // Leer vista default desde config solo cuando no viene en URL
+  let vistaDefault: Vista = 'semana'
+  if (!vistaParam) {
+    const { data: cfgVista } = await supabase
+      .from('configuracion_citas_sucursal')
+      .select('agenda_vista_default')
+      .limit(1)
+      .maybeSingle()
+    const raw = (cfgVista as unknown as { agenda_vista_default?: string } | null)?.agenda_vista_default
+    if (raw === 'mes' || raw === 'semana' || raw === 'dia') vistaDefault = raw
+  }
+
+  const vista: Vista =
+    vistaParam === 'mes' || vistaParam === 'semana' || vistaParam === 'dia'
+      ? vistaParam
+      : vistaDefault
 
   // Parse and normalize anchor date
   const raw = fechaParam ? new Date(fechaParam + 'T00:00:00') : new Date()

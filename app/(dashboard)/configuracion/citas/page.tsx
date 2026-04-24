@@ -24,6 +24,7 @@ type ConfigCitas = {
   dias_disponibles: number[]
   intervalo_minutos: number
   activa: boolean
+  agenda_vista_default: 'mes' | 'semana' | 'dia'
 }
 
 export default async function ConfigCitasPage() {
@@ -40,7 +41,7 @@ export default async function ConfigCitasPage() {
   const { data: cfg } = usuario?.sucursal_id
     ? await supabase
         .from('configuracion_citas_sucursal')
-        .select('horario_inicio, horario_fin, dias_disponibles, intervalo_minutos, activa')
+        .select('horario_inicio, horario_fin, dias_disponibles, intervalo_minutos, activa, agenda_vista_default')
         .eq('sucursal_id', usuario.sucursal_id)
         .single()
     : { data: null }
@@ -51,6 +52,7 @@ export default async function ConfigCitasPage() {
     dias_disponibles: [1, 2, 3, 4, 5, 6],
     intervalo_minutos: 30,
     activa: true,
+    agenda_vista_default: 'semana' as const,
   }
 
   return (
@@ -135,6 +137,25 @@ export default async function ConfigCitasPage() {
               </label>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
+        <h2 className="text-sm font-semibold text-gray-900">Preferencias de agenda</h2>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Vista por defecto de Mi Agenda</label>
+          <select
+            name="agenda_vista_default"
+            defaultValue={config.agenda_vista_default}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            <option value="mes">Mes</option>
+            <option value="semana">Semana</option>
+            <option value="dia">Día</option>
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            Vista inicial al abrir /agenda cuando no hay parámetro de vista en la URL.
+          </p>
         </div>
       </div>
     </form>

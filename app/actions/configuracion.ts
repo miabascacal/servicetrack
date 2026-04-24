@@ -17,6 +17,10 @@ export async function upsertConfigCitasAction(formData: FormData) {
   const horario_fin    = formData.get('horario_fin')    as string
   const intervalo_minutos = parseInt(formData.get('intervalo_minutos') as string) || 30
   const activa = formData.get('activa') === 'true'
+  const rawVista = formData.get('agenda_vista_default') as string
+  const agenda_vista_default = (['mes', 'semana', 'dia'] as const).includes(rawVista as 'mes' | 'semana' | 'dia')
+    ? rawVista
+    : 'semana'
 
   const rawDias = formData.getAll('dias_disponibles').map(Number)
   const dias_disponibles = rawDias.length > 0 ? rawDias : [1, 2, 3, 4, 5, 6]
@@ -25,7 +29,10 @@ export async function upsertConfigCitasAction(formData: FormData) {
 
   const { error } = await supabase
     .from('configuracion_citas_sucursal')
-    .upsert({ sucursal_id: ctx.sucursal_id, horario_inicio, horario_fin, dias_disponibles, intervalo_minutos, activa }, { onConflict: 'sucursal_id' })
+    .upsert(
+      { sucursal_id: ctx.sucursal_id, horario_inicio, horario_fin, dias_disponibles, intervalo_minutos, activa, agenda_vista_default },
+      { onConflict: 'sucursal_id' }
+    )
 
   if (error) return { error: error.message }
   revalidatePath('/configuracion/citas')
