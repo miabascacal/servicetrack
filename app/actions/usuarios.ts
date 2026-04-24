@@ -177,6 +177,95 @@ export async function reenviarInvitacionAction(formData: FormData) {
   return { success: true, email: authLookup.authUser.email }
 }
 
+export async function desactivarUsuarioAction(usuarioId: string) {
+  const auth = await getAdminCtx()
+  if ('error' in auth) return { error: auth.error }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user?.id === usuarioId) return { error: 'No puedes desactivarte a ti mismo' }
+
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('usuarios')
+    .update({ activo: false })
+    .eq('id', usuarioId)
+    .eq('sucursal_id', auth.ctx.sucursal_id)
+
+  if (error) return { error: `Error al desactivar: ${error.message}` }
+
+  revalidatePath('/usuarios')
+  return { ok: true }
+}
+
+export async function reactivarUsuarioAction(usuarioId: string) {
+  const auth = await getAdminCtx()
+  if ('error' in auth) return { error: auth.error }
+
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('usuarios')
+    .update({ activo: true })
+    .eq('id', usuarioId)
+    .eq('sucursal_id', auth.ctx.sucursal_id)
+
+  if (error) return { error: `Error al reactivar: ${error.message}` }
+
+  revalidatePath('/usuarios')
+  return { ok: true }
+}
+
+export async function borrarUsuarioAction(usuarioId: string) {
+  const auth = await getAdminCtx()
+  if ('error' in auth) return { error: auth.error }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user?.id === usuarioId) return { error: 'No puedes eliminar tu propia cuenta' }
+
+  const admin = createAdminClient()
+
+  const { data: usr } = await admin
+    .from('usuarios')
+    .select('id')
+    .eq('id', usuarioId)
+    .eq('sucursal_id', auth.ctx.sucursal_id)
+    .maybeSingle()
+
+  if (!usr) return { error: 'Usuario no encontrado en esta sucursal' }
+
+  // Check for history across key tables — if any, block deletion
+  const [r1, r2, r3, r4] = await Promise.all([
+    admin.from('citas').select('id', { count: 'exact', head: true }).eq('asesor_id', usuarioId),
+    admin.from('ordenes_trabajo').select('id', { count: 'exact', head: true }).eq('asesor_id', usuarioId),
+    admin.from('actividades').select('id', { count: 'exact', head: true }).eq('usuario_asignado_id', usuarioId),
+    admin.from('mensajes').select('id', { count: 'exact', head: true }).eq('usuario_asesor_id', usuarioId),
+  ])
+
+  const historial = (r1.count ?? 0) + (r2.count ?? 0) + (r3.count ?? 0) + (r4.count ?? 0)
+  if (historial > 0) {
+    return { error: 'Este usuario tiene historial en el sistema. Solo puede desactivarse.' }
+  }
+
+  const { error: eAuth } = await admin.auth.admin.deleteUser(usuarioId)
+  if (eAuth && !eAuth.message?.includes('not found')) {
+    return { error: `Error al eliminar cuenta: ${eAuth.message}` }
+  }
+
+  const { error: eUsr } = await admin
+    .from('usuarios')
+    .delete()
+    .eq('id', usuarioId)
+    .eq('sucursal_id', auth.ctx.sucursal_id)
+
+  if (eUsr) return { error: `Error al eliminar usuario: ${eUsr.message}` }
+
+  revalidatePath('/usuarios')
+  return { ok: true }
+}
+
 export async function resetPasswordAdminAction(formData: FormData) {
   const auth = await getAdminCtx()
   if ('error' in auth) return { error: auth.error }

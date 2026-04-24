@@ -40,7 +40,6 @@ export function usePermisos() {
       const { data: usuarioRoles } = await supabase
         .from('usuario_roles')
         .select(`
-          sucursal_id,
           rol:roles (
             es_super_admin,
             rol_permisos ( modulo, puede_ver, puede_crear, puede_editar, puede_eliminar, puede_exportar )
@@ -66,7 +65,7 @@ export function usePermisos() {
           puede_exportar: boolean
         }[]
       }
-      type UsuarioRolRow = { sucursal_id: string | null; rol: RolWithPermisos }
+      type UsuarioRolRow = { rol: RolWithPermisos }
       const typedRoles = (usuarioRoles ?? []) as unknown as UsuarioRolRow[]
 
       // Check super admin

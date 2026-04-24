@@ -274,7 +274,7 @@ export default async function UsuariosPage() {
                       )}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <UsuarioAcciones usuarioId={u.id} authStatus={u.authStatus} authStatusKnown={!authError} />
+                      <UsuarioAcciones usuarioId={u.id} authStatus={u.authStatus} authStatusKnown={!authError} activo={u.activo} />
                     </td>
                   </tr>
                 )
