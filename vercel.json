@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/outbound-queue-flush",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }
