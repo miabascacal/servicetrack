@@ -273,6 +273,9 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
   - NO normalizar: `email`, `whatsapp`, `notas_internas`, `promesa_entrega`, `tokens`
 - **Trazabilidad de estado OT:** `updated_at` manejado por trigger `t_ordenes_trabajo_updated` (migration 005). **TODO pendiente:** agregar columna `updated_by` UUID en migración futura cuando se requiera auditoría por usuario.
 - **`usuarios.id` = `auth.users.id`** — La tabla `usuarios` usa el UUID de auth como PK. NO existe columna `auth_user_id`. NUNCA hacer `.eq('auth_user_id', user.id)`. Siempre usar `ensureUsuario(supabase, user.id, user.email)` en server actions para obtener `sucursal_id` y `grupo_id`.
+- **Modelo de roles:** `usuario_roles` NO tiene columna `sucursal_id`. El scoping de roles es por grupo (via `roles.grupo_id`) y por sucursal vía RLS (policy verifica que el `usuario_id` apunte a un usuario en `get_mi_sucursal_id()`). Al hacer query sobre `usuario_roles`, NUNCA seleccionar `sucursal_id`.
+- **Asignación de roles:** usar `asignarRolAction(usuarioId, rolId)` y `removerRolAction(asignacionId)` en `app/actions/roles.ts`. La asignación valida que el rol pertenezca al mismo `grupo_id` del admin y que el usuario objetivo esté en la misma `sucursal_id`.
+- **Origen de asesores en citas:** todos los usuarios con `activo=true` son elegibles como asesor de cita. No hay filtro por rol. Si en el futuro se quiere restringir a roles específicos, filtrar por `rol IN ('asesor_servicio', 'gerente')` en la query de la página `/citas/nuevo`.
 - **`usuarios` NO tiene `grupo_id`** — grupo se resuelve via `sucursales → razones_sociales → grupos`. `ensureUsuario` ya maneja este join automáticamente.
 - **`estado_lead` ENUM real** (BD): `nuevo, contactado, cotizado, negociando, cerrado_ganado, cerrado_perdido`. Usar siempre estos valores. NO usar `interesado`, `cotizacion`, `ganado`, `perdido`.
 - **`csi_respuestas` score** — columna es `respuesta_numerica`, no `score`.

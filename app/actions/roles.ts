@@ -72,6 +72,76 @@ export async function createRolAction(input: CreateRolInput) {
   return { success: true }
 }
 
+export async function asignarRolAction(usuarioId: string, rolId: string) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'admin'))
+    return { error: 'Sin permisos para esta operación' }
+
+  // Verificar que el rol pertenece al mismo grupo
+  const { data: rol } = await supabase
+    .from('roles')
+    .select('id')
+    .eq('id', rolId)
+    .eq('grupo_id', ctx.grupo_id)
+    .single()
+
+  if (!rol) return { error: 'Rol no válido para este grupo' }
+
+  // Verificar que el usuario objetivo pertenece a la misma sucursal
+  const { data: targetUser } = await supabase
+    .from('usuarios')
+    .select('id')
+    .eq('id', usuarioId)
+    .eq('sucursal_id', ctx.sucursal_id)
+    .single()
+
+  if (!targetUser) return { error: 'Usuario no encontrado en esta sucursal' }
+
+  const { error } = await supabase
+    .from('usuario_roles')
+    .insert({ usuario_id: usuarioId, rol_id: rolId, activo: true })
+
+  if (error) {
+    if (error.code === '23505') return { error: 'El usuario ya tiene este rol' }
+    return { error: `Error al asignar rol: ${error.message}` }
+  }
+
+  revalidatePath('/usuarios')
+  return { ok: true }
+}
+
+export async function removerRolAction(asignacionId: string) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+
+  let ctx: import('@/lib/ensure-usuario').UsuarioCtx
+  try { ctx = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { error: e instanceof Error ? e.message : 'Error al obtener perfil' } }
+
+  if (!tieneRol(ctx.rol, 'admin'))
+    return { error: 'Sin permisos para esta operación' }
+
+  const { error } = await supabase
+    .from('usuario_roles')
+    .delete()
+    .eq('id', asignacionId)
+
+  if (error) return { error: `Error al remover rol: ${error.message}` }
+
+  revalidatePath('/usuarios')
+  return { ok: true }
+}
+
 export async function updateRolPermisosAction(
   rolId: string,
   permisos: Record<ModuloPermiso, PermisoRow>

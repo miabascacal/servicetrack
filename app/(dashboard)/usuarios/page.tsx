@@ -6,6 +6,7 @@ import { tieneRol } from '@/lib/permisos'
 import { AlertTriangle, Clock, MailCheck, Shield, UserCog } from 'lucide-react'
 import { InvitarUsuario } from './InvitarUsuario'
 import { UsuarioAcciones } from './UsuarioAcciones'
+import { AsignarRol } from './AsignarRol'
 import { cn } from '@/lib/utils'
 
 type AuthStatus = 'active' | 'pending' | 'inactive' | 'missing'
@@ -23,9 +24,9 @@ type UsuarioRow = {
 type UsuarioRolRow = {
   id: string
   activo: boolean
-  sucursal_id: string | null
   usuario_id: string
   rol_id: string
+  // sucursal_id no existe en usuario_roles — ver migración 009
 }
 
 type RolRow = {
@@ -78,7 +79,7 @@ export default async function UsuariosPage() {
       .order('nombre'),
     admin
       .from('usuario_roles')
-      .select('id, activo, sucursal_id, usuario_id, rol_id'),
+      .select('id, activo, usuario_id, rol_id'),
     admin
       .from('roles')
       .select('id, nombre, es_super_admin, activo')
@@ -116,7 +117,7 @@ export default async function UsuariosPage() {
     else if (!u.activo) authStatus = 'inactive'
 
     const rolesActivos = usuarioRoles
-      .filter((ur) => ur.usuario_id === u.id && ur.activo && (!ur.sucursal_id || ur.sucursal_id === u.sucursal_id))
+      .filter((ur) => ur.usuario_id === u.id && ur.activo)
       .map((ur) => ({ ...ur, rol: rolesById.get(ur.rol_id) ?? null }))
 
     return { ...u, authStatus, authUser, rolesActivos }
@@ -235,22 +236,20 @@ export default async function UsuariosPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {u.rolesActivos.length === 0 ? (
-                          <span className="text-xs text-gray-400">Sin rol</span>
-                        ) : (
-                          u.rolesActivos.map((ur) => (
-                            <span
-                              key={ur.id}
-                              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                ur.rol?.es_super_admin ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
-                              }`}
-                            >
-                              {ur.rol?.nombre ?? 'Rol eliminado'}
-                            </span>
-                          ))
-                        )}
-                      </div>
+                      <AsignarRol
+                        usuarioId={u.id}
+                        rolesDisponibles={roles.map(r => ({
+                          id: r.id,
+                          nombre: r.nombre,
+                          es_super_admin: r.es_super_admin,
+                        }))}
+                        rolesAsignados={u.rolesActivos.map(ra => ({
+                          asignacionId: ra.id,
+                          rolId: ra.rol_id,
+                          nombre: ra.rol?.nombre ?? 'Rol eliminado',
+                          es_super_admin: ra.rol?.es_super_admin ?? false,
+                        }))}
+                      />
                     </td>
                     <td className="px-5 py-3">
                       {u.authStatus === 'pending' ? (
