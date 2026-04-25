@@ -46,7 +46,7 @@ export interface GetOrCreateThreadResult {
  * Estados que definen un hilo como activo.
  * Confirmados por uq_thread_activo_con_contexto y uq_thread_activo_general en 003.
  */
-const ACTIVE_STATES = ['open', 'waiting_customer', 'waiting_agent'] as const
+const ACTIVE_STATES = ['open', 'waiting_customer', 'waiting_agent', 'bot_active'] as const
 
 // ── Función principal ──────────────────────────────────────────────────────
 

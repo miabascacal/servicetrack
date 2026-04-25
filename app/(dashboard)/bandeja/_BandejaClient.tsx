@@ -19,6 +19,7 @@ import {
   UserCheck,
   X,
   Send,
+  Phone,
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -129,15 +130,18 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
   const [threadErrors,   setThreadErrors]   = useState<Record<string, string>>({})
 
   // Demo panel state
-  const [showDemo,   setShowDemo]   = useState(false)
-  const [demoPhone,  setDemoPhone]  = useState('')
-  const [demoMsg,    setDemoMsg]    = useState('')
-  const [demoResult, setDemoResult] = useState<SimularResult | null>(null)
+  const [showDemo,    setShowDemo]    = useState(false)
+  const [demoPhone,   setDemoPhone]   = useState('')
+  const [demoMsg,     setDemoMsg]     = useState('')
+  const [demoResult,  setDemoResult]  = useState<SimularResult | null>(null)
+  // threadId activo en la conversación demo — se mantiene entre turnos del mismo cliente
+  const [demoThreadId, setDemoThreadId] = useState<string | null>(null)
   const [demoPending, startDemo]    = useTransition()
   const [tomarPending, startTomar]  = useTransition()
 
   const inFlightRef    = useRef<Set<string>>(new Set())
   const initializedRef = useRef(false)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   async function loadMessages(threadId: string) {
     if (threadMessages[threadId] !== undefined) return
@@ -167,6 +171,11 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Auto-scroll al fondo cuando llegan mensajes nuevos
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [threadMessages, selected])
+
   function handleSelectThread(threadId: string) {
     setSelected(threadId)
     void loadMessages(threadId)
@@ -176,18 +185,33 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
     startDemo(async () => {
       const result = await simularMensajeAction({ telefono: demoPhone, mensaje: demoMsg })
       setDemoResult(result)
-      if (result.ok) {
-        // Invalidar mensajes del hilo para que se recarguen
-        if (result.thread_id) {
-          setThreadMessages(prev => {
-            const next = { ...prev }
-            delete next[result.thread_id!]
-            return next
-          })
-        }
+      if (result.ok && result.thread_id) {
+        setDemoThreadId(result.thread_id)
+        // Seleccionar el hilo en la bandeja y forzar recarga de mensajes
+        setSelected(result.thread_id)
+        setThreadMessages(prev => {
+          const next = { ...prev }
+          delete next[result.thread_id!]
+          return next
+        })
+        void loadMessages(result.thread_id)
         router.refresh()
       }
     })
+  }
+
+  // Continúa la conversación con el mismo teléfono — solo limpia el mensaje
+  function handleContinuarConversacion() {
+    setDemoResult(null)
+    setDemoMsg('')
+  }
+
+  // Inicia conversación con número diferente
+  function handleNuevoNumero() {
+    setDemoResult(null)
+    setDemoPhone('')
+    setDemoMsg('')
+    setDemoThreadId(null)
   }
 
   function handleTomar(threadId: string) {
@@ -234,6 +258,9 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
   })()
 
   const needsAttention = conv?.estado === 'waiting_agent' || conv?.estado === 'bot_active'
+
+  // ─── La conversación demo tiene un hilo activo si demoThreadId está seteado
+  const demoEnCurso = demoThreadId !== null
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] -mx-6 -my-6">
@@ -316,6 +343,7 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
               const isSel   = t.id === selected
               const preview = t.preview?.contenido?.slice(0, 60) ?? '—'
               const isBotActive = t.estado === 'bot_active'
+              const isDemoThread = t.id === demoThreadId
 
               return (
                 <button
@@ -348,6 +376,7 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                           </p>
                           {t.escalada && <AlertTriangle size={12} className="text-red-500 shrink-0" />}
                           {isBotActive && <Bot size={12} className="text-blue-500 shrink-0" />}
+                          {isDemoThread && <span className="text-[10px] text-blue-400 font-medium">DEMO</span>}
                         </div>
                         <p className="text-xs text-gray-500 truncate">{preview}</p>
                       </div>
@@ -505,7 +534,7 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                               <span>Bot actuó automáticamente</span>
                             </div>
                           )}
-                          <div className={`px-3.5 py-2.5 rounded-2xl text-sm ${
+                          <div className={`px-3.5 py-2.5 rounded-2xl text-sm whitespace-pre-wrap ${
                             isOutgoing
                               ? m.enviado_por_bot
                                 ? 'bg-blue-100 text-blue-800 rounded-tr-sm'
@@ -525,6 +554,7 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                     )
                   })
                 )}
+                <div ref={messagesEndRef} />
               </div>
             </>
           )}
@@ -535,104 +565,161 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
       {/* ── Demo Bot — Panel flotante ──────────────────────────── */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
         {showDemo && (
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-2xl p-5 w-80">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-80 overflow-hidden">
+
+            {/* Header del panel demo */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
               <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                <Bot size={16} className="text-blue-500" />
+                <Bot size={15} className="text-blue-500" />
                 Demo Bot
+                {demoEnCurso && (
+                  <span className="text-[10px] font-normal text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                    En conversación
+                  </span>
+                )}
               </h3>
               <button
-                onClick={() => { setShowDemo(false); setDemoResult(null) }}
+                onClick={() => { setShowDemo(false) }}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <X size={16} />
+                <X size={15} />
               </button>
             </div>
 
-            {demoResult ? (
-              <div className="space-y-3">
-                {demoResult.error ? (
-                  <div className="p-3 rounded-lg bg-red-50 text-red-700 text-xs">
-                    {demoResult.error}
-                  </div>
-                ) : (
-                  <div className="p-3 rounded-lg bg-gray-50 text-xs space-y-1.5">
-                    <div className="flex gap-2">
-                      <span className="text-gray-500">Intent:</span>
-                      <span className="font-medium text-gray-800">{demoResult.intent}</span>
-                      <span className="text-gray-400">·</span>
-                      <span className="font-medium text-gray-800">{demoResult.sentiment}</span>
-                    </div>
-                    {demoResult.handoff && (
-                      <div className="flex items-center gap-1 text-orange-600 font-medium">
-                        <UserCheck size={11} />
-                        Escaló a asesor — revisa la bandeja
-                      </div>
-                    )}
-                    {demoResult.cita_id && (
-                      <div className="flex items-center gap-1 text-green-600 font-medium">
-                        <CheckCircle2 size={11} />
-                        Cita agendada por el bot
-                      </div>
-                    )}
-                    <div className="pt-1 border-t border-gray-200">
-                      <p className="text-gray-500 mb-0.5">Respuesta del bot:</p>
-                      <p className="text-gray-800 leading-relaxed">
-                        &ldquo;{demoResult.respuesta?.slice(0, 120)}{(demoResult.respuesta?.length ?? 0) > 120 ? '…' : ''}&rdquo;
-                      </p>
+            <div className="p-4 space-y-3">
+
+              {/* Indicador de número activo cuando hay conversación en curso */}
+              {demoEnCurso && (
+                <div className="flex items-center justify-between px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Phone size={12} className="text-green-600" />
+                    <div>
+                      <p className="text-[10px] text-green-600 font-medium">Conversación activa</p>
+                      <p className="text-xs font-mono text-green-800">{demoPhone}</p>
                     </div>
                   </div>
-                )}
-                <button
-                  onClick={() => { setDemoResult(null); setDemoPhone(''); setDemoMsg('') }}
-                  className="w-full py-2 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"
-                >
-                  Nuevo mensaje
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Teléfono (sin +52)
-                  </label>
-                  <input
-                    type="tel"
-                    value={demoPhone}
-                    onChange={e => setDemoPhone(e.target.value)}
-                    placeholder="5512345678"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <button
+                    onClick={handleNuevoNumero}
+                    className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                    title="Iniciar con nuevo número"
+                  >
+                    Cambiar
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Mensaje del cliente
-                  </label>
-                  <textarea
-                    value={demoMsg}
-                    onChange={e => setDemoMsg(e.target.value)}
-                    placeholder="Hola, quiero agendar una cita para cambio de aceite..."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+              )}
+
+              {demoResult ? (
+                /* ── Vista de resultado ── */
+                <div className="space-y-3">
+                  {demoResult.error ? (
+                    <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
+                      {demoResult.error}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs space-y-2">
+                      <div className="flex gap-2 items-center">
+                        <span className="text-gray-500">Intent:</span>
+                        <span className="font-medium text-gray-800">{demoResult.intent}</span>
+                        <span className="text-gray-300">·</span>
+                        <span className="font-medium text-gray-600">{demoResult.sentiment}</span>
+                      </div>
+                      {demoResult.handoff && (
+                        <div className="flex items-center gap-1.5 text-orange-600 font-medium">
+                          <UserCheck size={11} />
+                          Escaló a asesor — toma la conversación en la bandeja
+                        </div>
+                      )}
+                      {demoResult.cita_id && (
+                        <div className="flex items-center gap-1.5 text-green-600 font-medium">
+                          <CheckCircle2 size={11} />
+                          ¡Cita agendada exitosamente!
+                        </div>
+                      )}
+                      <div className="pt-1.5 border-t border-blue-200">
+                        <p className="text-gray-500 mb-1 font-medium">Ara respondió:</p>
+                        <p className="text-gray-800 leading-relaxed text-[12px] whitespace-pre-wrap">
+                          {demoResult.respuesta}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!demoResult.error && (
+                    <button
+                      onClick={handleContinuarConversacion}
+                      className="w-full py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 flex items-center justify-center gap-1.5"
+                    >
+                      <Send size={11} />
+                      Continuar conversación
+                    </button>
+                  )}
+                  <button
+                    onClick={handleNuevoNumero}
+                    className="w-full py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50"
+                  >
+                    Nuevo número
+                  </button>
                 </div>
-                <p className="text-[11px] text-gray-400">
-                  Simula un mensaje entrante de WA sin número Meta activo.
-                </p>
-                <button
-                  onClick={handleSimular}
-                  disabled={demoPending || !demoPhone.trim() || !demoMsg.trim()}
-                  className="w-full py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  <Send size={12} />
-                  {demoPending ? 'Procesando…' : 'Enviar al bot'}
-                </button>
-              </div>
-            )}
+              ) : (
+                /* ── Vista de entrada ── */
+                <div className="space-y-3">
+                  {/* Teléfono — solo editable si no hay conversación activa */}
+                  {!demoEnCurso && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Teléfono (10 dígitos, sin +52)
+                      </label>
+                      <input
+                        type="tel"
+                        value={demoPhone}
+                        onChange={e => setDemoPhone(e.target.value)}
+                        placeholder="5512345678"
+                        maxLength={10}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      {demoEnCurso ? 'Siguiente mensaje del cliente' : 'Mensaje del cliente'}
+                    </label>
+                    <textarea
+                      value={demoMsg}
+                      onChange={e => setDemoMsg(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey && demoPhone.trim() && demoMsg.trim()) {
+                          e.preventDefault()
+                          handleSimular()
+                        }
+                      }}
+                      placeholder={demoEnCurso
+                        ? 'Escribe la respuesta del cliente...'
+                        : 'Hola, quiero agendar una cita para cambio de aceite...'}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  {!demoEnCurso && (
+                    <p className="text-[10px] text-gray-400">
+                      Simula un mensaje entrante de WA sin número Meta activo. Enter para enviar.
+                    </p>
+                  )}
+                  <button
+                    onClick={handleSimular}
+                    disabled={demoPending || !demoPhone.trim() || !demoMsg.trim()}
+                    className="w-full py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <Send size={12} />
+                    {demoPending ? 'Procesando…' : 'Enviar al bot'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
+
         <button
-          onClick={() => { setShowDemo(prev => !prev); if (!showDemo) setDemoResult(null) }}
+          onClick={() => setShowDemo(prev => !prev)}
           className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors ${
             showDemo ? 'bg-gray-700 hover:bg-gray-800' : 'bg-blue-600 hover:bg-blue-700'
           } text-white`}
