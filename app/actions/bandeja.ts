@@ -121,17 +121,24 @@ export async function simularMensajeAction(params: {
     return { ok: false, error: e instanceof Error ? e.message : 'Error de perfil' }
   }
 
-  const admin = createAdminClient()
-  const tel = params.telefono.replace(/\D/g, '')
+  // Misma normalización que clientes.ts — WA se guarda como +52XXXXXXXXXX
+  const digits = params.telefono.replace(/\D/g, '')
+  let waFormateado: string
+  if (digits.length === 10) waFormateado = '+52' + digits
+  else if (digits.length === 12 && digits.startsWith('52')) waFormateado = '+' + digits
+  else if (digits.length === 13 && digits.startsWith('521')) waFormateado = '+' + digits
+  else return { ok: false, error: 'Teléfono inválido: ingresa 10 dígitos (sin código de país)' }
 
-  // 1. Buscar o crear cliente por teléfono.
-  // clientes usa grupo_id (dueño del registro) y sucursal_origen_id — NO sucursal_id.
-  // UNIQUE(grupo_id, whatsapp) es la constraint real del schema.
+  const admin = createAdminClient()
+
+  // 1. Buscar o crear cliente.
+  // UNIQUE(grupo_id, whatsapp) — columnas reales: grupo_id, nombre, apellido, whatsapp, activo.
+  // No existen sucursal_id ni sucursal_origen_id en el schema desplegado.
   let { data: cliente } = await admin
     .from('clientes')
     .select('id, nombre, apellido')
     .eq('grupo_id', grupo_id)
-    .or(`whatsapp.eq.${tel},whatsapp.eq.+${tel}`)
+    .eq('whatsapp', waFormateado)
     .maybeSingle()
 
   if (!cliente) {
@@ -139,10 +146,10 @@ export async function simularMensajeAction(params: {
       .from('clientes')
       .insert({
         grupo_id,
-        sucursal_origen_id: sucursal_id,
         nombre:   'CLIENTE',
         apellido: 'DEMO',
-        whatsapp: tel,
+        whatsapp: waFormateado,
+        activo:   true,
       })
       .select('id, nombre, apellido')
       .single()
@@ -153,6 +160,8 @@ export async function simularMensajeAction(params: {
   }
 
   if (!cliente) return { ok: false, error: 'No se pudo resolver el cliente' }
+
+  void sucursal_id // usado en getOrCreateThread más abajo
 
   // 2. Buscar hilo activo existente (incluye bot_active)
   const { data: existingThread } = await admin
