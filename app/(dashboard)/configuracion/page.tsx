@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Settings, Users, ClipboardList, Building2, AlertTriangle, MessageCircle, Mail, UserCog } from 'lucide-react'
+import { Settings, Users, ClipboardList, Building2, AlertTriangle, MessageCircle, Mail, UserCog, CalendarDays, Wrench } from 'lucide-react'
 
 const MODULOS = [
   {
@@ -11,9 +11,25 @@ const MODULOS = [
     disponible: true,
   },
   {
+    href: '/configuracion/citas',
+    icon: CalendarDays,
+    color: 'bg-green-100 text-green-600',
+    titulo: 'Citas',
+    descripcion: 'Horarios, disponibilidad y preferencias de agenda',
+    disponible: true,
+  },
+  {
+    href: '/configuracion/taller',
+    icon: Wrench,
+    color: 'bg-violet-100 text-violet-600',
+    titulo: 'Taller',
+    descripcion: 'Horarios y capacidad de bahías del taller',
+    disponible: true,
+  },
+  {
     href: '/configuracion/whatsapp',
     icon: MessageCircle,
-    color: 'bg-green-100 text-green-600',
+    color: 'bg-emerald-100 text-emerald-600',
     titulo: 'WhatsApp',
     descripcion: 'Números de WhatsApp Business API por módulo',
     disponible: true,
