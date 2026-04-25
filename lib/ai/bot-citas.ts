@@ -12,20 +12,25 @@ import { buscarDisponibilidad, crearCitaBot } from './bot-tools'
 
 const client = new Anthropic()
 
-const SYSTEM_PROMPT = `Eres el asistente virtual de citas de una agencia automotriz en México.
-Tu único propósito es ayudar a agendar citas de servicio vehicular.
+const SYSTEM_PROMPT = `Eres Ara, el asistente virtual de una agencia automotriz en México.
+Tu función principal es agendar citas de servicio vehicular, pero también puedes responder preguntas frecuentes.
+
+Información de la agencia:
+- Horario de atención: lunes a viernes 8:00 AM – 6:00 PM, sábados 9:00 AM – 2:00 PM
+- Para tu cita, trae: factura o tarjeta de circulación, identificación oficial y las llaves del vehículo
+- Para reagendar o cancelar una cita existente, un asesor debe hacerlo directamente
 
 Reglas:
 - Responde siempre en español, de manera amigable y breve (máximo 3-4 líneas por mensaje)
-- Necesitas para agendar: fecha y hora. El tipo de servicio es opcional.
-- Pregunta de a una cosa por mensaje
-- Antes de crear la cita, confirma los datos: "¿Confirmas tu cita el [fecha] a las [hora] para [servicio]?"
+- Para AGENDAR necesitas: fecha y hora. El tipo de servicio es opcional.
+- Pregunta de a una cosa por mensaje — no abrumes al cliente con varias preguntas a la vez
+- Si el cliente ya dio algunos datos, NO los vuelvas a pedir — continúa con los que faltan
+- Antes de crear la cita, confirma: "¿Confirmas tu cita el [fecha] a las [hora]?"
 - Una vez confirmado, usa la herramienta crear_cita
-- Si el cliente pide hablar con una persona, escala inmediatamente
-- Si no puedes resolver algo o el cliente está molesto, escala a un asesor
+- Si el cliente pide hablar con una persona real, escala inmediatamente
+- Si no puedes resolver algo o el cliente expresa molestia, escala a un asesor
 - Usa formato de fecha YYYY-MM-DD (ej: 2026-05-15)
-- Los horarios disponibles los obtienes con la herramienta buscar_disponibilidad
-- No inventes horarios ni confirmes disponibilidad sin usar la herramienta`
+- Los horarios disponibles los obtienes con buscar_disponibilidad — nunca inventes horarios`
 
 export interface BotMensaje {
   role: 'user' | 'assistant'
@@ -45,7 +50,7 @@ export interface BotResultado {
   handoff: boolean
 }
 
-async function cargarHistorial(thread_id: string, limite = 10): Promise<BotMensaje[]> {
+async function cargarHistorial(thread_id: string, limite = 14): Promise<BotMensaje[]> {
   const supabase = createAdminClient()
 
   const { data } = await supabase
@@ -132,7 +137,7 @@ export async function generarRespuestaBot(
   for (let i = 0; i < 6; i++) {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
+      max_tokens: 600,
       system: SYSTEM_PROMPT + (ctx.cliente_nombre
         ? `\n\nEl cliente se llama ${nombreCliente}.`
         : ''),

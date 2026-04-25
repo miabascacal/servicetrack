@@ -164,9 +164,10 @@ export async function simularMensajeAction(params: {
   void sucursal_id // usado en getOrCreateThread más abajo
 
   // 2. Buscar hilo activo existente (incluye bot_active)
+  // Leemos también `estado` para decidir el routing multi-turno más abajo.
   const { data: existingThread } = await admin
     .from('conversation_threads')
-    .select('id')
+    .select('id, estado')
     .eq('sucursal_id', sucursal_id)
     .eq('cliente_id', cliente.id)
     .eq('canal', 'whatsapp')
@@ -178,8 +179,10 @@ export async function simularMensajeAction(params: {
     .maybeSingle()
 
   let thread_id: string
+  let threadEstado: string | null = null
   if (existingThread) {
-    thread_id = existingThread.id
+    thread_id  = existingThread.id
+    threadEstado = existingThread.estado
   } else {
     const result = await getOrCreateThread({
       sucursal_id,
@@ -238,7 +241,16 @@ export async function simularMensajeAction(params: {
   let cita_id: string | null = null
   let handoff = false
 
-  if (intentResult.intent === 'agendar_cita' && intentResult.confidence >= 0.6) {
+  // Routing multi-turno:
+  // - Si el hilo ya está en manos del bot (bot_active), siempre usar el loop agéntico
+  //   para que el bot recuerde el contexto y continúe donde se quedó.
+  // - Si es un hilo nuevo, solo activar el bot completo para intención de agendar cita.
+  const isBotActive = threadEstado === 'bot_active'
+  const usarBotCompleto =
+    isBotActive ||
+    (intentResult.intent === 'agendar_cita' && intentResult.confidence >= 0.6)
+
+  if (usarBotCompleto) {
     const botResult = await generarRespuestaBot(params.mensaje, ctx)
     respuesta = botResult.respuesta
     cita_id   = botResult.cita_id

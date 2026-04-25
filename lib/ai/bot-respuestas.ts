@@ -12,8 +12,8 @@ export interface RespuestaSimpleResultado {
 }
 
 /**
- * Genera respuestas predefinidas para intenciones que no requieren el loop agéntico de citas.
- * Escala automáticamente cuando el bot no puede resolver solo (cancelar, OT, presupuesto, queja).
+ * Respuestas predefinidas para intenciones que no requieren el loop agéntico de citas.
+ * Escala automáticamente cuando el bot no puede resolver solo.
  */
 export function generarRespuestaSimple(params: RespuestaSimpleParams): RespuestaSimpleResultado {
   const nombre = params.cliente_nombre?.split(' ')[0] ?? 'cliente'
@@ -21,44 +21,56 @@ export function generarRespuestaSimple(params: RespuestaSimpleParams): Respuesta
   switch (params.intent) {
     case 'saludo':
       return {
-        respuesta: `¡Hola ${nombre}! Bienvenido al servicio de atención de la agencia. ¿En qué puedo ayudarte hoy? Puedo ayudarte a agendar una cita de servicio vehicular.`,
+        respuesta: `¡Hola ${nombre}! Soy Ara, el asistente de citas de la agencia. 😊\n\n¿En qué puedo ayudarte hoy? Puedo:\n• Agendar una cita de servicio\n• Informarte sobre horarios y ubicación`,
         handoff: false,
+      }
+
+    case 'consulta_horario':
+      return {
+        respuesta: `¡Claro, ${nombre}! 🕐\n\n*Horarios de atención:*\n• Lunes a viernes: 8:00 AM – 6:00 PM\n• Sábados: 9:00 AM – 2:00 PM\n\n¿Te gustaría agendar una cita?`,
+        handoff: false,
+      }
+
+    case 'reagendar_cita':
+      return {
+        respuesta: `Entendido, ${nombre}. Para cambiar la fecha de tu cita necesito que un asesor verifique tu expediente. Te conecto ahora mismo. 📅`,
+        handoff: true,
       }
 
     case 'cancelar_cita':
       return {
-        respuesta: `Entendido, ${nombre}. Para cancelar tu cita necesito que un asesor te atienda directamente. Te conecto en un momento.`,
+        respuesta: `Entendido, ${nombre}. Para cancelar tu cita un asesor necesita confirmarlo en el sistema. Te transfiero en un momento.`,
         handoff: true,
       }
 
     case 'consulta_estado_ot':
       return {
-        respuesta: `Hola ${nombre}, para consultar el estado de tu vehículo un asesor necesita verificar tu expediente. Te transfiero ahora para darte información precisa.`,
+        respuesta: `Hola ${nombre}, para darte información precisa sobre tu vehículo un asesor necesita revisar tu expediente. Te comunico ahora.`,
         handoff: true,
       }
 
     case 'consulta_presupuesto':
       return {
-        respuesta: `Hola ${nombre}, para darte un presupuesto preciso necesito que un asesor especializado te atienda. Te contactarán en breve.`,
+        respuesta: `Hola ${nombre}, los presupuestos los prepara un asesor especializado según el diagnóstico de tu vehículo. Te contactarán en breve con toda la información.`,
         handoff: true,
       }
 
     case 'queja':
       return {
-        respuesta: `Lamentamos la situación, ${nombre}. Tu satisfacción es nuestra prioridad. Te comunico de inmediato con un asesor para resolver esto.`,
+        respuesta: `Lamentamos la situación, ${nombre}. Tu satisfacción es nuestra prioridad. Te comunico de inmediato con un asesor para resolver esto personalmente.`,
         handoff: true,
       }
 
     case 'confirmacion':
       return {
-        respuesta: `Perfecto ${nombre}, hemos registrado tu confirmación. ¿Hay algo más en lo que pueda ayudarte?`,
+        respuesta: `Perfecto, ${nombre}, hemos registrado tu confirmación. ¿Hay algo más en lo que pueda ayudarte?`,
         handoff: false,
       }
 
     case 'agendar_cita':
       // Fallback — normalmente este caso lo maneja generarRespuestaBot
       return {
-        respuesta: `Hola ${nombre}, con gusto te ayudo a agendar tu cita. ¿Para qué fecha te gustaría?`,
+        respuesta: `Con gusto te ayudo a agendar tu cita, ${nombre}. ¿Para qué fecha tienes disponibilidad?`,
         handoff: false,
       }
 
@@ -71,7 +83,7 @@ export function generarRespuestaSimple(params: RespuestaSimpleParams): Respuesta
         }
       }
       return {
-        respuesta: `Hola ${nombre}, recibí tu mensaje. ¿Deseas agendar una cita de servicio o tienes alguna otra consulta?`,
+        respuesta: `Hola ${nombre}, recibí tu mensaje. ¿Deseas agendar una cita de servicio o tienes alguna consulta sobre la agencia?`,
         handoff: false,
       }
   }
