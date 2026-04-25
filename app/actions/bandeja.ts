@@ -112,9 +112,11 @@ export async function simularMensajeAction(params: {
   if (!user) return { ok: false, error: 'No autorizado' }
 
   let sucursal_id: string
+  let grupo_id: string
   try {
     const ctx = await ensureUsuario(supabase, user.id, user.email ?? '')
     sucursal_id = ctx.sucursal_id
+    grupo_id    = ctx.grupo_id
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Error de perfil' }
   }
@@ -122,20 +124,31 @@ export async function simularMensajeAction(params: {
   const admin = createAdminClient()
   const tel = params.telefono.replace(/\D/g, '')
 
-  // 1. Buscar o crear cliente por teléfono
+  // 1. Buscar o crear cliente por teléfono.
+  // clientes usa grupo_id (dueño del registro) y sucursal_origen_id — NO sucursal_id.
+  // UNIQUE(grupo_id, whatsapp) es la constraint real del schema.
   let { data: cliente } = await admin
     .from('clientes')
     .select('id, nombre, apellido')
-    .eq('sucursal_id', sucursal_id)
+    .eq('grupo_id', grupo_id)
     .or(`whatsapp.eq.${tel},whatsapp.eq.+${tel}`)
     .maybeSingle()
 
   if (!cliente) {
-    const { data: nuevo } = await admin
+    const { data: nuevo, error: insertError } = await admin
       .from('clientes')
-      .insert({ sucursal_id, nombre: 'CLIENTE', apellido: 'DEMO', whatsapp: tel })
+      .insert({
+        grupo_id,
+        sucursal_origen_id: sucursal_id,
+        nombre:   'CLIENTE',
+        apellido: 'DEMO',
+        whatsapp: tel,
+      })
       .select('id, nombre, apellido')
       .single()
+    if (insertError) {
+      return { ok: false, error: `Error creando cliente demo: ${insertError.message}` }
+    }
     cliente = nuevo
   }
 
