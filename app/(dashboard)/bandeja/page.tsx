@@ -43,7 +43,7 @@ export default async function BandejaPage() {
       assignee_id,
       cliente:clientes ( id, nombre )
     `)
-    .in('estado', ['open', 'waiting_customer', 'waiting_agent'])
+    .in('estado', ['open', 'waiting_customer', 'waiting_agent', 'bot_active'])
     .order('last_message_at', { ascending: false, nullsFirst: false })
     .limit(50)
 

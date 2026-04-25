@@ -1,5 +1,42 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-22 — Migraciones 001-009 aplicadas, deploy realizado, FASE 1.5 activa. Construyendo FASE 6: calendarios, Ventas, CSI, Seguros, Workflow Studio._
+_Actualizado: 2026-04-24 — Migración 015 creada (asesor_id + agenda_vista_default). Agenda calendario en producción. FASE 2b definida: base operativa configurable. Roadmap reordenado._
+
+---
+
+## 🔵 FASE 2b — BASE OPERATIVA CONFIGURABLE (siguiente prioridad después de FASE 1.5)
+
+> Basada en análisis de modelo Autoline 2026-04-24. Antes de módulos secundarios (Ventas/CSI/Seguros).
+
+### SQL pendiente de ejecución INMEDIATA
+
+⬜ **Migración 015** — `asesor_id` en `citas` + `agenda_vista_default` en `configuracion_citas_sucursal`
+```sql
+-- supabase/migrations/015_citas_asesor_and_agenda_config.sql (YA EXISTE EN REPO)
+ALTER TABLE citas ADD COLUMN IF NOT EXISTS asesor_id UUID REFERENCES usuarios(id);
+CREATE INDEX IF NOT EXISTS idx_citas_asesor ON citas(asesor_id);
+ALTER TABLE configuracion_citas_sucursal
+  ADD COLUMN IF NOT EXISTS agenda_vista_default TEXT NOT NULL DEFAULT 'semana'
+  CHECK (agenda_vista_default IN ('mes', 'semana', 'dia'));
+```
+
+### Pendientes de código + migración
+
+⬜ **Migración 016** — parámetros de automatización configurables en `configuracion_citas_sucursal`
+- `horas_recordatorio` INT DEFAULT 24
+- `horas_recordatorio_2` INT DEFAULT 2
+- `ventana_noshow_horas` INT DEFAULT 24
+- `noshow_activo` BOOL DEFAULT TRUE
+
+⬜ **Migración 016** — flags operativos en tabla `usuarios`
+- `puede_ser_asesor` BOOL DEFAULT TRUE
+- `puede_recibir_citas` BOOL DEFAULT TRUE
+- `cuota_citas_dia` INT DEFAULT NULL
+
+⬜ **UI `/configuracion/citas`** — exponer `horas_recordatorio`, `ventana_noshow_horas`, `noshow_activo` (el form con "Guardar" ya existe, solo agregar campos)
+
+⬜ **`app/api/cron/recordatorios-citas/route.ts`** — leer `horas_recordatorio` de BD en lugar de hardcoded 24h, y `ventana_noshow_horas` para no-show detection
+
+⬜ **`/citas/nuevo`** — filtrar lista de asesores por `puede_ser_asesor=true` cuando el flag exista
 
 ---
 
@@ -10,7 +47,7 @@ _Actualizado: 2026-04-22 — Migraciones 001-009 aplicadas, deploy realizado, FA
 | Sprint 1 | AUTH + LAYOUT | 80% | 🟡 Casi completo |
 | Sprint 2 | USUARIOS & PERMISOS | 85% | 🟡 FASE 1.5 activa — pendiente validación manual |
 | Sprint 3 | CRM | 65% | 🟡 En progreso |
-| Sprint 4 | CITAS | 35% | 🟡 Base construida |
+| Sprint 4 | CITAS | 45% | 🟡 Agenda calendario construida, migración 015 pendiente de ejecutar |
 | Sprint 5 | TALLER | 25% | 🔴 Base construida |
 | Sprint 6 | REFACCIONES | 30% | 🔴 Base construida |
 | Sprint 7 | VENTAS | 30% | 🔴 MVP en construcción 2026-04-22 |
@@ -58,6 +95,14 @@ _Actualizado: 2026-04-22 — Migraciones 001-009 aplicadas, deploy realizado, FA
 - [x] Sprint 9 — `VincularOTCita.tsx`: componente cliente para buscar y vincular OT desde detalle de cita
 - [x] Sprint 9 — Nueva cita: link "Crear cliente nuevo" cuando la búsqueda retorna cero resultados
 - [x] Sprint 9 — Wizard nuevo cliente: soporte `return_to` para redirigir a `/citas/nuevo?cliente_id=...` tras crear cliente
+- [x] Sesión 2026-04-24 — Mi Agenda: calendario mes/semana/día con navegación por URL (vista + fecha en searchParams)
+- [x] Sesión 2026-04-24 — Agenda: vista default configurable desde Configuración > Citas (`agenda_vista_default`)
+- [x] Sesión 2026-04-24 — Migración 015 creada: `asesor_id` en `citas` + `agenda_vista_default` en config (PENDIENTE EJECUTAR en Supabase)
+- [x] Sesión 2026-04-24 — FASE 2b documentada: base operativa configurable (parámetros automatización, flags usuario)
+- [x] Sesión 2026-04-24 — Roadmap reordenado: FASE 2b antes de módulos secundarios; WA+IA como prioridad comercial
+- [x] Sesión 2026-04-24 — Fix `hooks/usePermisos.ts`: eliminado `sucursal_id` de SELECT (causa real del error en producción)
+- [x] Sesión 2026-04-24 — Ciclo de vida de usuarios: `desactivarUsuarioAction`, `reactivarUsuarioAction`, `borrarUsuarioAction` con chequeo de historial FK
+- [x] Sesión 2026-04-24 — `UsuarioAcciones.tsx` reescrito con botones Desactivar/Reactivar/Eliminar (2-click confirm)
 - [x] Sprint 9 — `vincularOTCitaAction`: comentario explícito de regla vehiculo_id null-permisiva
 - [x] Sprint 9 — Crash `/taller` resuelto: fallback ESTADO_CONFIG + guard formatDateTime
 - [x] FASE 1 — Seguridad multi-tenant: 10 page components migrados de `createAdminClient()` a `await createClient()` con RLS → **NO cerrada por completo**: faltan hardening en `app/actions/*`, rutas admin y validación con segundo usuario real

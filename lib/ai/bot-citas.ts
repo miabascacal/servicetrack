@@ -53,7 +53,7 @@ async function cargarHistorial(thread_id: string, limite = 10): Promise<BotMensa
     .select('direccion, contenido')
     .eq('thread_id', thread_id)
     .not('contenido', 'is', null)
-    .order('created_at', { ascending: false })
+    .order('enviado_at', { ascending: false })
     .limit(limite)
 
   if (!data) return []

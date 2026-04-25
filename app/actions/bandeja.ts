@@ -3,6 +3,11 @@
 import { createClient }      from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ensureUsuario }     from '@/lib/ensure-usuario'
+import { getOrCreateThread } from '@/lib/threads'
+import { classifyIntent }    from '@/lib/ai/classify-intent'
+import { detectSentiment }   from '@/lib/ai/detect-sentiment'
+import { generarRespuestaBot }    from '@/lib/ai/bot-citas'
+import { generarRespuestaSimple } from '@/lib/ai/bot-respuestas'
 
 export interface MensajeRow {
   id:             string
@@ -76,4 +81,235 @@ export async function getThreadMessagesAction(
   }
 
   return { data: mensajes ?? [], error: null }
+}
+
+// ── Demo: Simular mensaje entrante por WhatsApp ───────────────────────────────
+
+export interface SimularResult {
+  ok:         boolean
+  intent?:    string
+  sentiment?: string
+  respuesta?: string
+  cita_id?:   string | null
+  handoff?:   boolean
+  thread_id?: string
+  cliente_id?: string
+  error?:     string
+}
+
+/**
+ * Simula un mensaje entrante de WhatsApp sin necesidad de número Meta activo.
+ * Crea o reutiliza un cliente DEMO por teléfono, persiste en mensajes,
+ * clasifica intent + sentiment, y genera respuesta del bot.
+ * Uso exclusivo en modo demo — no envía WA real.
+ */
+export async function simularMensajeAction(params: {
+  telefono: string
+  mensaje:  string
+}): Promise<SimularResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'No autorizado' }
+
+  let sucursal_id: string
+  try {
+    const ctx = await ensureUsuario(supabase, user.id, user.email ?? '')
+    sucursal_id = ctx.sucursal_id
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Error de perfil' }
+  }
+
+  const admin = createAdminClient()
+  const tel = params.telefono.replace(/\D/g, '')
+
+  // 1. Buscar o crear cliente por teléfono
+  let { data: cliente } = await admin
+    .from('clientes')
+    .select('id, nombre, apellido')
+    .eq('sucursal_id', sucursal_id)
+    .or(`whatsapp.eq.${tel},whatsapp.eq.+${tel}`)
+    .maybeSingle()
+
+  if (!cliente) {
+    const { data: nuevo } = await admin
+      .from('clientes')
+      .insert({ sucursal_id, nombre: 'CLIENTE', apellido: 'DEMO', whatsapp: tel })
+      .select('id, nombre, apellido')
+      .single()
+    cliente = nuevo
+  }
+
+  if (!cliente) return { ok: false, error: 'No se pudo resolver el cliente' }
+
+  // 2. Buscar hilo activo existente (incluye bot_active)
+  const { data: existingThread } = await admin
+    .from('conversation_threads')
+    .select('id')
+    .eq('sucursal_id', sucursal_id)
+    .eq('cliente_id', cliente.id)
+    .eq('canal', 'whatsapp')
+    .eq('contexto_tipo', 'general')
+    .is('contexto_id', null)
+    .in('estado', ['open', 'waiting_customer', 'waiting_agent', 'bot_active'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  let thread_id: string
+  if (existingThread) {
+    thread_id = existingThread.id
+  } else {
+    const result = await getOrCreateThread({
+      sucursal_id,
+      cliente_id: cliente.id,
+      canal: 'whatsapp',
+      contexto_tipo: 'general',
+      thread_origin: 'inbound',
+    })
+    thread_id = result.thread_id
+  }
+
+  // 3. Insertar mensaje entrante del cliente
+  const { data: msgIn } = await admin
+    .from('mensajes')
+    .insert({
+      sucursal_id,
+      cliente_id:         cliente.id,
+      canal:              'whatsapp',
+      direccion:          'entrante',
+      contenido:          params.mensaje,
+      thread_id,
+      message_source:     'customer',
+      processing_status:  'pending',
+      enviado_at:         new Date().toISOString(),
+    })
+    .select('id')
+    .single()
+
+  // 4. Clasificar intent + sentiment en paralelo
+  const [intentResult, sentimentResult] = await Promise.all([
+    classifyIntent(params.mensaje),
+    detectSentiment(params.mensaje),
+  ])
+
+  if (msgIn) {
+    await admin
+      .from('mensajes')
+      .update({
+        ai_intent:            intentResult.intent,
+        ai_intent_confidence: intentResult.confidence,
+        ai_sentiment:         sentimentResult.sentiment,
+        processing_status:    'processed',
+      })
+      .eq('id', msgIn.id)
+  }
+
+  // 5. Generar respuesta del bot
+  const ctx = {
+    sucursal_id,
+    cliente_id:     cliente.id,
+    cliente_nombre: `${cliente.nombre} ${cliente.apellido}`.trim(),
+    thread_id,
+  }
+
+  let respuesta: string
+  let cita_id: string | null = null
+  let handoff = false
+
+  if (intentResult.intent === 'agendar_cita' && intentResult.confidence >= 0.6) {
+    const botResult = await generarRespuestaBot(params.mensaje, ctx)
+    respuesta = botResult.respuesta
+    cita_id   = botResult.cita_id
+    handoff   = botResult.handoff
+  } else {
+    const botResult = generarRespuestaSimple({
+      intent:         intentResult.intent,
+      sentiment:      sentimentResult.sentiment,
+      cliente_nombre: ctx.cliente_nombre,
+    })
+    respuesta = botResult.respuesta
+    handoff   = botResult.handoff
+  }
+
+  // 6. Persistir respuesta del bot
+  await admin
+    .from('mensajes')
+    .insert({
+      sucursal_id,
+      cliente_id:        cliente.id,
+      canal:             'whatsapp',
+      direccion:         'saliente',
+      contenido:         respuesta,
+      thread_id,
+      message_source:    'agent_bot',
+      enviado_por_bot:   true,
+      processing_status: 'skipped',
+      enviado_at:        new Date().toISOString(),
+    })
+
+  // 7. Actualizar estado del hilo
+  const nuevoEstado = handoff ? 'waiting_agent' : 'bot_active'
+  await admin
+    .from('conversation_threads')
+    .update({
+      estado:              nuevoEstado,
+      last_message_at:     new Date().toISOString(),
+      last_message_source: 'agent_bot',
+    })
+    .eq('id', thread_id)
+
+  return {
+    ok:         true,
+    intent:     intentResult.intent,
+    sentiment:  sentimentResult.sentiment,
+    respuesta,
+    cita_id,
+    handoff,
+    thread_id,
+    cliente_id: cliente.id,
+  }
+}
+
+// ── Tomar conversación (asesor asume hilo del bot) ────────────────────────────
+
+/**
+ * Asesor toma una conversación que estaba en manos del bot o esperando asesor.
+ * Mueve el hilo a 'open' y asigna el asesor actual.
+ */
+export async function tomarConversacionAction(
+  thread_id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!thread_id) return { ok: false, error: 'thread_id requerido' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'No autorizado' }
+
+  let sucursal_id: string
+  try {
+    const ctx = await ensureUsuario(supabase, user.id, user.email ?? '')
+    sucursal_id = ctx.sucursal_id
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Error de perfil' }
+  }
+
+  const admin = createAdminClient()
+
+  const { data: thread } = await admin
+    .from('conversation_threads')
+    .select('id, sucursal_id')
+    .eq('id', thread_id)
+    .single()
+
+  if (!thread || thread.sucursal_id !== sucursal_id) {
+    return { ok: false, error: 'Hilo no encontrado o sin acceso' }
+  }
+
+  const { error } = await admin
+    .from('conversation_threads')
+    .update({ estado: 'open', assignee_id: user.id })
+    .eq('id', thread_id)
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
 }

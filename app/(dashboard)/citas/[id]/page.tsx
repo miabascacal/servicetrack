@@ -6,6 +6,7 @@ import { ChevronLeft, Car, Phone, Wrench } from 'lucide-react'
 import type { EstadoCita, EstadoOT } from '@/types/database'
 import { CambiarEstadoCita } from '@/app/_components/citas/CambiarEstadoCita'
 import { VincularOTCita } from '@/app/_components/citas/VincularOTCita'
+import { DemoNoShowButton } from '@/app/_components/citas/DemoNoShowButton'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -199,6 +200,12 @@ export default async function CitaDetailPage({ params }: PageProps) {
               estadoActual={estado}
               transitions={transitions}
             />
+            {(estado === 'confirmada' || estado === 'en_agencia') && (
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-[11px] text-gray-400 mb-2 font-medium uppercase tracking-wide">Demo</p>
+                <DemoNoShowButton citaId={c.id} />
+              </div>
+            )}
           </div>
 
           {/* OT — vincular o ver */}

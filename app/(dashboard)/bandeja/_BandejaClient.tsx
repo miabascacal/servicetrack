@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   MessageSquare,
   Mail,
@@ -15,16 +16,25 @@ import {
   Car,
   Wrench,
   Wifi,
+  UserCheck,
+  X,
+  Send,
 } from 'lucide-react'
 import Link from 'next/link'
-import { getThreadMessagesAction, type MensajeRow } from '@/app/actions/bandeja'
+import {
+  getThreadMessagesAction,
+  simularMensajeAction,
+  tomarConversacionAction,
+  type MensajeRow,
+  type SimularResult,
+} from '@/app/actions/bandeja'
 
 // ─────────────────────────────────────────────────────────
 // Tipos exportados — usados por page.tsx (Server Component)
 // ─────────────────────────────────────────────────────────
 
 export type BandejaCanal   = 'whatsapp' | 'email' | 'facebook' | 'instagram' | 'interno'
-export type BandejaEstado  = 'open' | 'waiting_customer' | 'waiting_agent'
+export type BandejaEstado  = 'open' | 'waiting_customer' | 'waiting_agent' | 'bot_active'
 
 export interface ThreadRow {
   id:                  string
@@ -66,11 +76,6 @@ function formatTime(ts: string): string {
   return new Date(ts).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
 }
 
-/**
- * Minutos sin respuesta del cliente.
- * Solo cuenta cuando el ÚLTIMO mensaje del hilo es del cliente ('customer').
- * Si el último mensaje fue del agente o bot, devuelve 0.
- */
 function calcSinRespuestaMin(
   last_message_at:     string | null,
   last_message_source: string | null,
@@ -80,9 +85,7 @@ function calcSinRespuestaMin(
 }
 
 // ─────────────────────────────────────────────────────────
-// Canal config — valores del ENUM de BD únicamente
-// Fallback para valores inesperados (e.g. si la BD agrega
-// un canal nuevo antes de actualizar el frontend)
+// Canal config
 // ─────────────────────────────────────────────────────────
 
 const CANAL_CONFIG: Record<string, {
@@ -110,7 +113,6 @@ function getCanalCfg(canal: string) {
 const FILTERS = ['Todos', 'WhatsApp', 'Email', 'Instagram', 'Facebook', 'Sin respuesta', 'Escaladas'] as const
 type FilterKey = typeof FILTERS[number]
 
-/** Minutos sin respuesta del cliente para considerar un hilo escalado */
 const ESCALADA_MIN = 45
 
 // ─────────────────────────────────────────────────────────
@@ -118,29 +120,35 @@ const ESCALADA_MIN = 45
 // ─────────────────────────────────────────────────────────
 
 export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) {
+  const router = useRouter()
+
   const [selected,       setSelected]       = useState<string | null>(threads[0]?.id ?? null)
   const [filter,         setFilter]         = useState<FilterKey>('Todos')
   const [threadMessages, setThreadMessages] = useState<Record<string, MensajeRow[]>>({})
   const [loadingThread,  setLoadingThread]  = useState<string | null>(null)
   const [threadErrors,   setThreadErrors]   = useState<Record<string, string>>({})
 
-  // Ref para prevenir cargas concurrentes del mismo hilo
-  const inFlightRef  = useRef<Set<string>>(new Set())
-  // Ref para el efecto de carga inicial (previene doble invocación en Strict Mode)
+  // Demo panel state
+  const [showDemo,   setShowDemo]   = useState(false)
+  const [demoPhone,  setDemoPhone]  = useState('')
+  const [demoMsg,    setDemoMsg]    = useState('')
+  const [demoResult, setDemoResult] = useState<SimularResult | null>(null)
+  const [demoPending, startDemo]    = useTransition()
+  const [tomarPending, startTomar]  = useTransition()
+
+  const inFlightRef    = useRef<Set<string>>(new Set())
   const initializedRef = useRef(false)
 
   async function loadMessages(threadId: string) {
-    if (threadMessages[threadId] !== undefined) return   // ya cargado
-    if (inFlightRef.current.has(threadId))      return   // ya en curso
+    if (threadMessages[threadId] !== undefined) return
+    if (inFlightRef.current.has(threadId))      return
 
     inFlightRef.current.add(threadId)
     setLoadingThread(threadId)
-    // Limpiar error previo del mismo hilo antes de reintentar
     setThreadErrors(prev => { const next = { ...prev }; delete next[threadId]; return next })
     try {
       const result = await getThreadMessagesAction(threadId)
       if (result.error) {
-        // Error explícito de la action — no confundir con hilo vacío
         setThreadErrors(prev => ({ ...prev, [threadId]: result.error! }))
       } else {
         setThreadMessages(prev => ({ ...prev, [threadId]: result.data ?? [] }))
@@ -151,7 +159,6 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
     }
   }
 
-  // Cargar mensajes del primer hilo al montar
   useEffect(() => {
     if (!initializedRef.current && threads[0]?.id) {
       initializedRef.current = true
@@ -163,6 +170,31 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
   function handleSelectThread(threadId: string) {
     setSelected(threadId)
     void loadMessages(threadId)
+  }
+
+  function handleSimular() {
+    startDemo(async () => {
+      const result = await simularMensajeAction({ telefono: demoPhone, mensaje: demoMsg })
+      setDemoResult(result)
+      if (result.ok) {
+        // Invalidar mensajes del hilo para que se recarguen
+        if (result.thread_id) {
+          setThreadMessages(prev => {
+            const next = { ...prev }
+            delete next[result.thread_id!]
+            return next
+          })
+        }
+        router.refresh()
+      }
+    })
+  }
+
+  function handleTomar(threadId: string) {
+    startTomar(async () => {
+      const result = await tomarConversacionAction(threadId)
+      if (result.ok) router.refresh()
+    })
   }
 
   // ── Datos derivados ───────────────────────────────────
@@ -191,7 +223,6 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
   const conv     = selected ? (threadsEnhanced.find(t => t.id === selected) ?? null) : null
   const messages = selected ? (threadMessages[selected] ?? []) : []
 
-  // KPIs — calculados desde el arreglo real
   const totalActivos   = threadsEnhanced.length
   const countSinResp   = threadsEnhanced.filter(t => t.sinRespuestaMin > 15).length
   const countEscaladas = threadsEnhanced.filter(t => t.escalada).length
@@ -201,6 +232,8 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
     if (!con.length) return 0
     return Math.round(con.reduce((s, t) => s + t.sinRespuestaMin, 0) / con.length)
   })()
+
+  const needsAttention = conv?.estado === 'waiting_agent' || conv?.estado === 'bot_active'
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] -mx-6 -my-6">
@@ -282,6 +315,7 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
               const overdue = t.sinRespuestaMin > 15
               const isSel   = t.id === selected
               const preview = t.preview?.contenido?.slice(0, 60) ?? '—'
+              const isBotActive = t.estado === 'bot_active'
 
               return (
                 <button
@@ -290,8 +324,10 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                   className={`w-full text-left px-4 py-3.5 transition-colors ${
                     isSel ? 'bg-blue-50 border-r-2 border-blue-600' : 'hover:bg-gray-50'
                   } ${
-                    t.escalada ? 'border-l-2 border-l-red-500'
-                    : overdue  ? 'border-l-2 border-l-orange-400'
+                    t.escalada    ? 'border-l-2 border-l-red-500'
+                    : t.estado === 'waiting_agent' ? 'border-l-2 border-l-orange-400'
+                    : isBotActive ? 'border-l-2 border-l-blue-400'
+                    : overdue     ? 'border-l-2 border-l-orange-400'
                     : ''
                   }`}
                 >
@@ -311,6 +347,7 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                             {t.clienteNombre}
                           </p>
                           {t.escalada && <AlertTriangle size={12} className="text-red-500 shrink-0" />}
+                          {isBotActive && <Bot size={12} className="text-blue-500 shrink-0" />}
                         </div>
                         <p className="text-xs text-gray-500 truncate">{preview}</p>
                       </div>
@@ -334,6 +371,12 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                       ESCALADA — {t.sinRespuestaMin} min sin respuesta
                     </div>
                   )}
+                  {isBotActive && !t.escalada && (
+                    <div className="mt-1.5 flex items-center gap-1 text-[11px] text-blue-600">
+                      <Bot size={10} />
+                      Bot gestionando
+                    </div>
+                  )}
                 </button>
               )
             })}
@@ -352,7 +395,9 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
             <>
               {/* Header */}
               <div className={`flex items-center gap-4 px-5 py-3.5 bg-white border-b shrink-0 ${
-                conv.escalada ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                conv.escalada ? 'border-red-300 bg-red-50'
+                : conv.estado === 'waiting_agent' ? 'border-orange-200 bg-orange-50'
+                : 'border-gray-200'
               }`}>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -370,22 +415,23 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                       conv.estado === 'waiting_customer' ? 'bg-yellow-100 text-yellow-700'
                       : conv.estado === 'waiting_agent'  ? 'bg-orange-100 text-orange-700'
+                      : conv.estado === 'bot_active'     ? 'bg-blue-100 text-blue-700'
                       : 'bg-green-100 text-green-700'
                     }`}>
                       {conv.estado === 'waiting_customer' ? 'Esperando cliente'
-                        : conv.estado === 'waiting_agent' ? 'Esperando asesor'
+                        : conv.estado === 'waiting_agent' ? '⚡ Requiere asesor'
+                        : conv.estado === 'bot_active'    ? '🤖 Bot activo'
                         : 'Abierto'}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
-                    {/* Vehículo no disponible en conversation_threads — pendiente Phase 2 */}
                     <span className="flex items-center gap-1"><Car size={11} /> —</span>
                     {conv.assignee_id && (
                       <span className="flex items-center gap-1"><User size={11} /> Asignado</span>
                     )}
                   </div>
                 </div>
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
                   {conv.cliente?.id && (
                     <Link
                       href={`/crm/clientes/${conv.cliente.id}`}
@@ -393,6 +439,16 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                     >
                       Ver cliente <ChevronRight size={12} />
                     </Link>
+                  )}
+                  {needsAttention && (
+                    <button
+                      onClick={() => handleTomar(conv.id)}
+                      disabled={tomarPending}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 border border-orange-300 rounded-lg text-xs text-orange-700 hover:bg-orange-50 disabled:opacity-50 transition-colors"
+                    >
+                      <UserCheck size={12} />
+                      {tomarPending ? 'Tomando…' : 'Tomar conversación'}
+                    </button>
                   )}
                   <Link
                     href="/taller/nuevo"
@@ -409,11 +465,17 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                 </div>
               </div>
 
-              {/* Banner de escalación */}
+              {/* Banner escalación */}
               {conv.escalada && (
                 <div className="px-5 py-2.5 bg-red-100 border-b border-red-200 flex items-center gap-2 text-sm text-red-700">
                   <AlertTriangle size={15} />
                   <strong>Sin respuesta</strong> — {conv.sinRespuestaMin} min desde el último mensaje del cliente.
+                </div>
+              )}
+              {conv.estado === 'waiting_agent' && !conv.escalada && (
+                <div className="px-5 py-2.5 bg-orange-50 border-b border-orange-200 flex items-center gap-2 text-sm text-orange-700">
+                  <UserCheck size={15} />
+                  El bot escaló esta conversación. Un asesor debe tomarla.
                 </div>
               )}
 
@@ -469,6 +531,117 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
         </div>
 
       </div>
+
+      {/* ── Demo Bot — Panel flotante ──────────────────────────── */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        {showDemo && (
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-2xl p-5 w-80">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Bot size={16} className="text-blue-500" />
+                Demo Bot
+              </h3>
+              <button
+                onClick={() => { setShowDemo(false); setDemoResult(null) }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {demoResult ? (
+              <div className="space-y-3">
+                {demoResult.error ? (
+                  <div className="p-3 rounded-lg bg-red-50 text-red-700 text-xs">
+                    {demoResult.error}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-gray-50 text-xs space-y-1.5">
+                    <div className="flex gap-2">
+                      <span className="text-gray-500">Intent:</span>
+                      <span className="font-medium text-gray-800">{demoResult.intent}</span>
+                      <span className="text-gray-400">·</span>
+                      <span className="font-medium text-gray-800">{demoResult.sentiment}</span>
+                    </div>
+                    {demoResult.handoff && (
+                      <div className="flex items-center gap-1 text-orange-600 font-medium">
+                        <UserCheck size={11} />
+                        Escaló a asesor — revisa la bandeja
+                      </div>
+                    )}
+                    {demoResult.cita_id && (
+                      <div className="flex items-center gap-1 text-green-600 font-medium">
+                        <CheckCircle2 size={11} />
+                        Cita agendada por el bot
+                      </div>
+                    )}
+                    <div className="pt-1 border-t border-gray-200">
+                      <p className="text-gray-500 mb-0.5">Respuesta del bot:</p>
+                      <p className="text-gray-800 leading-relaxed">
+                        &ldquo;{demoResult.respuesta?.slice(0, 120)}{(demoResult.respuesta?.length ?? 0) > 120 ? '…' : ''}&rdquo;
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={() => { setDemoResult(null); setDemoPhone(''); setDemoMsg('') }}
+                  className="w-full py-2 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"
+                >
+                  Nuevo mensaje
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Teléfono (sin +52)
+                  </label>
+                  <input
+                    type="tel"
+                    value={demoPhone}
+                    onChange={e => setDemoPhone(e.target.value)}
+                    placeholder="5512345678"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Mensaje del cliente
+                  </label>
+                  <textarea
+                    value={demoMsg}
+                    onChange={e => setDemoMsg(e.target.value)}
+                    placeholder="Hola, quiero agendar una cita para cambio de aceite..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  Simula un mensaje entrante de WA sin número Meta activo.
+                </p>
+                <button
+                  onClick={handleSimular}
+                  disabled={demoPending || !demoPhone.trim() || !demoMsg.trim()}
+                  className="w-full py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Send size={12} />
+                  {demoPending ? 'Procesando…' : 'Enviar al bot'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        <button
+          onClick={() => { setShowDemo(prev => !prev); if (!showDemo) setDemoResult(null) }}
+          className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors ${
+            showDemo ? 'bg-gray-700 hover:bg-gray-800' : 'bg-blue-600 hover:bg-blue-700'
+          } text-white`}
+          title="Demo Bot"
+        >
+          {showDemo ? <X size={20} /> : <Bot size={20} />}
+        </button>
+      </div>
+
     </div>
   )
 }

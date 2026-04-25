@@ -294,3 +294,65 @@ export async function updateCitaEstadoAction(citaId: string, nuevoEstado: Estado
 export async function cancelarCitaAction(citaId: string) {
   return updateCitaEstadoAction(citaId, 'cancelada')
 }
+
+// ── Demo: Simular no-show ──────────────────────────────────────────────────
+
+/**
+ * Marca una cita como no_show para demostración del flujo de seguimiento.
+ * Devuelve el mensaje WA que se encolaría para que el demo muestre el texto real.
+ */
+export async function simularNoShowAction(
+  citaId: string,
+): Promise<{ ok: boolean; wa_mensaje?: string; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'No autorizado' }
+
+  let usuario: import('@/lib/ensure-usuario').UsuarioCtx
+  try { usuario = await ensureUsuario(supabase, user.id, user.email ?? '') }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Error de perfil' } }
+
+  const admin = createAdminClient()
+
+  const { data: cita } = await admin
+    .from('citas')
+    .select(`
+      id, estado, sucursal_id, cliente_id, fecha_cita, hora_cita,
+      cliente:clientes ( nombre, whatsapp ),
+      sucursal:sucursales ( nombre )
+    `)
+    .eq('id', citaId)
+    .single()
+
+  if (!cita) return { ok: false, error: 'Cita no encontrada' }
+  if (cita.sucursal_id !== usuario.sucursal_id) return { ok: false, error: 'Sin acceso' }
+  if (!['confirmada', 'en_agencia'].includes(cita.estado)) {
+    return { ok: false, error: 'Solo se puede simular no-show en citas confirmadas o en agencia' }
+  }
+
+  const { error } = await admin
+    .from('citas')
+    .update({ estado: 'no_show' })
+    .eq('id', citaId)
+
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath(`/citas/${citaId}`)
+  revalidatePath('/citas')
+
+  type CitaRel = typeof cita & {
+    cliente:  { nombre: string; whatsapp: string | null } | null
+    sucursal: { nombre: string } | null
+  }
+  const c = cita as unknown as CitaRel
+
+  const wa_mensaje = c.cliente
+    ? mensajeNoShow({
+        nombre:  c.cliente.nombre,
+        hora:    (cita.hora_cita as unknown as string).slice(0, 5),
+        agencia: c.sucursal?.nombre ?? 'la agencia',
+      })
+    : undefined
+
+  return { ok: true, wa_mensaje }
+}

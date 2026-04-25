@@ -1,9 +1,9 @@
 # WORKPLAN_CURRENT_STATE.md — ServiceTrack
 > **FUENTE DE VERDAD ÚNICA del proyecto. Todo análisis, bug, decisión y mejora debe integrarse aquí.**
 > Documento de estado consolidado para arquitectos, asistentes IA y equipo de desarrollo.
-> **Última actualización:** 2026-04-22 (sesión: FASE 6 completada — Agenda calendario, DisponibilidadHoras, Ventas/CSI/Seguros/Workflow Studio MVPs en producción)
+> **Última actualización:** 2026-04-24 (sesión: análisis base operativa Autoline, migración 015 creada, FASE 2b definida, roadmap reordenado)
 > **Sprint cerrado:** Sprint 9
-> **Estado general:** ~42% del producto completo — CRM+Citas+Taller+Usuarios operativos, automatizaciones email activas, Ventas+CSI+Seguros+Workflow Studio desplegados.
+> **Estado general:** ~43% del producto completo — CRM+Citas+Taller+Usuarios operativos, Agenda calendario construida, automatizaciones email activas, base operativa configurable planificada.
 
 ---
 
@@ -214,6 +214,22 @@ cancelado → (final)
 | 2.4 | **Campos obligatorios en create** | `email` en cliente, `RFC` en empresa — HTML5 `required` + validación en server action | Bajo |
 | 2.5 | **Alertas promesa vencida en Taller** | Marcar visualmente OTs con `promesa_entrega < NOW()` | Bajo |
 | 2.6 | **Uppercase CSS en inputs de texto visible** | Clase CSS en `nombre`, `apellido`, `marca`, etc. Cosmético — BD ya es correcta | Bajo |
+
+### FASE 2b — BASE OPERATIVA CONFIGURABLE (prioridad antes de FASE 3 y módulos secundarios)
+
+> Puente entre "tenemos el sistema" y "el sistema se opera con parámetros reales del cliente". Basado en análisis de modelo Autoline (2026-04-24). No bloquea activación de FASE 5 (WA).
+
+| # | Tarea | Descripción | Esfuerzo |
+|---|-------|-------------|---------|
+| 2b.1 | **Ejecutar migración 015** en Supabase | `asesor_id` en `citas` + `agenda_vista_default` en `configuracion_citas_sucursal` | Inmediato (SQL ya listo) |
+| 2b.2 | **Migración 016** — parámetros de automatización | Columnas en `configuracion_citas_sucursal`: `horas_recordatorio` (default 24), `horas_recordatorio_2` (default 2), `ventana_noshow_horas` (default 24), `noshow_activo` (bool, default true) | Bajo |
+| 2b.3 | **Migración 016** — flags operativos en `usuarios` | `puede_ser_asesor` (bool), `puede_recibir_citas` (bool), `cuota_citas_dia` (int nullable) | Bajo |
+| 2b.4 | **UI parámetros de automatización** | Exponer en `/configuracion/citas`: recordatorio, ventana no-show, toggle no-show activo | Bajo |
+| 2b.5 | **Cron recordatorios**: leer `horas_recordatorio` de BD | `app/api/cron/recordatorios-citas/route.ts` lee config de BD en lugar de hardcoded 24h | Bajo |
+| 2b.6 | **Cron no-show**: leer `ventana_noshow_horas` de BD | Mismo archivo, ventana configurable por sucursal en lugar de hardcoded | Bajo |
+| 2b.7 | **Agenda: filtrar asesores por flag** | `/citas/nuevo` solo muestra usuarios con `puede_ser_asesor=true` | Bajo |
+
+**Qué NO se copia de Autoline:** UI de escritorio, modelo on-prem, batch processing, reemplazo del DMS, retrocompatibilidad legacy.
 
 ### FASE 3 — INTEGRIDAD DE NEGOCIO
 
@@ -499,3 +515,67 @@ Gaps entre lo que el backend hace correctamente y lo que el usuario experimenta 
 | ADR-09 | Migración 009 para roles/permisos en lugar de cambiar el código | Las tablas ya estaban definidas en el schema; el bug era en la BD (RLS sin policies), no en la lógica de negocio. Código no necesita cambios. | 2026-04-22 |
 | ADR-10 | Webhook WA clasifica IA inline (síncrono) en lugar de diferido por cron | Haiku es suficientemente rápido (<2s) para no bloquear el webhook (<20s límite Meta). Mensajes sin AI activo quedan en `processing_status='pending'` — pueden clasificarse retroactivamente. | 2026-04-22 |
 | ADR-11 | Lookup de cliente en webhook por `whatsapp.eq.{phone}` OR `whatsapp.eq.+{phone}` | Meta envía teléfonos sin `+`. Los registros en `clientes` pueden tener o no el prefijo. Solución pragmática para MVP sin normalización forzada en BD. | 2026-04-22 |
+| ADR-12 | Parámetros de automatización configurables en BD, no hardcodeados | `horas_recordatorio`, `ventana_noshow_horas`, `noshow_activo` como columnas en `configuracion_citas_sucursal`. Cada sucursal tiene sus tiempos. Evita cambios de código para ajustar comportamiento. | 2026-04-24 |
+| ADR-13 | Flags operativos en `usuarios` independientes del rol | `puede_ser_asesor`, `puede_recibir_citas`, `cuota_citas_dia` viven en la fila del usuario, no en el rol. El rol define visibilidad; el flag define capacidad operativa. Permite un gerente que no es asesor, o un asesor sin cuota. | 2026-04-24 |
+| ADR-14 | Roadmap prioriza activación WA+IA y base operativa configurable sobre módulos secundarios | Ventas/CSI/Seguros/Atención son importantes pero no son el diferenciador central del producto. Citas + Automatizaciones + Bot WA es lo que genera valor operativo inmediato para el cliente piloto. | 2026-04-24 |
+| ADR-15 | Autoline como referencia de lógica operativa, no de UI ni arquitectura | Del modelo Autoline se adaptan: parámetros configurables por sucursal, flags por usuario, agenda como cockpit. No se copian: UI de escritorio, on-prem, batch, retrocompatibilidad legacy. | 2026-04-24 |
+
+---
+
+## 11. BASE OPERATIVA — MODELO DE REFERENCIA (Autoline adaptado)
+
+> Analizado 2026-04-24. Objetivo: integrar la lógica operativa de un DMS maduro sin copiar su complejidad técnica ni su UI legacy.
+
+### 11.1 Modelo de usuario en capas
+
+```
+usuario
+  └── rol base          (define qué módulos ve: asesor_servicio, gerente, admin)
+        └── permisos por módulo  (puede_ver, puede_crear, puede_editar, puede_eliminar)
+              └── alcance         (sucursal_id via RLS, ya implementado)
+                    └── flags operativos  (puede_ser_asesor, puede_recibir_citas — TODO)
+```
+
+**Lo que ya existe:** rol + permisos + alcance (RLS).
+**Lo que falta:** flags operativos en `usuarios` (migración 016).
+
+### 11.2 Configuración por módulo/sucursal
+
+| Módulo | Tabla de config | Estado |
+|--------|----------------|--------|
+| Citas | `configuracion_citas_sucursal` | ✅ Existe — falta: `horas_recordatorio`, `ventana_noshow_horas`, `noshow_activo` |
+| Taller | `configuracion_taller_sucursal` | ✅ Existe |
+| CRM | — | ⬜ No existe — baja prioridad |
+| Ventas | — | ⬜ No existe — baja prioridad |
+| Bandeja/IA | `ai_settings` | ✅ Existe (`activo`, `horario_bot_inicio/fin`, `confidence_threshold`) |
+
+### 11.3 Agenda como cockpit operativo
+
+La agenda de `/agenda` es el punto de coordinación de la operación diaria. No es solo "mis actividades". Objetivo final:
+- **Vista personal** (hoy): actividades + citas asignadas al usuario
+- **Vista de equipo** (futuro): carga de trabajo por asesor, slots disponibles vs ocupados
+- **Vista de disponibilidad** (FASE 2.3 pendiente): al crear cita, mostrar horarios disponibles del asesor asignado
+
+### 11.4 Parámetros de automatización configurables (FASE 2b)
+
+| Parámetro | Tabla | Default | Usado por |
+|-----------|-------|---------|-----------|
+| `horas_recordatorio` | `configuracion_citas_sucursal` | 24 | Cron `recordatorios-citas` |
+| `horas_recordatorio_2` | `configuracion_citas_sucursal` | 2 | `outbound_queue` al confirmar cita |
+| `ventana_noshow_horas` | `configuracion_citas_sucursal` | 24 | Cron no-show detection |
+| `noshow_activo` | `configuracion_citas_sucursal` | true | Cron no-show detection |
+| `agenda_vista_default` | `configuracion_citas_sucursal` | `semana` | `/agenda` sin parámetro de URL |
+
+**Hoy:** todos hardcodeados en código. **FASE 2b:** mover a BD con UI de configuración.
+
+### 11.5 Orden de prioridad actualizado
+
+```
+FASE 1.5  → Cierre multi-usuario (pendiente smoke test manual)
+FASE 2    → Agenda + Calendario Citas [YA CONSTRUIDAS]
+FASE 2b   → Base operativa configurable (migración 015 + 016, UI params, flags usuario)
+FASE 5    → Activar WA+IA (código listo, dependencia: número Meta)
+FASE 3    → Integridad de negocio (KM, duplicados, flujo contextual)
+FASE 4    → Gobernanza (middleware permisos, auditoría, taller calendario)
+Módulos   → Ventas/CSI/Seguros/Atención (ya tienen placeholders, no son prioridad)
+```
