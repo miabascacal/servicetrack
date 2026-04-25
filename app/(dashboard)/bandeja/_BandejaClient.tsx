@@ -26,6 +26,7 @@ import {
   getThreadMessagesAction,
   simularMensajeAction,
   tomarConversacionAction,
+  enviarMensajeAsesorAction,
   type MensajeRow,
   type SimularResult,
 } from '@/app/actions/bandeja'
@@ -136,23 +137,30 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
   const [demoResult,  setDemoResult]  = useState<SimularResult | null>(null)
   // threadId activo en la conversación demo — se mantiene entre turnos del mismo cliente
   const [demoThreadId, setDemoThreadId] = useState<string | null>(null)
-  const [demoPending, startDemo]    = useTransition()
-  const [tomarPending, startTomar]  = useTransition()
+  const [asesorMsg,    setAsesorMsg]  = useState('')
+  const [demoPending,  startDemo]    = useTransition()
+  const [tomarPending, startTomar]   = useTransition()
+  const [asesorPending, startAsesor] = useTransition()
 
-  const inFlightRef    = useRef<Set<string>>(new Set())
-  const initializedRef = useRef(false)
-  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const inFlightRef     = useRef<Set<string>>(new Set())
+  // loadedThreadsRef tracks which threads have been fetched — using a Ref (not state)
+  // so that invalidation before calling loadMessages is always synchronous.
+  const loadedThreadsRef = useRef<Set<string>>(new Set())
+  const initializedRef  = useRef(false)
+  const messagesEndRef  = useRef<HTMLDivElement | null>(null)
 
   async function loadMessages(threadId: string) {
-    if (threadMessages[threadId] !== undefined) return
+    if (loadedThreadsRef.current.has(threadId)) return
     if (inFlightRef.current.has(threadId))      return
 
+    loadedThreadsRef.current.add(threadId)
     inFlightRef.current.add(threadId)
     setLoadingThread(threadId)
     setThreadErrors(prev => { const next = { ...prev }; delete next[threadId]; return next })
     try {
       const result = await getThreadMessagesAction(threadId)
       if (result.error) {
+        loadedThreadsRef.current.delete(threadId)  // allow retry on error
         setThreadErrors(prev => ({ ...prev, [threadId]: result.error! }))
       } else {
         setThreadMessages(prev => ({ ...prev, [threadId]: result.data ?? [] }))
@@ -187,13 +195,10 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
       setDemoResult(result)
       if (result.ok && result.thread_id) {
         setDemoThreadId(result.thread_id)
-        // Seleccionar el hilo en la bandeja y forzar recarga de mensajes
         setSelected(result.thread_id)
-        setThreadMessages(prev => {
-          const next = { ...prev }
-          delete next[result.thread_id!]
-          return next
-        })
+        // Synchronous ref invalidation — must happen before loadMessages call,
+        // otherwise the stale closure in loadMessages would skip the reload.
+        loadedThreadsRef.current.delete(result.thread_id)
         void loadMessages(result.thread_id)
         router.refresh()
       }
@@ -214,10 +219,28 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
     setDemoThreadId(null)
   }
 
+  function handleEnviarAsesor(threadId: string) {
+    if (!asesorMsg.trim()) return
+    const msg = asesorMsg
+    startAsesor(async () => {
+      const result = await enviarMensajeAsesorAction({ thread_id: threadId, contenido: msg })
+      if (result.ok) {
+        setAsesorMsg('')
+        loadedThreadsRef.current.delete(threadId)
+        void loadMessages(threadId)
+      }
+    })
+  }
+
   function handleTomar(threadId: string) {
     startTomar(async () => {
       const result = await tomarConversacionAction(threadId)
-      if (result.ok) router.refresh()
+      if (result.ok) {
+        // Reload messages for the thread so asesor sees full context immediately
+        loadedThreadsRef.current.delete(threadId)
+        void loadMessages(threadId)
+        router.refresh()
+      }
     })
   }
 
@@ -556,6 +579,33 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                 )}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* Área de respuesta — visible cuando el asesor tomó la conversación */}
+              {conv.estado === 'open' && conv.assignee_id && (
+                <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 flex items-end gap-2">
+                  <textarea
+                    value={asesorMsg}
+                    onChange={e => setAsesorMsg(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey && asesorMsg.trim()) {
+                        e.preventDefault()
+                        handleEnviarAsesor(conv.id)
+                      }
+                    }}
+                    placeholder="Responder al cliente… (Enter para enviar)"
+                    rows={2}
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={() => handleEnviarAsesor(conv.id)}
+                    disabled={asesorPending || !asesorMsg.trim()}
+                    className="shrink-0 p-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    title="Enviar"
+                  >
+                    <Send size={15} />
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

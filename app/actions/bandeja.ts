@@ -174,7 +174,7 @@ export async function simularMensajeAction(params: {
     .eq('contexto_tipo', 'general')
     .is('contexto_id', null)
     .in('estado', ['open', 'waiting_customer', 'waiting_agent', 'bot_active'])
-    .order('created_at', { ascending: false })
+    .order('creado_at', { ascending: false })
     .limit(1)
     .maybeSingle()
 
@@ -302,6 +302,70 @@ export async function simularMensajeAction(params: {
     thread_id,
     cliente_id: cliente.id,
   }
+}
+
+// ── Asesor responde en una conversación abierta ──────────────────────────────
+
+export async function enviarMensajeAsesorAction(params: {
+  thread_id: string
+  contenido: string
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!params.thread_id || !params.contenido.trim()) {
+    return { ok: false, error: 'Parámetros inválidos' }
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'No autorizado' }
+
+  let sucursal_id: string
+  try {
+    const ctx = await ensureUsuario(supabase, user.id, user.email ?? '')
+    sucursal_id = ctx.sucursal_id
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Error de perfil' }
+  }
+
+  const admin = createAdminClient()
+
+  const { data: thread } = await admin
+    .from('conversation_threads')
+    .select('id, sucursal_id, cliente_id')
+    .eq('id', params.thread_id)
+    .single()
+
+  if (!thread || thread.sucursal_id !== sucursal_id) {
+    return { ok: false, error: 'Hilo no encontrado o sin acceso' }
+  }
+
+  const now = new Date().toISOString()
+
+  const { error: msgError } = await admin
+    .from('mensajes')
+    .insert({
+      sucursal_id,
+      cliente_id:        thread.cliente_id,
+      canal:             'whatsapp',
+      direccion:         'saliente',
+      contenido:         params.contenido.trim(),
+      thread_id:         params.thread_id,
+      message_source:    'agent',
+      enviado_por_bot:   false,
+      processing_status: 'skipped',
+      enviado_at:        now,
+    })
+
+  if (msgError) return { ok: false, error: msgError.message }
+
+  await admin
+    .from('conversation_threads')
+    .update({
+      last_message_at:     now,
+      last_message_source: 'agent',
+    })
+    .eq('id', params.thread_id)
+
+  return { ok: true }
 }
 
 // ── Tomar conversación (asesor asume hilo del bot) ────────────────────────────
