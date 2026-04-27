@@ -1,9 +1,9 @@
 # WORKPLAN_CURRENT_STATE.md — ServiceTrack
 > **FUENTE DE VERDAD ÚNICA del proyecto. Todo análisis, bug, decisión y mejora debe integrarse aquí.**
 > Documento de estado consolidado para arquitectos, asistentes IA y equipo de desarrollo.
-> **Última actualización:** 2026-04-24 (sesión: análisis base operativa Autoline, migración 015 creada, FASE 2b definida, roadmap reordenado)
-> **Sprint cerrado:** Sprint 9
-> **Estado general:** ~43% del producto completo — CRM+Citas+Taller+Usuarios operativos, Agenda calendario construida, automatizaciones email activas, base operativa configurable planificada.
+> **Última actualización:** 2026-04-27 (sesión: bot rediseñado como asistente de seguimiento de citas; herramientas consultarCitasCliente + confirmarCitaBot; aviso WA coche listo; fix cierre de cita; intents confirmar_asistencia + consulta_cita_propia)
+> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento)
+> **Estado general:** ~45% del producto completo — CRM+Citas+Taller+Usuarios operativos, bot con prioridad seguimiento de citas ya agendadas, aviso coche listo implementado.
 
 ---
 
@@ -281,12 +281,15 @@ cancelado → (final)
 | 5.3 | **Automatizaciones determinísticas** (citas → WA) | ✅ Código completo | 🔴 No activo — mismo bloqueante que 5.1 |
 | 5.3b | **Recordatorio 2h** (`outbound_queue` al confirmar cita) | ✅ Código completo — encola en `outbound_queue` con `send_after = cita - 2h` | 🔴 No activo — depende de flush cron activo |
 | 5.3c | **No-show detection** (cron diario detecta citas `confirmada` de ayer, envía WA, actualiza estado) | ✅ Código completo — en `recordatorios-citas/route.ts` | 🔴 No activo — depende de WA activo |
-| 5.4 | **Bandeja operativa** (compose, respuesta, filtros) | ⬜ No implementado | ⬜ — |
-| 5.5 | **IA: clasificador de intención** (`lib/ai/classify-intent.ts`) | ✅ Código completo | 🔴 No activo — `ai_settings.activo=FALSE` y sin `ai_settings` en BD |
+| 5.3d | **Aviso vehículo listo** — WA automático al cliente cuando OT → `listo` | ✅ 2026-04-27: `mensajeVehiculoListo()` en `lib/whatsapp.ts`; integrado en `updateEstadoOTAction` con número de OT y dirección | 🔴 No activo — depende de `wa_numeros` activo |
+| 5.4 | **Bandeja operativa** (compose, respuesta, filtros) | 🟡 Asesor puede responder desde bandeja (`enviarMensajeAsesorAction`). Webhook entrante pendiente. | ⬜ Webhook WA no activo |
+| 5.5 | **IA: clasificador de intención** (`lib/ai/classify-intent.ts`) | ✅ Código completo — 12 intents incl. `confirmar_asistencia` y `consulta_cita_propia` (2026-04-27) | 🔴 No activo — `ai_settings.activo=FALSE` por defecto |
 | 5.6 | **IA: detector de sentimiento** (`lib/ai/detect-sentiment.ts`) | ✅ Código completo | 🔴 No activo — mismo control que 5.5 |
 | 5.7 | **Handoff bot → humano** (en webhook, umbral `confidence_threshold`) | ✅ Código completo | 🔴 No activo — depende de 5.2 y 5.5 |
 | 5.8 | **Flush `outbound_queue`** (`app/api/cron/outbound-queue-flush/route.ts`) | ✅ Código completo | 🔴 No activo — requiere deploy para que Vercel registre el cron |
-| 5.9 | **Workflow Studio / AI Copilot** | ⬜ No implementado | ⬜ — pasada futura |
+| 5.9 | **Bot: seguimiento de citas ya agendadas** — `consultarCitasCliente` + `confirmarCitaBot` | ✅ 2026-04-27: herramientas en `lib/ai/bot-tools.ts`; bot redesignado en `bot-citas.ts` con prioridad seguimiento → confirmación → nueva cita | 🔴 No activo — depende de WA activo; testeable en Demo Bot |
+| 5.10 | **Workflow Studio / AI Copilot** | ⬜ No implementado | ⬜ — pasada futura |
+| 5.11 | **Bot flotante / overlay por módulo** | ⬜ Sugerencia futura — NO implementar aún. El bot hoy vive solo en Automatizaciones/Demo. En el futuro podría invocarse desde Citas, Taller, CRM como ventana flotante. | ⬜ — pendiente diseño |
 
 ---
 

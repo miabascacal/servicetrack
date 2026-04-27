@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-24 — Migración 015 creada (asesor_id + agenda_vista_default). Agenda calendario en producción. FASE 2b definida: base operativa configurable. Roadmap reordenado._
+_Actualizado: 2026-04-27 — Bot seguimiento de citas implementado. Fix stale closure bandeja. Asesor puede responder tras tomar conversación. WA coche listo desde taller._
 
 ---
 
@@ -100,6 +100,16 @@ ALTER TABLE configuracion_citas_sucursal
 - [x] Sesión 2026-04-24 — Migración 015 creada: `asesor_id` en `citas` + `agenda_vista_default` en config (PENDIENTE EJECUTAR en Supabase)
 - [x] Sesión 2026-04-24 — FASE 2b documentada: base operativa configurable (parámetros automatización, flags usuario)
 - [x] Sesión 2026-04-24 — Roadmap reordenado: FASE 2b antes de módulos secundarios; WA+IA como prioridad comercial
+- [x] Sesión 2026-04-27 — Bot: seguimiento de citas ya agendadas como PRIORIDAD 1 (antes de agendar nuevas). Primera interacción siempre llama `consultar_citas_cliente`.
+- [x] Sesión 2026-04-27 — Bot: `confirmarCitaBot` tool — confirma asistencia vía bot, actualiza `confirmacion_cliente`, `contacto_bot`, `confirmacion_at` en BD.
+- [x] Sesión 2026-04-27 — Bot: guard `crear_cita` — llama exactamente una vez por conversación; si ya existe `cita_id` retorna "ya creada" y fuerza end_turn.
+- [x] Sesión 2026-04-27 — Bot: nuevos intents `confirmar_asistencia` + `consulta_cita_propia` en `classify-intent.ts` y routing en `bandeja.ts`.
+- [x] Sesión 2026-04-27 — WA coche listo: `mensajeVehiculoListo()` en `lib/whatsapp.ts` + disparo best-effort en `updateEstadoOTAction` al pasar OT a `listo`.
+- [x] Sesión 2026-04-27 — Bandeja: fix stale closure en `loadMessages` (ref-based cache con `useRef<Set<string>>` en lugar de state).
+- [x] Sesión 2026-04-27 — Bandeja: `enviarMensajeAsesorAction` + textarea de respuesta en chat panel (visible cuando hilo en `open` con assignee).
+- [x] Sesión 2026-04-27 — Bandeja: `handleTomar` invalida cache ref + recarga mensajes inmediatamente tras tomar conversación.
+- [x] Sesión 2026-04-27 — Bandeja: fix columna `creado_at` en orden de hilos (antes usaba `created_at` inexistente).
+- [x] Sesión 2026-04-27 — Bot flotante/overlay para otros módulos: documentado como SUGERENCIA FUTURA, NO implementar ahora.
 - [x] Sesión 2026-04-24 — Fix `hooks/usePermisos.ts`: eliminado `sucursal_id` de SELECT (causa real del error en producción)
 - [x] Sesión 2026-04-24 — Ciclo de vida de usuarios: `desactivarUsuarioAction`, `reactivarUsuarioAction`, `borrarUsuarioAction` con chequeo de historial FK
 - [x] Sesión 2026-04-24 — `UsuarioAcciones.tsx` reescrito con botones Desactivar/Reactivar/Eliminar (2-click confirm)

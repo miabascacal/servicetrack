@@ -238,6 +238,46 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
 - **`conversation_threads.canal` ahora acepta `'interno'`** (migración 006).
 - **`lib/threads.ts` — `ThreadCanal`** incluye `'interno'`.
 
+### Decisiones clave — Sesión 2026-04-27 (Bot seguimiento + Bandeja)
+
+- **Bot Ara — PRIORIDAD 1: seguimiento de citas ya agendadas, no agendar nuevas.**
+  - Primera interacción: SIEMPRE llama `consultar_citas_cliente` antes de responder.
+  - Si cliente tiene cita próxima pendiente → pregunta si confirma asistencia.
+  - Si cliente confirma → llama `confirmar_cita_cliente` → actualiza BD → termina con "Hasta pronto".
+  - Solo si cliente NO tiene citas → ofrece agendar una nueva.
+  - NUNCA invertir este orden de prioridades.
+  - Implementado en `lib/ai/bot-citas.ts` (SYSTEM_PROMPT + loop) y `lib/ai/bot-tools.ts` (`consultarCitasCliente`, `confirmarCitaBot`).
+
+- **Bot: guard `crear_cita` — exactamente una vez por conversación.**
+  - Variable `cita_id` en scope del loop agéntico; si ya tiene valor → retorna "ya creada" y fuerza `end_turn`.
+  - Tool result incluye instrucción SISTEMA para generar mensaje final y terminar.
+  - NUNCA llamar `crear_cita` dos veces en el mismo loop.
+
+- **Bot: nuevos intents en clasificador.**
+  - `confirmar_asistencia` — cliente confirma explícitamente que asistirá a cita existente.
+  - `consulta_cita_propia` — cliente pregunta por su propia cita agendada.
+  - Ambos activan el bot completo con threshold 0.5.
+  - Definidos en `lib/ai/types.ts` y `lib/ai/classify-intent.ts`.
+
+- **WA coche listo — best-effort al pasar OT a `listo`.**
+  - `updateEstadoOTAction` en `app/actions/taller.ts` dispara `enviarMensajeWA` cuando `nuevoEstado === 'listo'`.
+  - Mensaje: `mensajeVehiculoListo()` en `lib/whatsapp.ts`.
+  - Fallo del WA NO bloquea la operación de taller. Log de error pero continúa.
+
+- **Bandeja: cache ref-based para invalidación sincrónica.**
+  - `loadedThreadsRef = useRef<Set<string>>()` reemplaza el chequeo por estado.
+  - Antes de `loadMessages(id)`: llamar `loadedThreadsRef.current.delete(id)` para forzar recarga.
+  - Aplica en: `handleSimular`, `handleTomar`, y cualquier refresh de hilo futuro.
+
+- **Bandeja: asesor puede responder tras tomar conversación.**
+  - `enviarMensajeAsesorAction` en `app/actions/bandeja.ts`.
+  - Textarea visible cuando `conv.estado === 'open' && conv.assignee_id`.
+  - Enter (sin Shift) envía. `useTransition` para feedback no-bloqueante.
+
+- **Bot flotante/overlay para otros módulos — SUGERENCIA FUTURA ÚNICAMENTE.**
+  - No implementar hasta que el bot WhatsApp esté activo en producción.
+  - No agregar UI de bot dentro de módulos Taller/Citas/CRM mientras no haya validación real.
+
 ### Decisiones clave — Sprint 9 (2026-04-15 → 2026-04-16)
 
 - **ENUM `estado_ot`: valor canónico es `'en_proceso'`, no `'en_reparacion'`.**
