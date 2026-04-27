@@ -242,13 +242,14 @@ export async function simularMensajeAction(params: {
   let handoff = false
 
   // Routing multi-turno:
-  // - Si el hilo ya está en manos del bot (bot_active), siempre usar el loop agéntico
-  //   para que el bot recuerde el contexto y continúe donde se quedó.
-  // - Si es un hilo nuevo, solo activar el bot completo para intención de agendar cita.
+  // - bot_active: siempre loop agéntico (bot mantiene contexto del hilo)
+  // - Primera interacción: activar bot para agendar, confirmar asistencia o consulta de cita propia
   const isBotActive = threadEstado === 'bot_active'
   const usarBotCompleto =
     isBotActive ||
-    (intentResult.intent === 'agendar_cita' && intentResult.confidence >= 0.6)
+    (intentResult.intent === 'agendar_cita'        && intentResult.confidence >= 0.6) ||
+    (intentResult.intent === 'confirmar_asistencia' && intentResult.confidence >= 0.5) ||
+    (intentResult.intent === 'consulta_cita_propia' && intentResult.confidence >= 0.5)
 
   if (usarBotCompleto) {
     const botResult = await generarRespuestaBot(params.mensaje, ctx)

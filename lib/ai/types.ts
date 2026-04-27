@@ -8,6 +8,8 @@ export type IntentTipo =
   | 'saludo'
   | 'queja'
   | 'confirmacion'
+  | 'confirmar_asistencia'   // cliente confirma que asistirá a una cita ya agendada
+  | 'consulta_cita_propia'   // cliente pregunta por su cita existente (fecha, hora, estado)
   | 'otro'
 
 export type SentimentTipo = 'positive' | 'neutral' | 'negative' | 'urgent'

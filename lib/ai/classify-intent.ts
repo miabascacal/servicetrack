@@ -15,6 +15,8 @@ const VALID_INTENTS: IntentTipo[] = [
   'saludo',
   'queja',
   'confirmacion',
+  'confirmar_asistencia',
+  'consulta_cita_propia',
   'otro',
 ]
 
@@ -22,15 +24,17 @@ const SYSTEM_PROMPT = `Eres un clasificador de intenciones para una agencia auto
 Clasifica el mensaje del cliente en UNA de estas intenciones y responde SOLO con JSON válido.
 
 Intenciones posibles:
-- agendar_cita: quiere agendar o programar una cita de servicio (nueva)
+- agendar_cita: quiere agendar o programar una cita de servicio nueva
 - cancelar_cita: quiere cancelar una cita existente
 - reagendar_cita: quiere cambiar la fecha/hora de una cita existente
-- consulta_estado_ot: pregunta por el estado de su vehículo o la orden de trabajo
+- consulta_estado_ot: pregunta por el estado de su vehículo u orden de trabajo activa
 - consulta_presupuesto: pregunta por precios, cotizaciones o costos
-- consulta_horario: pregunta por horarios de atención, ubicación, o información general de la agencia
+- consulta_horario: pregunta por horarios de atención, ubicación o información general
 - saludo: solo saluda sin intención específica
 - queja: expresa molestia, insatisfacción o reclamo
-- confirmacion: confirma algo (asistencia a cita, recepción de información, etc.)
+- confirmacion: confirma recepción de información genérica (no relacionada con asistencia a cita)
+- confirmar_asistencia: confirma explícitamente que asistirá a una cita ya agendada ("sí confirmo", "ahí estaré", "sí voy")
+- consulta_cita_propia: pregunta por los detalles de su propia cita ya agendada ("¿cuándo es mi cita?", "¿a qué hora?")
 - otro: cualquier otra intención no listada
 
 Responde SOLO con este JSON, sin texto adicional:

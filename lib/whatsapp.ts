@@ -303,3 +303,22 @@ export function mensajeNoShow(params: {
     `¿Te gustaría reagendar? Responde este mensaje y con gusto te ayudamos.`,
   ].join('\n')
 }
+
+export function mensajeVehiculoListo(params: {
+  nombre:     string
+  numero_ot:  string
+  agencia:    string
+  direccion?: string
+}): string {
+  return [
+    `Hola ${params.nombre} 👋`,
+    ``,
+    `Tu vehículo ya está listo en *${params.agencia}* 🚗✅`,
+    ``,
+    `📋 Número de servicio: *${params.numero_ot}*`,
+    params.direccion ? `📍 *Dirección:* ${params.direccion}` : '',
+    ``,
+    `Puedes pasar a recogerlo en horario de atención.`,
+    `Si tienes alguna pregunta o necesitas coordinar la entrega, responde este mensaje.`,
+  ].filter(Boolean).join('\n')
+}

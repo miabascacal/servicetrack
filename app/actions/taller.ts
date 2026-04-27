@@ -8,6 +8,7 @@ import { ensureUsuario } from '@/lib/ensure-usuario'
 import { tieneRol } from '@/lib/permisos'
 import { OT_TRANSITIONS, ESTADO_OT_LABELS } from '@/lib/ot-estados'
 import { getOrCreateThread } from '@/lib/threads'
+import { enviarMensajeWA, mensajeVehiculoListo } from '@/lib/whatsapp'
 
 // ── Generar número de OT único ─────────────────────────────────────────────
 function generarNumeroOT(): string {
@@ -237,12 +238,12 @@ export async function updateEstadoOTAction(otId: string, nuevoEstado: EstadoOT) 
       const estadoNuevo    = ESTADO_OT_LABELS[nuevoEstado] ?? nuevoEstado
       const dmsInfo = ot.numero_ot_dms ? ` · DMS: ${ot.numero_ot_dms}` : ''
       await insertarEventoOT({
-        sucursal_id:  ot.sucursal_id,
-        cliente_id:   ot.cliente_id,
-        ot_id:        otId,
-        numero_ot:    ot.numero_ot,
+        sucursal_id:   ot.sucursal_id,
+        cliente_id:    ot.cliente_id,
+        ot_id:         otId,
+        numero_ot:     ot.numero_ot,
         numero_ot_dms: ot.numero_ot_dms,
-        contenido:    `Estado actualizado — ${ot.numero_ot}${dmsInfo}: "${estadoAnterior}" → "${estadoNuevo}".`,
+        contenido:     `Estado actualizado — ${ot.numero_ot}${dmsInfo}: "${estadoAnterior}" → "${estadoNuevo}".`,
       })
     }
   } catch (e) {
@@ -250,6 +251,50 @@ export async function updateEstadoOTAction(otId: string, nuevoEstado: EstadoOT) 
       `[updateEstadoOT] evento interno falló — ot_id: ${otId}, numero_ot: ${ot.numero_ot}, nuevo_estado: ${nuevoEstado} — `,
       e instanceof Error ? e.message : e
     )
+  }
+
+  // Notificación WA al cliente cuando el vehículo está listo — best-effort
+  if (nuevoEstado === 'listo' && ot.cliente_id && ot.sucursal_id) {
+    try {
+      const admin = createAdminClient()
+      const { data: cliente } = await admin
+        .from('clientes')
+        .select('nombre, whatsapp')
+        .eq('id', ot.cliente_id)
+        .single()
+
+      const { data: sucursal } = await admin
+        .from('sucursales')
+        .select('nombre, direccion')
+        .eq('id', ot.sucursal_id)
+        .single()
+
+      if (cliente?.whatsapp) {
+        void enviarMensajeWA({
+          sucursal_id:   ot.sucursal_id,
+          modulo:        'taller',
+          telefono:      cliente.whatsapp,
+          mensaje:       mensajeVehiculoListo({
+            nombre:    cliente.nombre,
+            numero_ot: ot.numero_ot,
+            agencia:   sucursal?.nombre ?? 'la agencia',
+            direccion: sucursal?.direccion ?? undefined,
+          }),
+          tipo:          'ot_lista',
+          entidad_tipo:  'ot',
+          entidad_id:    otId,
+          cliente_id:    ot.cliente_id,
+          enviado_por_bot: false,
+          contexto_tipo: 'ot',
+          contexto_id:   otId,
+        })
+      }
+    } catch (e) {
+      console.error(
+        `[updateEstadoOT] WA vehiculo listo falló — ot_id: ${otId} — `,
+        e instanceof Error ? e.message : e
+      )
+    }
   }
 
   revalidatePath('/taller')

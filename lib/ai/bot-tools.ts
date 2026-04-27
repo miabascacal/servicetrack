@@ -117,6 +117,106 @@ export async function crearCitaBot(params: {
   }
 }
 
+// ── Seguimiento de citas existentes ──────────────────────────────────────────
+
+export interface CitaResumen {
+  id:         string
+  fecha_cita: string
+  hora_cita:  string
+  estado:     string
+  servicio:   string | null
+}
+
+/**
+ * Devuelve las citas recientes y próximas de un cliente.
+ * Incluye citas de los últimos 30 días + futuras (excluye canceladas y no-show).
+ */
+export async function consultarCitasCliente(params: {
+  sucursal_id: string
+  cliente_id:  string
+}): Promise<{ citas: CitaResumen[]; mensaje: string }> {
+  const supabase = createAdminClient()
+
+  const desde = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+  const { data } = await supabase
+    .from('citas')
+    .select('id, fecha_cita, hora_cita, estado, servicio')
+    .eq('sucursal_id', params.sucursal_id)
+    .eq('cliente_id', params.cliente_id)
+    .not('estado', 'in', '(cancelada,no_show)')
+    .gte('fecha_cita', desde)
+    .order('fecha_cita', { ascending: true })
+    .limit(3)
+
+  const citas = (data ?? []) as CitaResumen[]
+
+  if (citas.length === 0) {
+    return { citas: [], mensaje: 'El cliente no tiene citas agendadas en los últimos 30 días ni próximas.' }
+  }
+
+  const resumen = citas.map(c => {
+    const hora = (c.hora_cita as string).slice(0, 5)
+    const srv  = c.servicio ? ` — ${c.servicio}` : ''
+    return `- ${c.fecha_cita} a las ${hora}${srv} [estado: ${c.estado}] [id: ${c.id}]`
+  }).join('\n')
+
+  return { citas, mensaje: `Citas del cliente:\n${resumen}` }
+}
+
+/**
+ * Confirma la asistencia del cliente a una cita ya agendada.
+ * Mueve estado de 'pendiente_contactar'/'contactada' a 'confirmada'.
+ * Registra que el bot hizo el contacto y el cliente confirmó.
+ */
+export async function confirmarCitaBot(params: {
+  cita_id:     string
+  sucursal_id: string
+}): Promise<{ ok: boolean; mensaje: string }> {
+  const supabase = createAdminClient()
+
+  const { data: cita } = await supabase
+    .from('citas')
+    .select('id, estado, fecha_cita, hora_cita, servicio')
+    .eq('id', params.cita_id)
+    .eq('sucursal_id', params.sucursal_id)
+    .single()
+
+  if (!cita) {
+    return { ok: false, mensaje: 'No se encontró la cita en el sistema.' }
+  }
+
+  const hora = (cita.hora_cita as string).slice(0, 5)
+
+  // Si ya está confirmada o más avanzada, no hacer nada
+  if (!['pendiente_contactar', 'contactada'].includes(cita.estado)) {
+    return {
+      ok:     true,
+      mensaje: `La cita del ${cita.fecha_cita} a las ${hora} ya está en estado "${cita.estado}".`,
+    }
+  }
+
+  const { error } = await supabase
+    .from('citas')
+    .update({
+      estado:               'confirmada',
+      contacto_bot:         true,
+      confirmacion_cliente: true,
+      confirmacion_at:      new Date().toISOString(),
+    })
+    .eq('id', params.cita_id)
+
+  if (error) {
+    return { ok: false, mensaje: 'No se pudo registrar la confirmación. Por favor intenta de nuevo.' }
+  }
+
+  const srv = cita.servicio ? ` para ${cita.servicio}` : ''
+  return {
+    ok:     true,
+    mensaje: `Asistencia confirmada. Cita${srv} el ${cita.fecha_cita} a las ${hora} hrs — estado actualizado a confirmada.`,
+  }
+}
+
 export async function buscarClientePorTelefono(
   sucursal_id: string,
   telefono: string,
