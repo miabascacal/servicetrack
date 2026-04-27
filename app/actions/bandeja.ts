@@ -10,6 +10,7 @@ import { generarRespuestaBot }    from '@/lib/ai/bot-citas'
 import { generarRespuestaSimple } from '@/lib/ai/bot-respuestas'
 import {
   crearCitaBot,
+  confirmarCitaBot,
   limpiarConfirmacionPendiente,
   type ConfirmacionPendiente,
 } from '@/lib/ai/bot-tools'
@@ -277,6 +278,7 @@ export async function simularMensajeAction(params: {
       fecha:      pendingConf.fecha,
       hora:       pendingConf.hora,
       servicio:   pendingConf.servicio ?? undefined,
+      confirmada: true,
     })
     if ('id' in result) {
       cita_id  = result.id
@@ -290,6 +292,36 @@ export async function simularMensajeAction(params: {
       await limpiarConfirmacionPendiente(thread_id)
     }
     // If crearCitaBot returned an error (slot taken, etc.) fall through to bot
+  }
+
+  // 5b. Fallback determinístico para cita existente:
+  // Si el cliente dice que sí pero no había confirmacion_pendiente (nuevo slot),
+  // verificar si tiene exactamente una cita próxima activa y confirmarla.
+  if (!skipBot && isAfirmacion(params.mensaje)) {
+    const hoy = new Date().toISOString().split('T')[0]
+    const { data: citasActivas } = await admin
+      .from('citas')
+      .select('id, fecha_cita, hora_cita, servicio')
+      .eq('sucursal_id', sucursal_id)
+      .eq('cliente_id', cliente.id)
+      .in('estado', ['pendiente_contactar', 'contactada'])
+      .gte('fecha_cita', hoy)
+      .order('fecha_cita', { ascending: true })
+      .limit(2)
+
+    if (citasActivas && citasActivas.length === 1) {
+      const cita  = citasActivas[0]
+      const cr    = await confirmarCitaBot({ cita_id: cita.id, sucursal_id })
+      if (cr.ok) {
+        const fechaLeg = new Date((cita.fecha_cita as string) + 'T12:00:00').toLocaleDateString('es-MX', {
+          weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
+        })
+        const hora = (cita.hora_cita as string).slice(0, 5)
+        const srv  = cita.servicio ? ` para ${cita.servicio}` : ''
+        respuesta = `¡Perfecto! Tu asistencia${srv} ha sido confirmada para el ${fechaLeg} a las ${hora} hrs. ¡Hasta pronto!`
+        skipBot   = true
+      }
+    }
   }
 
   // 6. Generar respuesta del bot (si no se resolvió determinísticamente)
@@ -326,7 +358,7 @@ export async function simularMensajeAction(params: {
   }
 
   // 7. Persistir respuesta del bot
-  await admin
+  const { error: botMsgError } = await admin
     .from('mensajes')
     .insert({
       sucursal_id,
@@ -340,6 +372,18 @@ export async function simularMensajeAction(params: {
       processing_status: 'skipped',
       enviado_at:        new Date().toISOString(),
     })
+
+  if (botMsgError) {
+    console.error('[simularMensajeAction] error al guardar respuesta del bot:', botMsgError)
+    return {
+      ok:    false,
+      error: `Error guardando respuesta del bot: ${botMsgError.message}`,
+      cita_id,
+      handoff,
+      thread_id,
+      cliente_id: cliente.id,
+    }
+  }
 
   // 8. Actualizar estado del hilo
   const nuevoEstado = handoff ? 'waiting_agent' : 'bot_active'

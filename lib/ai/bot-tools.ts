@@ -76,6 +76,7 @@ export async function crearCitaBot(params: {
   fecha: string
   hora: string
   servicio?: string
+  confirmada?: boolean   // true → la cita se crea en estado 'confirmada' (cliente ya confirmó)
 }): Promise<{ id: string; confirmacion: string } | { error: string }> {
   const supabase = createAdminClient()
 
@@ -92,16 +93,19 @@ export async function crearCitaBot(params: {
     return { error: 'Ese horario ya no está disponible. Por favor elige otro.' }
   }
 
+  const now = new Date().toISOString()
   const { data, error } = await supabase
     .from('citas')
     .insert({
-      sucursal_id: params.sucursal_id,
-      cliente_id: params.cliente_id,
-      fecha_cita: params.fecha,
-      hora_cita: params.hora,
-      servicio: params.servicio ?? null,
-      estado: 'pendiente_contactar',
-      contacto_bot: true,
+      sucursal_id:          params.sucursal_id,
+      cliente_id:           params.cliente_id,
+      fecha_cita:           params.fecha,
+      hora_cita:            params.hora,
+      servicio:             params.servicio ?? null,
+      estado:               params.confirmada ? 'confirmada' : 'pendiente_contactar',
+      contacto_bot:         true,
+      confirmacion_cliente: params.confirmada ? true : null,
+      confirmacion_at:      params.confirmada ? now : null,
     })
     .select('id')
     .single()
