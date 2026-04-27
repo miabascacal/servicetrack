@@ -25,6 +25,7 @@ ServiceTrack es un SaaS vertical automotriz (Next.js 16 + Supabase + Vercel). El
 - **Acceso multiusuario roto** — el link de invitación falla con `access_denied` / `otp_expired`. Migración 009 creada pero sin ejecutar. Sin segundo usuario funcional no se puede validar aislamiento multi-tenant real.
 - Bandeja UI — conecta a `conversation_threads` + `mensajes`, pero incompleta: webhook WA implementado en código pero sin activar (requiere número Meta + config externa), sin compose/respuesta real.
 - **WhatsApp + IA MVP** — código completo (webhook, classify-intent, detect-sentiment, outbound-queue-flush), pero nada activo en producción: requiere deploy + `wa_numeros` poblado + `WA_VERIFY_TOKEN` + habilitar `ai_settings`.
+- **Bot demo NO listo para producción hasta que se ejecute migración 018** en Supabase SQL Editor. `citas` en producción no tiene `contacto_bot`, `confirmacion_cliente`, `confirmacion_at`. Bot falla en INSERT/UPDATE sin esas columnas. Ver `PENDIENTES.md` para el SQL exacto y el checklist de prueba A/B/C/D.
 
 ---
 

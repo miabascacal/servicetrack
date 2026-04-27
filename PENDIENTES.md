@@ -1,5 +1,23 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-27 — Bot seguimiento de citas implementado. Fix stale closure bandeja. Asesor puede responder tras tomar conversación. WA coche listo desde taller._
+_Actualizado: 2026-04-27 — Bot seguimiento de citas implementado. Fix stale closure bandeja. Asesor puede responder tras tomar conversación. WA coche listo desde taller. Schema drift detectado en `citas` (producción), migración 018 creada._
+
+---
+
+## ⚠️ MIGRACIONES PENDIENTES DE EJECUTAR EN SUPABASE (bloquean demo del bot)
+
+> **Ejecutar ANTES de hacer push/deploy o probar el bot en producción.**
+
+✅ **Migración 018** — `supabase/migrations/018_add_bot_confirmation_fields_to_citas.sql`
+- Detectada en validación pre-deploy 2026-04-27: producción no tenía `contacto_bot`, `confirmacion_cliente`, `confirmacion_at` en tabla `citas`.
+- `lib/ai/bot-tools.ts` (`crearCitaBot`, `confirmarCitaBot`) usa estas columnas — INSERT/UPDATE falla en producción sin esta migración.
+- **Ejecutar manualmente en Supabase SQL Editor** antes de push.
+
+```sql
+alter table public.citas
+  add column if not exists contacto_bot        boolean     default false,
+  add column if not exists confirmacion_cliente boolean,
+  add column if not exists confirmacion_at      timestamptz;
+```
 
 ---
 

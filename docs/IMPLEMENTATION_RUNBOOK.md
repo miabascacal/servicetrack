@@ -447,6 +447,34 @@ Si no hay número para el módulo específico, `lib/whatsapp.ts` hace fallback a
 
 ---
 
+## 10.5 Migraciones pendientes de ejecutar en Supabase antes de demo/deploy bot
+
+Las siguientes migraciones NO se aplican automáticamente — deben ejecutarse manualmente en
+**Supabase → SQL Editor** de la instancia de producción antes de cualquier push o demo del bot.
+
+### Migración 018 — campos de trazabilidad del bot en `citas`
+
+Detectada como schema drift en validación pre-deploy 2026-04-27.
+`lib/ai/bot-tools.ts` usa estas columnas al crear y confirmar citas vía bot.
+Sin esta migración, `crearCitaBot` y `confirmarCitaBot` fallan silenciosamente.
+
+```sql
+alter table public.citas
+  add column if not exists contacto_bot        boolean     default false,
+  add column if not exists confirmacion_cliente boolean,
+  add column if not exists confirmacion_at      timestamptz;
+```
+
+**Verificación post-ejecución:**
+```sql
+select column_name, data_type from information_schema.columns
+where table_name = 'citas'
+  and column_name in ('contacto_bot','confirmacion_cliente','confirmacion_at');
+-- Debe devolver 3 filas.
+```
+
+---
+
 ## 11. Checklist de go-live
 
 - [ ] Login funcional para todos los usuarios iniciales

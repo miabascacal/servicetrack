@@ -10,7 +10,6 @@ import { generarRespuestaBot }    from '@/lib/ai/bot-citas'
 import { generarRespuestaSimple } from '@/lib/ai/bot-respuestas'
 import {
   crearCitaBot,
-  leerConfirmacionPendiente,
   limpiarConfirmacionPendiente,
   type ConfirmacionPendiente,
 } from '@/lib/ai/bot-tools'

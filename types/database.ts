@@ -162,6 +162,10 @@ export interface Cita {
   notas_previas?: string
   activa: boolean
   created_at: string
+  // campos trazabilidad bot — migration 018
+  contacto_bot?: boolean
+  confirmacion_cliente?: boolean | null
+  confirmacion_at?: string | null
 }
 
 export interface OrdenTrabajo {
