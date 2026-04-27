@@ -8,6 +8,12 @@ import { classifyIntent }    from '@/lib/ai/classify-intent'
 import { detectSentiment }   from '@/lib/ai/detect-sentiment'
 import { generarRespuestaBot }    from '@/lib/ai/bot-citas'
 import { generarRespuestaSimple } from '@/lib/ai/bot-respuestas'
+import {
+  crearCitaBot,
+  leerConfirmacionPendiente,
+  limpiarConfirmacionPendiente,
+  type ConfirmacionPendiente,
+} from '@/lib/ai/bot-tools'
 
 export interface MensajeRow {
   id:             string
@@ -35,8 +41,6 @@ export async function getThreadMessagesAction(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { data: null, error: 'No autorizado' }
 
-  // Obtener sucursal del usuario (ensureUsuario usa adminClient internamente
-  // porque RLS bloquea el SELECT directo en la tabla usuarios)
   let sucursal_id: string
   try {
     const ctx = await ensureUsuario(supabase, user.id, user.email ?? '')
@@ -47,9 +51,6 @@ export async function getThreadMessagesAction(
 
   const admin = createAdminClient()
 
-  // Verificar que el hilo pertenece a la sucursal del usuario.
-  // adminClient garantiza que encontramos el hilo aunque RLS devuelva
-  // vacío por alguna razón — el control de acceso lo hacemos nosotros.
   const { data: thread, error: threadError } = await admin
     .from('conversation_threads')
     .select('id, sucursal_id')
@@ -98,6 +99,43 @@ export interface SimularResult {
 }
 
 /**
+ * Retorna true si el texto es una respuesta afirmativa clara del cliente.
+ * Usado para el pre-check determinístico de confirmación de cita.
+ */
+function isAfirmacion(texto: string): boolean {
+  const t = texto.toLowerCase().trim().replace(/[¡!¿?.]/g, '').trim()
+  const AFFIRMATIVES = [
+    'sí', 'si', 'confirmo', 'correcto', 'ok', 'adelante', 'dale',
+    'claro', 'de acuerdo', 'perfecto', 'confirmado', 'va', 'sale',
+    'ándale', 'andale', 'con gusto', 'listo', 'órale', 'orale',
+  ]
+  return AFFIRMATIVES.some(a =>
+    t === a ||
+    t.startsWith(a + ' ') ||
+    t.endsWith(' ' + a) ||
+    t === a + 's' // "sí" variants
+  )
+}
+
+/**
+ * Parsea la confirmación pendiente desde el objeto metadata del hilo.
+ * La metadata viene de Supabase como objeto JS plano (JSONB auto-parsed).
+ */
+function parsePendingConfirmation(metadata: unknown): ConfirmacionPendiente | null {
+  if (!metadata || typeof metadata !== 'object') return null
+  const m = metadata as Record<string, unknown>
+  const pending = m.confirmacion_pendiente
+  if (!pending || typeof pending !== 'object') return null
+  const p = pending as Record<string, unknown>
+  if (typeof p.fecha !== 'string' || typeof p.hora !== 'string') return null
+  return {
+    fecha:    p.fecha,
+    hora:     p.hora,
+    servicio: typeof p.servicio === 'string' && p.servicio ? p.servicio : null,
+  }
+}
+
+/**
  * Simula un mensaje entrante de WhatsApp sin necesidad de número Meta activo.
  * Crea o reutiliza un cliente DEMO por teléfono, persiste en mensajes,
  * clasifica intent + sentiment, y genera respuesta del bot.
@@ -132,8 +170,6 @@ export async function simularMensajeAction(params: {
   const admin = createAdminClient()
 
   // 1. Buscar o crear cliente.
-  // UNIQUE(grupo_id, whatsapp) — columnas reales: grupo_id, nombre, apellido, whatsapp, activo.
-  // No existen sucursal_id ni sucursal_origen_id en el schema desplegado.
   let { data: cliente } = await admin
     .from('clientes')
     .select('id, nombre, apellido')
@@ -161,13 +197,10 @@ export async function simularMensajeAction(params: {
 
   if (!cliente) return { ok: false, error: 'No se pudo resolver el cliente' }
 
-  void sucursal_id // usado en getOrCreateThread más abajo
-
-  // 2. Buscar hilo activo existente (incluye bot_active)
-  // Leemos también `estado` para decidir el routing multi-turno más abajo.
+  // 2. Buscar hilo activo existente (incluye metadata para pre-check determinístico)
   const { data: existingThread } = await admin
     .from('conversation_threads')
-    .select('id, estado')
+    .select('id, estado, metadata')
     .eq('sucursal_id', sucursal_id)
     .eq('cliente_id', cliente.id)
     .eq('canal', 'whatsapp')
@@ -181,7 +214,7 @@ export async function simularMensajeAction(params: {
   let thread_id: string
   let threadEstado: string | null = null
   if (existingThread) {
-    thread_id  = existingThread.id
+    thread_id    = existingThread.id
     threadEstado = existingThread.estado
   } else {
     const result = await getOrCreateThread({
@@ -229,44 +262,71 @@ export async function simularMensajeAction(params: {
       .eq('id', msgIn.id)
   }
 
-  // 5. Generar respuesta del bot
-  const ctx = {
-    sucursal_id,
-    cliente_id:     cliente.id,
-    cliente_nombre: `${cliente.nombre} ${cliente.apellido}`.trim(),
-    thread_id,
-  }
-
-  let respuesta: string
+  // 5. Pre-check determinístico: si hay confirmación pendiente y el cliente afirma,
+  //    crear la cita directamente sin pasar por el LLM.
+  let respuesta = 'En este momento no puedo procesar tu solicitud. Un asesor se pondrá en contacto contigo pronto.'
   let cita_id: string | null = null
   let handoff = false
+  let skipBot = false
 
-  // Routing multi-turno:
-  // - bot_active: siempre loop agéntico (bot mantiene contexto del hilo)
-  // - Primera interacción: activar bot para agendar, confirmar asistencia o consulta de cita propia
-  const isBotActive = threadEstado === 'bot_active'
-  const usarBotCompleto =
-    isBotActive ||
-    (intentResult.intent === 'agendar_cita'        && intentResult.confidence >= 0.6) ||
-    (intentResult.intent === 'confirmar_asistencia' && intentResult.confidence >= 0.5) ||
-    (intentResult.intent === 'consulta_cita_propia' && intentResult.confidence >= 0.5)
+  const pendingConf = parsePendingConfirmation(existingThread?.metadata)
 
-  if (usarBotCompleto) {
-    const botResult = await generarRespuestaBot(params.mensaje, ctx)
-    respuesta = botResult.respuesta
-    cita_id   = botResult.cita_id
-    handoff   = botResult.handoff
-  } else {
-    const botResult = generarRespuestaSimple({
-      intent:         intentResult.intent,
-      sentiment:      sentimentResult.sentiment,
-      cliente_nombre: ctx.cliente_nombre,
+  if (pendingConf && isAfirmacion(params.mensaje)) {
+    const result = await crearCitaBot({
+      sucursal_id,
+      cliente_id: cliente.id,
+      fecha:      pendingConf.fecha,
+      hora:       pendingConf.hora,
+      servicio:   pendingConf.servicio ?? undefined,
     })
-    respuesta = botResult.respuesta
-    handoff   = botResult.handoff
+    if ('id' in result) {
+      cita_id  = result.id
+      const fechaLegible = new Date(pendingConf.fecha + 'T12:00:00').toLocaleDateString('es-MX', {
+        weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
+      })
+      const srv = pendingConf.servicio ? ` para ${pendingConf.servicio}` : ''
+      respuesta = `¡Listo! Tu cita${srv} ha sido confirmada para el ${fechaLegible} a las ${pendingConf.hora} hrs. ¡Hasta pronto! 🎉`
+      skipBot   = true
+      // Clear pending state now that cita is created
+      await limpiarConfirmacionPendiente(thread_id)
+    }
+    // If crearCitaBot returned an error (slot taken, etc.) fall through to bot
   }
 
-  // 6. Persistir respuesta del bot
+  // 6. Generar respuesta del bot (si no se resolvió determinísticamente)
+  if (!skipBot) {
+    const ctx = {
+      sucursal_id,
+      cliente_id:     cliente.id,
+      cliente_nombre: `${cliente.nombre} ${cliente.apellido}`.trim(),
+      thread_id,
+      intent_tipo:    intentResult.intent,
+    }
+
+    const isBotActive = threadEstado === 'bot_active'
+    const usarBotCompleto =
+      isBotActive ||
+      (intentResult.intent === 'agendar_cita'        && intentResult.confidence >= 0.6) ||
+      (intentResult.intent === 'confirmar_asistencia' && intentResult.confidence >= 0.5) ||
+      (intentResult.intent === 'consulta_cita_propia' && intentResult.confidence >= 0.5)
+
+    if (usarBotCompleto) {
+      const botResult = await generarRespuestaBot(params.mensaje, ctx)
+      respuesta = botResult.respuesta
+      cita_id   = botResult.cita_id
+      handoff   = botResult.handoff
+    } else {
+      const botResult = generarRespuestaSimple({
+        intent:         intentResult.intent,
+        sentiment:      sentimentResult.sentiment,
+        cliente_nombre: ctx.cliente_nombre,
+      })
+      respuesta = botResult.respuesta
+      handoff   = botResult.handoff
+    }
+  }
+
+  // 7. Persistir respuesta del bot
   await admin
     .from('mensajes')
     .insert({
@@ -282,7 +342,7 @@ export async function simularMensajeAction(params: {
       enviado_at:        new Date().toISOString(),
     })
 
-  // 7. Actualizar estado del hilo
+  // 8. Actualizar estado del hilo
   const nuevoEstado = handoff ? 'waiting_agent' : 'bot_active'
   await admin
     .from('conversation_threads')

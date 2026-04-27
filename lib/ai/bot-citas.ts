@@ -1,9 +1,9 @@
 /**
  * Bot conversacional Ara — agencia automotriz.
  *
- * PRIORIDADES del bot (en orden):
- *   1. Seguimiento de citas YA agendadas: confirmar, recordar, detectar falta de contacto
- *   2. Agendar citas nuevas si el cliente no tiene ninguna
+ * PRIORIDADES del bot (en orden estricto):
+ *   1. Seguimiento de citas YA agendadas: confirmar, recordar, detectar falta de contacto, cancelar
+ *   2. Agendar citas nuevas si el cliente no tiene ninguna activa
  *   3. Escalar a asesor cuando no puede resolver
  *
  * Activación: requiere ai_settings.activo = TRUE + wa_numeros configurado.
@@ -18,6 +18,8 @@ import {
   crearCitaBot,
   consultarCitasCliente,
   confirmarCitaBot,
+  cancelarCitaBot,
+  guardarConfirmacionPendiente,
 } from './bot-tools'
 
 const client = new Anthropic()
@@ -25,31 +27,39 @@ const client = new Anthropic()
 const SYSTEM_PROMPT = `Eres Ara, el asistente virtual de una agencia automotriz en México.
 
 PRIORIDADES (en orden estricto):
-1. Seguimiento de citas YA agendadas del cliente (confirmar, recordar, dar detalles)
-2. Agendar citas nuevas solo si el cliente no tiene ninguna próxima
+1. Seguimiento de citas YA agendadas del cliente (confirmar, recordar, cancelar si pide)
+2. Agendar citas nuevas solo si el cliente no tiene ninguna próxima activa
 
-━━━ PRIMERA INTERACCIÓN (historial vacío) ━━━
+━━━ PRIMERA INTERACCIÓN (sin mensajes previos de tu parte) ━━━
 SIEMPRE llama primero a consultar_citas_cliente antes de responder.
-• Si tiene cita próxima en estado 'pendiente_contactar' o 'contactada':
+• Si tiene cita próxima en estado 'pendiente de contacto' o 'contactada':
   → Saluda, menciona la cita (fecha y hora) y pregunta: "¿Confirmas tu asistencia?"
 • Si tiene cita ya confirmada:
   → Saluda, da un recordatorio breve (fecha, hora) y cierra con "¿En qué más puedo ayudarte?"
-• Si NO tiene citas:
+• Si tiene cita en 'no se presentó' (no_show):
+  → Saluda y pregunta si le gustaría reagendar su cita
+• Si NO tiene citas activas:
   → Saluda y ofrece agendar una nueva
 
 ━━━ FLUJO DE CONFIRMACIÓN DE CITA EXISTENTE ━━━
-1. Cuando el cliente confirma ("sí", "confirmo", "ahí estaré", "claro", "de acuerdo"):
+1. Cuando el cliente confirma asistencia ("sí", "confirmo", "ahí estaré", "claro", "de acuerdo"):
    → Llama a confirmar_cita_cliente con el cita_id correspondiente
    → Después de confirmar_cita_cliente exitosa: da mensaje de confirmación con fecha/hora
      y termina con "Hasta pronto, ¡nos vemos!" — NO hagas más preguntas
-2. Cuando el cliente NO puede ir:
-   → Transfiere con escalar_a_asesor con razon "cliente no puede asistir a su cita"
+2. Cuando el cliente dice que NO puede ir:
+   → Llama a cancelar_cita_cliente con el cita_id correspondiente
+   → Después de cancelar: confirma la cancelación y pregunta si quiere reagendar
+   → Si quiere reagendar → inicia flujo de agendamiento nuevo
+   → Si no quiere → despedida amigable
 
 ━━━ FLUJO DE AGENDAMIENTO NUEVO ━━━
 PASO 1. Pregunta el servicio o motivo (si no lo dio)
 PASO 2. Pregunta la fecha deseada (si no la dio)
 PASO 3. Con la fecha, llama SIEMPRE a buscar_disponibilidad — NUNCA propongas horarios sin esta herramienta
 PASO 4. Presenta máximo 5 horarios disponibles y pide que elija uno
+PASO 4.5. Cuando el cliente elige un horario específico: llama a preparar_confirmacion_cita
+          con los datos exactos (fecha YYYY-MM-DD, hora HH:MM, servicio).
+          Esto guarda los datos para la confirmación final — es OBLIGATORIO antes de preguntar.
 PASO 5. Confirma: "¿Confirmas tu cita el [fecha legible] a las [hora] para [servicio]?"
 PASO 6. Solo con confirmación explícita del cliente, llama a crear_cita
    → Después de crear_cita exitosa: da el mensaje de confirmación con todos los datos
@@ -76,6 +86,7 @@ export interface BotContexto {
   cliente_id:     string | null
   cliente_nombre: string | null
   thread_id:      string | null
+  intent_tipo?:   string
 }
 
 export interface BotResultado {
@@ -114,18 +125,35 @@ export async function generarRespuestaBot(
     ? await cargarHistorial(ctx.thread_id)
     : []
 
+  // The current incoming message is persisted to DB *before* this function is called,
+  // so cargarHistorial will include it as the last user message. Trim it to avoid
+  // sending two consecutive identical user messages to the Anthropic API.
+  const historialSinActual =
+    historial.length > 0 && historial[historial.length - 1].role === 'user'
+      ? historial.slice(0, -1)
+      : historial
+
+  // Primera interacción = nunca ha respondido el bot en este hilo
+  const esPrimeraInteraccion = !historialSinActual.some(m => m.role === 'assistant')
+
   const nombreCliente = ctx.cliente_nombre ?? 'cliente'
-  const esPrimeraInteraccion = historial.length === 0
+
+  // Always consult existing citas when: first interaction OR intent is cita-related
+  const debeConsultarCitas =
+    esPrimeraInteraccion ||
+    ctx.intent_tipo === 'confirmar_asistencia' ||
+    ctx.intent_tipo === 'consulta_cita_propia'
+
+  const today = new Date().toLocaleDateString('es-MX', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    timeZone: 'America/Mexico_City',
+  })
 
   const tools: Anthropic.Tool[] = [
     {
       name:        'consultar_citas_cliente',
-      description: 'Consulta las citas agendadas del cliente (últimos 30 días y próximas). Úsala siempre al inicio de la primera interacción para saber si el cliente ya tiene cita.',
-      input_schema: {
-        type:       'object' as const,
-        properties: {},
-        required:   [],
-      },
+      description: 'Consulta TODAS las citas del cliente (últimos 30 días y próximas, todos los estados). Úsala siempre al inicio para saber si el cliente ya tiene cita.',
+      input_schema: { type: 'object' as const, properties: {}, required: [] },
     },
     {
       name:        'confirmar_cita_cliente',
@@ -133,10 +161,18 @@ export async function generarRespuestaBot(
       input_schema: {
         type:       'object' as const,
         properties: {
-          cita_id: {
-            type:        'string',
-            description: 'ID de la cita a confirmar (obtenido de consultar_citas_cliente)',
-          },
+          cita_id: { type: 'string', description: 'ID de la cita a confirmar (obtenido de consultar_citas_cliente)' },
+        },
+        required: ['cita_id'],
+      },
+    },
+    {
+      name:        'cancelar_cita_cliente',
+      description: 'Cancela una cita existente cuando el cliente confirma que no podrá asistir.',
+      input_schema: {
+        type:       'object' as const,
+        properties: {
+          cita_id: { type: 'string', description: 'ID de la cita a cancelar (obtenido de consultar_citas_cliente)' },
         },
         required: ['cita_id'],
       },
@@ -147,17 +183,27 @@ export async function generarRespuestaBot(
       input_schema: {
         type:       'object' as const,
         properties: {
-          fecha: {
-            type:        'string',
-            description: 'Fecha en formato YYYY-MM-DD. Debe ser hoy o posterior.',
-          },
+          fecha: { type: 'string', description: 'Fecha en formato YYYY-MM-DD. Debe ser hoy o posterior.' },
         },
         required: ['fecha'],
       },
     },
     {
+      name:        'preparar_confirmacion_cita',
+      description: 'Guarda los datos del slot elegido (fecha, hora, servicio) ANTES de preguntar confirmación al cliente. Obligatorio en el PASO 4.5.',
+      input_schema: {
+        type:       'object' as const,
+        properties: {
+          fecha:    { type: 'string', description: 'Fecha en formato YYYY-MM-DD' },
+          hora:     { type: 'string', description: 'Hora en formato HH:MM (24h)' },
+          servicio: { type: 'string', description: 'Tipo de servicio (opcional)' },
+        },
+        required: ['fecha', 'hora'],
+      },
+    },
+    {
       name:        'crear_cita',
-      description: 'Crea una cita NUEVA una vez que el cliente confirmó explícitamente fecha, hora y servicio. Llama SOLO UNA VEZ por conversación.',
+      description: 'Crea una cita NUEVA una vez que el cliente confirmó explícitamente. Llama SOLO UNA VEZ por conversación.',
       input_schema: {
         type:       'object' as const,
         properties: {
@@ -182,7 +228,7 @@ export async function generarRespuestaBot(
   ]
 
   const messages: Anthropic.MessageParam[] = [
-    ...historial.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    ...historialSinActual.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     { role: 'user', content: mensajeCliente },
   ]
 
@@ -190,12 +236,12 @@ export async function generarRespuestaBot(
   let handoff = false
   let respuesta = 'En este momento no puedo procesar tu solicitud. Un asesor se pondrá en contacto contigo pronto.'
 
-  // Indica al modelo si es la primera interacción para que llame a consultar_citas_cliente
-  const systemPrimer = esPrimeraInteraccion
-    ? `\n\n[SISTEMA] Primera interacción. Llama AHORA a consultar_citas_cliente antes de responder.`
+  const systemPrimer = debeConsultarCitas
+    ? `\n\n[SISTEMA] Llama AHORA a consultar_citas_cliente antes de responder. No omitas este paso.`
     : ''
 
   const systemFull = SYSTEM_PROMPT
+    + `\n\nHoy es ${today}.`
     + (nombreCliente !== 'cliente' ? `\n\nEl cliente se llama ${nombreCliente}.` : '')
     + systemPrimer
 
@@ -245,12 +291,22 @@ export async function generarRespuestaBot(
           if (!citaId) {
             toolResult = 'Se requiere el ID de la cita para confirmarla.'
           } else {
-            const result = await confirmarCitaBot({
-              cita_id:     citaId,
-              sucursal_id: ctx.sucursal_id,
-            })
+            const result = await confirmarCitaBot({ cita_id: citaId, sucursal_id: ctx.sucursal_id })
             toolResult = result.ok
-              ? `SISTEMA: ${result.mensaje} — Ahora da al cliente el mensaje de confirmación final y termina la conversación.`
+              ? `SISTEMA: ${result.mensaje} — Ahora da al cliente el mensaje de confirmación final y termina con "Hasta pronto, ¡nos vemos!". NO hagas más preguntas.`
+              : result.mensaje
+          }
+          break
+        }
+
+        case 'cancelar_cita_cliente': {
+          const citaId = input.cita_id ?? ''
+          if (!citaId) {
+            toolResult = 'Se requiere el ID de la cita para cancelarla.'
+          } else {
+            const result = await cancelarCitaBot({ cita_id: citaId, sucursal_id: ctx.sucursal_id })
+            toolResult = result.ok
+              ? `SISTEMA: ${result.mensaje} — Confirma la cancelación al cliente y pregunta si quiere reagendar.`
               : result.mensaje
           }
           break
@@ -262,10 +318,24 @@ export async function generarRespuestaBot(
           break
         }
 
+        case 'preparar_confirmacion_cita': {
+          if (ctx.thread_id && input.fecha && input.hora) {
+            await guardarConfirmacionPendiente({
+              thread_id: ctx.thread_id,
+              fecha:     input.fecha,
+              hora:      input.hora,
+              servicio:  input.servicio,
+            })
+            toolResult = `Datos guardados (fecha: ${input.fecha}, hora: ${input.hora}, servicio: ${input.servicio ?? 'no especificado'}). Ahora pregunta al cliente la confirmación.`
+          } else {
+            toolResult = 'Faltan datos (fecha u hora) para guardar la confirmación.'
+          }
+          break
+        }
+
         case 'crear_cita': {
-          // Guard: prevent duplicate creation in the same agentic loop
           if (cita_id) {
-            toolResult = `SISTEMA: La cita ya fue creada (id: ${cita_id}). No crear de nuevo. Da el mensaje de confirmación final al cliente y termina.`
+            toolResult = `SISTEMA: La cita ya fue creada (id: ${cita_id}). No crear de nuevo. Da el mensaje de confirmación final al cliente y termina con "Hasta pronto".`
           } else if (!ctx.cliente_id) {
             toolResult = 'Error: cliente no identificado en el sistema. Escala a asesor.'
             handoff = true
@@ -281,8 +351,7 @@ export async function generarRespuestaBot(
               toolResult = result.error
             } else {
               cita_id    = result.id
-              // Instruction to model: generate confirmation text and stop
-              toolResult = `SISTEMA: ${result.confirmacion} — Ahora da al cliente el mensaje de confirmación final (incluye fecha, hora y servicio) y termina con "Hasta pronto". NO llames ninguna herramienta más.`
+              toolResult = `SISTEMA: ${result.confirmacion} — Da al cliente el mensaje de confirmación final (incluye fecha, hora y servicio) y termina con "Hasta pronto". NO llames ninguna herramienta más.`
             }
           }
           break
@@ -306,12 +375,6 @@ export async function generarRespuestaBot(
     }
 
     messages.push({ role: 'user', content: toolResults })
-
-    // After cita confirmed or created, allow ONE more model response (the confirmation text)
-    // then exit — prevents the bot from looping back into questions.
-    if (cita_id && !handoff) {
-      // Continue loop once more so model generates the final text response, then it will end_turn
-    }
   }
 
   return { respuesta, cita_id, handoff }

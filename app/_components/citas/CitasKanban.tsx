@@ -33,6 +33,7 @@ const COLUMNS: Column[] = [
   { id: 'confirmada',          label: 'Confirmada',    color: 'border-blue-300',   headerBg: 'bg-blue-50',    dotColor: 'bg-blue-500' },
   { id: 'en_agencia',          label: 'En agencia',    color: 'border-indigo-300', headerBg: 'bg-indigo-50',  dotColor: 'bg-indigo-500' },
   { id: 'no_show',             label: 'No show',       color: 'border-red-300',    headerBg: 'bg-red-50',     dotColor: 'bg-red-500' },
+  { id: 'cancelada',           label: 'Cancelada',     color: 'border-gray-300',   headerBg: 'bg-gray-50',    dotColor: 'bg-gray-400' },
 ]
 
 // Which estado can move to which

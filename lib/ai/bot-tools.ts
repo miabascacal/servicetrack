@@ -33,11 +33,10 @@ export async function buscarDisponibilidad(
     return { slots: [], mensaje: 'El servicio de citas no está disponible en este momento.' }
   }
 
-  // Verificar que la fecha es un día operativo
   const diaSemana = new Date(fecha + 'T12:00:00').getDay()
   const diasDisponibles: number[] = cfgRes.data?.dias_disponibles ?? [1, 2, 3, 4, 5, 6]
   if (!diasDisponibles.includes(diaSemana)) {
-    return { slots: [], mensaje: `Lo sentimos, no atendemos ese día de la semana.` }
+    return { slots: [], mensaje: 'Lo sentimos, no atendemos ese día de la semana.' }
   }
 
   const ocupadas = new Set(
@@ -67,7 +66,7 @@ export async function buscarDisponibilidad(
     return { slots, mensaje: `No hay horarios disponibles para ${fecha}. Por favor elige otra fecha.` }
   }
 
-  const horasStr = libres.map(s => s.hora).join(', ')
+  const horasStr = libres.slice(0, 8).map(s => s.hora).join(', ')
   return { slots, mensaje: `Horarios disponibles el ${fecha}: ${horasStr}` }
 }
 
@@ -80,7 +79,6 @@ export async function crearCitaBot(params: {
 }): Promise<{ id: string; confirmacion: string } | { error: string }> {
   const supabase = createAdminClient()
 
-  // Verificar que el slot sigue disponible antes de insertar
   const { data: conflicto } = await supabase
     .from('citas')
     .select('id')
@@ -103,6 +101,7 @@ export async function crearCitaBot(params: {
       hora_cita: params.hora,
       servicio: params.servicio ?? null,
       estado: 'pendiente_contactar',
+      contacto_bot: true,
     })
     .select('id')
     .single()
@@ -111,9 +110,14 @@ export async function crearCitaBot(params: {
     return { error: 'No se pudo crear la cita. Por favor intenta de nuevo.' }
   }
 
+  const fechaLegible = new Date(params.fecha + 'T12:00:00').toLocaleDateString('es-MX', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
+  })
+  const srv = params.servicio ? ` para ${params.servicio}` : ''
+
   return {
     id: data.id,
-    confirmacion: `Cita confirmada para el ${params.fecha} a las ${params.hora} hrs.`,
+    confirmacion: `Cita${srv} confirmada para el ${fechaLegible} a las ${params.hora} hrs.`,
   }
 }
 
@@ -127,9 +131,19 @@ export interface CitaResumen {
   servicio:   string | null
 }
 
+const ESTADO_CITA_LABEL: Record<string, string> = {
+  pendiente_contactar: 'pendiente de contacto',
+  contactada:          'contactada, pendiente confirmar',
+  confirmada:          'confirmada ✓',
+  en_agencia:          'en agencia',
+  show:                'ya asistió',
+  no_show:             'no se presentó',
+  cancelada:           'cancelada',
+}
+
 /**
- * Devuelve las citas recientes y próximas de un cliente.
- * Incluye citas de los últimos 30 días + futuras (excluye canceladas y no-show).
+ * Devuelve TODAS las citas recientes y próximas del cliente (incluye no_show y cancelada).
+ * El bot necesita ver todos los estados para dar contexto correcto al cliente.
  */
 export async function consultarCitasCliente(params: {
   sucursal_id: string
@@ -144,21 +158,21 @@ export async function consultarCitasCliente(params: {
     .select('id, fecha_cita, hora_cita, estado, servicio')
     .eq('sucursal_id', params.sucursal_id)
     .eq('cliente_id', params.cliente_id)
-    .not('estado', 'in', '(cancelada,no_show)')
     .gte('fecha_cita', desde)
     .order('fecha_cita', { ascending: true })
-    .limit(3)
+    .limit(5)
 
   const citas = (data ?? []) as CitaResumen[]
 
   if (citas.length === 0) {
-    return { citas: [], mensaje: 'El cliente no tiene citas agendadas en los últimos 30 días ni próximas.' }
+    return { citas: [], mensaje: 'El cliente no tiene citas registradas en los últimos 30 días ni próximas.' }
   }
 
   const resumen = citas.map(c => {
-    const hora = (c.hora_cita as string).slice(0, 5)
-    const srv  = c.servicio ? ` — ${c.servicio}` : ''
-    return `- ${c.fecha_cita} a las ${hora}${srv} [estado: ${c.estado}] [id: ${c.id}]`
+    const hora  = (c.hora_cita as string).slice(0, 5)
+    const srv   = c.servicio ? ` — ${c.servicio}` : ''
+    const label = ESTADO_CITA_LABEL[c.estado] ?? c.estado
+    return `- ${c.fecha_cita} a las ${hora}${srv} [estado: ${label}] [id: ${c.id}]`
   }).join('\n')
 
   return { citas, mensaje: `Citas del cliente:\n${resumen}` }
@@ -167,7 +181,6 @@ export async function consultarCitasCliente(params: {
 /**
  * Confirma la asistencia del cliente a una cita ya agendada.
  * Mueve estado de 'pendiente_contactar'/'contactada' a 'confirmada'.
- * Registra que el bot hizo el contacto y el cliente confirmó.
  */
 export async function confirmarCitaBot(params: {
   cita_id:     string
@@ -188,10 +201,9 @@ export async function confirmarCitaBot(params: {
 
   const hora = (cita.hora_cita as string).slice(0, 5)
 
-  // Si ya está confirmada o más avanzada, no hacer nada
   if (!['pendiente_contactar', 'contactada'].includes(cita.estado)) {
     return {
-      ok:     true,
+      ok:      true,
       mensaje: `La cita del ${cita.fecha_cita} a las ${hora} ya está en estado "${cita.estado}".`,
     }
   }
@@ -212,9 +224,137 @@ export async function confirmarCitaBot(params: {
 
   const srv = cita.servicio ? ` para ${cita.servicio}` : ''
   return {
-    ok:     true,
-    mensaje: `Asistencia confirmada. Cita${srv} el ${cita.fecha_cita} a las ${hora} hrs — estado actualizado a confirmada.`,
+    ok:      true,
+    mensaje: `Asistencia confirmada. Cita${srv} el ${cita.fecha_cita} a las ${hora} hrs — actualizada a confirmada.`,
   }
+}
+
+/**
+ * Cancela una cita existente. Solo aplica a estados activos (no show ni cancelada previa).
+ */
+export async function cancelarCitaBot(params: {
+  cita_id:     string
+  sucursal_id: string
+}): Promise<{ ok: boolean; mensaje: string }> {
+  const supabase = createAdminClient()
+
+  const { data: cita } = await supabase
+    .from('citas')
+    .select('id, estado, fecha_cita, hora_cita, servicio')
+    .eq('id', params.cita_id)
+    .eq('sucursal_id', params.sucursal_id)
+    .single()
+
+  if (!cita) {
+    return { ok: false, mensaje: 'No se encontró la cita en el sistema.' }
+  }
+
+  const cancellable = ['pendiente_contactar', 'contactada', 'confirmada', 'en_agencia']
+  if (!cancellable.includes(cita.estado)) {
+    return { ok: false, mensaje: `La cita ya está en estado "${cita.estado}" y no puede cancelarse por este medio.` }
+  }
+
+  const { error } = await supabase
+    .from('citas')
+    .update({ estado: 'cancelada' })
+    .eq('id', params.cita_id)
+
+  if (error) {
+    return { ok: false, mensaje: 'Error al cancelar la cita. Un asesor se pondrá en contacto.' }
+  }
+
+  const hora = (cita.hora_cita as string).slice(0, 5)
+  const srv  = cita.servicio ? ` de ${cita.servicio}` : ''
+  return {
+    ok:      true,
+    mensaje: `Cita${srv} del ${cita.fecha_cita} a las ${hora} cancelada correctamente.`,
+  }
+}
+
+// ── Pending confirmation state (deterministic flow) ───────────────────────────
+
+export interface ConfirmacionPendiente {
+  fecha:    string
+  hora:     string
+  servicio: string | null
+}
+
+/**
+ * Guarda los parámetros de una cita pendiente de confirmación en el thread metadata.
+ * Se llama desde el bot justo antes de pedir confirmación al cliente.
+ */
+export async function guardarConfirmacionPendiente(params: {
+  thread_id: string
+  fecha:     string
+  hora:      string
+  servicio?: string
+}): Promise<void> {
+  const admin = createAdminClient()
+
+  const { data: current } = await admin
+    .from('conversation_threads')
+    .select('metadata')
+    .eq('id', params.thread_id)
+    .single()
+
+  const existing = (current?.metadata ?? {}) as Record<string, unknown>
+  await admin
+    .from('conversation_threads')
+    .update({
+      metadata: {
+        ...existing,
+        confirmacion_pendiente: {
+          fecha:    params.fecha,
+          hora:     params.hora,
+          servicio: params.servicio ?? null,
+        },
+      },
+    })
+    .eq('id', params.thread_id)
+}
+
+/**
+ * Lee la confirmación pendiente desde el thread metadata.
+ * Returns null si no hay ninguna pendiente.
+ */
+export async function leerConfirmacionPendiente(thread_id: string): Promise<ConfirmacionPendiente | null> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('conversation_threads')
+    .select('metadata')
+    .eq('id', thread_id)
+    .single()
+
+  const pending = (data?.metadata as Record<string, unknown> | null)?.confirmacion_pendiente
+  if (!pending || typeof pending !== 'object') return null
+  const p = pending as Record<string, unknown>
+  if (typeof p.fecha !== 'string' || typeof p.hora !== 'string') return null
+  return {
+    fecha:    p.fecha,
+    hora:     p.hora,
+    servicio: typeof p.servicio === 'string' ? p.servicio : null,
+  }
+}
+
+/**
+ * Limpia la confirmación pendiente del thread metadata una vez que se creó la cita.
+ */
+export async function limpiarConfirmacionPendiente(thread_id: string): Promise<void> {
+  const admin = createAdminClient()
+
+  const { data: current } = await admin
+    .from('conversation_threads')
+    .select('metadata')
+    .eq('id', thread_id)
+    .single()
+
+  const existing = { ...(current?.metadata ?? {}) as Record<string, unknown> }
+  delete existing.confirmacion_pendiente
+
+  await admin
+    .from('conversation_threads')
+    .update({ metadata: existing })
+    .eq('id', thread_id)
 }
 
 export async function buscarClientePorTelefono(

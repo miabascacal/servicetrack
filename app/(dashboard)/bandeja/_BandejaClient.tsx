@@ -112,7 +112,7 @@ function getCanalCfg(canal: string) {
   }
 }
 
-const FILTERS = ['Todos', 'WhatsApp', 'Email', 'Instagram', 'Facebook', 'Sin respuesta', 'Escaladas'] as const
+const FILTERS = ['Todos', 'WhatsApp', 'Email', 'Instagram', 'Facebook', 'Sin respuesta', 'Escaladas', 'Requiere asesor'] as const
 type FilterKey = typeof FILTERS[number]
 
 const ESCALADA_MIN = 45
@@ -258,22 +258,24 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
   })
 
   const filtered = threadsEnhanced.filter(t => {
-    if (filter === 'WhatsApp')      return t.canal === 'whatsapp'
-    if (filter === 'Email')         return t.canal === 'email'
-    if (filter === 'Instagram')     return t.canal === 'instagram'
-    if (filter === 'Facebook')      return t.canal === 'facebook'
-    if (filter === 'Sin respuesta') return t.sinRespuestaMin > 15
-    if (filter === 'Escaladas')     return t.escalada
+    if (filter === 'WhatsApp')        return t.canal === 'whatsapp'
+    if (filter === 'Email')           return t.canal === 'email'
+    if (filter === 'Instagram')       return t.canal === 'instagram'
+    if (filter === 'Facebook')        return t.canal === 'facebook'
+    if (filter === 'Sin respuesta')   return t.sinRespuestaMin > 15
+    if (filter === 'Escaladas')       return t.escalada
+    if (filter === 'Requiere asesor') return t.estado === 'waiting_agent'
     return true
   })
 
   const conv     = selected ? (threadsEnhanced.find(t => t.id === selected) ?? null) : null
   const messages = selected ? (threadMessages[selected] ?? []) : []
 
-  const totalActivos   = threadsEnhanced.length
-  const countSinResp   = threadsEnhanced.filter(t => t.sinRespuestaMin > 15).length
-  const countEscaladas = threadsEnhanced.filter(t => t.escalada).length
-  const countBot       = threadsEnhanced.filter(t => t.last_message_source === 'agent_bot').length
+  const totalActivos         = threadsEnhanced.length
+  const countSinResp         = threadsEnhanced.filter(t => t.sinRespuestaMin > 15).length
+  const countEscaladas       = threadsEnhanced.filter(t => t.escalada).length
+  const countBot             = threadsEnhanced.filter(t => t.last_message_source === 'agent_bot').length
+  const countRequiereAsesor  = threadsEnhanced.filter(t => t.estado === 'waiting_agent').length
   const tiempoPromedio = (() => {
     const con = threadsEnhanced.filter(t => t.sinRespuestaMin > 0)
     if (!con.length) return 0
@@ -311,6 +313,16 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
             <span className="font-semibold text-blue-600">{countBot}</span>
             <span className="text-gray-500">bot actuó</span>
           </div>
+          {countRequiereAsesor > 0 && (
+            <button
+              onClick={() => setFilter('Requiere asesor')}
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-100 hover:bg-red-200 transition-colors"
+            >
+              <UserCheck size={14} className="text-red-600" />
+              <span className="font-bold text-red-700">{countRequiereAsesor}</span>
+              <span className="text-red-600 text-xs">requieren asesor</span>
+            </button>
+          )}
           <div className="flex items-center gap-1.5">
             <Clock size={14} className="text-gray-400" />
             <span className="font-semibold text-gray-900">{tiempoPromedio} min</span>
@@ -347,6 +359,11 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                 {f === 'Escaladas' && countEscaladas > 0 && (
                   <span className="ml-1 bg-red-500 text-white rounded-full px-1 py-0.5 text-[10px]">
                     {countEscaladas}
+                  </span>
+                )}
+                {f === 'Requiere asesor' && countRequiereAsesor > 0 && (
+                  <span className="ml-1 bg-red-600 text-white rounded-full px-1 py-0.5 text-[10px] font-bold">
+                    {countRequiereAsesor}
                   </span>
                 )}
               </button>
@@ -423,7 +440,13 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                       ESCALADA — {t.sinRespuestaMin} min sin respuesta
                     </div>
                   )}
-                  {isBotActive && !t.escalada && (
+                  {t.estado === 'waiting_agent' && !t.escalada && (
+                    <div className="mt-1.5 flex items-center gap-1 text-[11px] text-orange-700 font-semibold">
+                      <UserCheck size={10} />
+                      Requiere asesor
+                    </div>
+                  )}
+                  {isBotActive && !t.escalada && t.estado !== 'waiting_agent' && (
                     <div className="mt-1.5 flex items-center gap-1 text-[11px] text-blue-600">
                       <Bot size={10} />
                       Bot gestionando
