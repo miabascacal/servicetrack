@@ -93,6 +93,14 @@ export async function crearCitaBot(params: {
     return { error: 'Ese horario ya no está disponible. Por favor elige otro.' }
   }
 
+  // Obtener responsable configurado en ai_settings (sin hardcodear)
+  const { data: aiCfg } = await supabase
+    .from('ai_settings')
+    .select('escalation_assignee_id')
+    .eq('sucursal_id', params.sucursal_id)
+    .maybeSingle()
+  const responsableId: string | null = (aiCfg as { escalation_assignee_id?: string | null } | null)?.escalation_assignee_id ?? null
+
   const now = new Date().toISOString()
   const { data, error } = await supabase
     .from('citas')
@@ -106,6 +114,7 @@ export async function crearCitaBot(params: {
       contacto_bot:         true,
       confirmacion_cliente: params.confirmada ? true : null,
       confirmacion_at:      params.confirmada ? now : null,
+      asesor_id:            responsableId ?? null,
     })
     .select('id')
     .single()
@@ -114,14 +123,46 @@ export async function crearCitaBot(params: {
     return { error: 'No se pudo crear la cita. Por favor intenta de nuevo.' }
   }
 
+  const citaId = data.id
+
+  // Crear actividad de trazabilidad (best-effort — no falla la operación principal)
+  try {
+    const fechaProgr = new Date(`${params.fecha}T${params.hora}:00`).toISOString()
+    const srv        = params.servicio ? `: ${params.servicio}` : ''
+    const descripcion = `Cita confirmada por BotIA${srv} — ${params.fecha} ${params.hora}`
+
+    const actividadData: Record<string, unknown> = {
+      sucursal_id:      params.sucursal_id,
+      cliente_id:       params.cliente_id,
+      cita_id:          citaId,
+      tipo:             'cita_agendada',
+      descripcion,
+      estado:           'realizada',
+      prioridad:        'normal',
+      completada:       true,
+      realizada_at:     now,
+      fecha_programada: fechaProgr,
+      fecha_vencimiento: fechaProgr,
+      modulo_origen:    'ia',
+      notas: responsableId
+        ? null
+        : 'Sin responsable configurado en ai_settings.escalation_assignee_id',
+    }
+    if (responsableId) actividadData.usuario_asignado_id = responsableId
+
+    await supabase.from('actividades').insert(actividadData)
+  } catch (actErr) {
+    console.error('[crearCitaBot] actividad best-effort falló:', actErr)
+  }
+
   const fechaLegible = new Date(params.fecha + 'T12:00:00').toLocaleDateString('es-MX', {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
   })
-  const srv = params.servicio ? ` para ${params.servicio}` : ''
+  const srvLabel = params.servicio ? ` para ${params.servicio}` : ''
 
   return {
-    id: data.id,
-    confirmacion: `Cita${srv} confirmada para el ${fechaLegible} a las ${params.hora} hrs.`,
+    id:           citaId,
+    confirmacion: `Cita${srvLabel} confirmada para el ${fechaLegible} a las ${params.hora} hrs.`,
   }
 }
 

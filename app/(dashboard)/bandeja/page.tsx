@@ -16,8 +16,8 @@ type RawThread = {
   assignee_id:         string | null
   // PostgREST devuelve FK many-to-one como objeto; se normaliza igual si llega array
   cliente:
-    | { id: string; nombre: string | null }
-    | Array<{ id: string; nombre: string | null }>
+    | { id: string; nombre: string | null; whatsapp: string | null }
+    | Array<{ id: string; nombre: string | null; whatsapp: string | null }>
     | null
 }
 
@@ -41,7 +41,7 @@ export default async function BandejaPage() {
       last_message_at,
       last_message_source,
       assignee_id,
-      cliente:clientes ( id, nombre )
+      cliente:clientes ( id, nombre, whatsapp )
     `)
     .in('estado', ['open', 'waiting_customer', 'waiting_agent', 'bot_active'])
     .order('last_message_at', { ascending: false, nullsFirst: false })
@@ -59,7 +59,11 @@ export default async function BandejaPage() {
     last_message_source: t.last_message_source,
     assignee_id:         t.assignee_id,
     // Normalizar: objeto directo (caso normal) o primer elemento si llega array
-    cliente: Array.isArray(t.cliente) ? (t.cliente[0] ?? null) : (t.cliente ?? null),
+    cliente: (() => {
+      const raw = Array.isArray(t.cliente) ? (t.cliente[0] ?? null) : (t.cliente ?? null)
+      if (!raw) return null
+      return { id: raw.id, nombre: raw.nombre, whatsapp: raw.whatsapp }
+    })(),
   }))
 
   // ── Query 2 — Preview del último mensaje por hilo ─────

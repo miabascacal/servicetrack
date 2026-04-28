@@ -45,7 +45,7 @@ export interface ThreadRow {
   last_message_at:     string | null
   last_message_source: string | null
   assignee_id:         string | null
-  cliente:             { id: string; nombre: string | null } | null
+  cliente:             { id: string; nombre: string | null; whatsapp: string | null } | null
 }
 
 export interface PreviewRow {
@@ -501,6 +501,12 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
                     <span className="flex items-center gap-1"><Car size={11} /> —</span>
+                    {conv.cliente?.whatsapp && (
+                      <span className="flex items-center gap-1">
+                        <Phone size={11} className="text-green-600" />
+                        <span className="text-green-700 font-medium">{conv.cliente.whatsapp}</span>
+                      </span>
+                    )}
                     {conv.assignee_id && (
                       <span className="flex items-center gap-1"><User size={11} /> Asignado</span>
                     )}

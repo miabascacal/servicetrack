@@ -6,7 +6,7 @@ import { ensureUsuario }     from '@/lib/ensure-usuario'
 import { getOrCreateThread } from '@/lib/threads'
 import { classifyIntent }    from '@/lib/ai/classify-intent'
 import { detectSentiment }   from '@/lib/ai/detect-sentiment'
-import { generarRespuestaBot }    from '@/lib/ai/bot-citas'
+import { generarRespuestaBot, type CitaProxima } from '@/lib/ai/bot-citas'
 import { generarRespuestaSimple } from '@/lib/ai/bot-respuestas'
 import {
   crearCitaBot,
@@ -305,6 +305,29 @@ export async function simularMensajeAction(params: {
     thread_id = result.thread_id
   }
 
+  // 2b. Buscar cita próxima del cliente para contexto determinístico del bot
+  const hoyStr = new Date().toISOString().split('T')[0]
+  const { data: citaProximaData } = await admin
+    .from('citas')
+    .select('id, fecha_cita, hora_cita, estado, servicio')
+    .eq('sucursal_id', sucursal_id)
+    .eq('cliente_id', cliente.id)
+    .not('estado', 'in', '(cancelada,no_show)')
+    .gte('fecha_cita', hoyStr)
+    .order('fecha_cita', { ascending: true })
+    .order('hora_cita', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  const citaProxima: CitaProxima | null = citaProximaData
+    ? {
+        id:         citaProximaData.id as string,
+        fecha_cita: citaProximaData.fecha_cita as string,
+        hora_cita:  citaProximaData.hora_cita as string,
+        estado:     citaProximaData.estado as string,
+        servicio:   citaProximaData.servicio as string | null,
+      }
+    : null
+
   // 3. Insertar mensaje entrante del cliente
   const { data: msgIn } = await admin
     .from('mensajes')
@@ -443,6 +466,7 @@ export async function simularMensajeAction(params: {
       thread_id,
       intent_tipo:             intentResult.intent,
       confirmacion_pendiente:  pendingConf,
+      cita_proxima:            citaProxima,
     }
 
     const isBotActive = threadEstado === 'bot_active'

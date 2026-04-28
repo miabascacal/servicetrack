@@ -90,6 +90,14 @@ export interface BotMensaje {
   content: string
 }
 
+export interface CitaProxima {
+  id:         string
+  fecha_cita: string
+  hora_cita:  string
+  estado:     string
+  servicio:   string | null
+}
+
 export interface BotContexto {
   sucursal_id:             string
   cliente_id:              string | null
@@ -97,6 +105,7 @@ export interface BotContexto {
   thread_id:               string | null
   intent_tipo?:            string
   confirmacion_pendiente?: ConfirmacionPendiente | null
+  cita_proxima?:           CitaProxima | null
 }
 
 export interface BotResultado {
@@ -150,8 +159,10 @@ export async function generarRespuestaBot(
   const nombreCliente = ctx.cliente_nombre ?? 'cliente'
 
   // Always consult existing citas when: first interaction OR intent is cita-related
+  // Si ya tenemos cita_proxima inyectada determinísticamente, no repetir la consulta
   const debeConsultarCitas =
-    !ctx.confirmacion_pendiente && (
+    !ctx.confirmacion_pendiente &&
+    !ctx.cita_proxima && (
       esPrimeraInteraccion ||
       ctx.intent_tipo === 'confirmar_asistencia' ||
       ctx.intent_tipo === 'consulta_cita_propia'
@@ -256,9 +267,20 @@ export async function generarRespuestaBot(
       ? `\n\n[SISTEMA] Llama AHORA a consultar_citas_cliente antes de responder. No omitas este paso.`
       : ''
 
+  const citaProximaInject = ctx.cita_proxima
+    ? `\n\n[DATOS ACTUALES — NO CONSULTAR BD] El cliente ya tiene una cita ${
+        ctx.cita_proxima.estado === 'confirmada' ? 'confirmada ✓'
+        : ctx.cita_proxima.estado === 'pendiente_contactar' ? 'pendiente de confirmar'
+        : ctx.cita_proxima.estado
+      }: ${ctx.cita_proxima.fecha_cita} a las ${ctx.cita_proxima.hora_cita.slice(0, 5)}${
+        ctx.cita_proxima.servicio ? ` — ${ctx.cita_proxima.servicio}` : ''
+      }. Menciónala de inmediato al saludar. NO llames consultar_citas_cliente (datos ya disponibles).`
+    : ''
+
   const systemFull = SYSTEM_PROMPT
     + `\n\nHoy es ${today}.`
     + (nombreCliente !== 'cliente' ? `\n\nEl cliente se llama ${nombreCliente}.` : '')
+    + citaProximaInject
     + systemPrimer
 
   // Agentic loop — máximo 8 iteraciones
