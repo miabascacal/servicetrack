@@ -45,6 +45,18 @@ export async function buscarDisponibilidad(
       .map(c => (c.hora_cita as string).slice(0, 5)),
   )
 
+  // Filter past slots when fecha is today (America/Mexico_City)
+  const nowMX = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }))
+  const todayMX = [
+    nowMX.getFullYear(),
+    String(nowMX.getMonth() + 1).padStart(2, '0'),
+    String(nowMX.getDate()).padStart(2, '0'),
+  ].join('-')
+  const isToday = fecha === todayMX
+  // 30-minute operational buffer (fallback default — should come from configuracion_citas_sucursal)
+  const BUFFER_MIN = 30
+  const nowTotalMin = nowMX.getHours() * 60 + nowMX.getMinutes()
+
   const [startH = 8, startM = 0] = (cfg.horario_inicio as string).split(':').map(Number)
   const [endH = 18, endM = 0] = (cfg.horario_fin as string).split(':').map(Number)
   const intervalo = cfg.intervalo_minutos as number ?? 30
@@ -57,13 +69,17 @@ export async function buscarDisponibilidad(
     const h = Math.floor(currentMin / 60).toString().padStart(2, '0')
     const m = (currentMin % 60).toString().padStart(2, '0')
     const hora = `${h}:${m}`
-    slots.push({ hora, disponible: !ocupadas.has(hora) })
+    const disponible = !ocupadas.has(hora) && (!isToday || currentMin > nowTotalMin + BUFFER_MIN)
+    slots.push({ hora, disponible })
     currentMin += intervalo
   }
 
   const libres = slots.filter(s => s.disponible)
   if (libres.length === 0) {
-    return { slots, mensaje: `No hay horarios disponibles para ${fecha}. Por favor elige otra fecha.` }
+    const msg = isToday
+      ? `Para hoy ya no hay horarios disponibles. ¿Te puedo ofrecer mañana?`
+      : `No hay horarios disponibles para ${fecha}. Por favor elige otra fecha.`
+    return { slots, mensaje: msg }
   }
 
   const horasStr = libres.slice(0, 8).map(s => s.hora).join(', ')
@@ -75,10 +91,18 @@ export async function crearCitaBot(params: {
   cliente_id:   string
   fecha:        string
   hora:         string
-  servicio?:    string
+  servicio?:    string | null
   confirmada?:  boolean    // true → estado 'confirmada' (cliente ya confirmó)
   vehiculo_id?: string | null
 }): Promise<{ id: string; confirmacion: string } | { error: string }> {
+  // Hard gates — protect DB against incomplete citas regardless of caller
+  if (!params.vehiculo_id) {
+    return { error: 'Se requiere el vehículo para crear la cita. Por favor confirma qué vehículo vas a traer.' }
+  }
+  if (!params.servicio) {
+    return { error: 'Se requiere el tipo de servicio para crear la cita. ¿Qué servicio necesitas?' }
+  }
+
   const supabase = createAdminClient()
 
   const { data: conflicto } = await supabase

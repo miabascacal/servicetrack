@@ -458,6 +458,8 @@ export async function generarRespuestaBot(
               fecha:       input.fecha ?? '',
               hora:        input.hora  ?? '',
               servicio:    input.servicio,
+              // Pass vehiculo_id from state machine — hard gate in crearCitaBot will reject if null
+              vehiculo_id: ctx.appointment_flow?.vehiculo_id ?? null,
             })
             if ('error' in result) {
               toolResult = result.error

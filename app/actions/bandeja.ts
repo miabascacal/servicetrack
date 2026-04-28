@@ -31,6 +31,7 @@ import {
   parsearVehiculo,
   parsearSeleccion,
   isNegacion,
+  isClientePlaceholder,
   type AppointmentFlowState,
 } from '@/lib/ai/appointment-flow'
 import {
@@ -411,40 +412,64 @@ export async function simularMensajeAction(params: {
   if (shouldProcessFlow && !citaProxima) {
     if (!flowState) flowState = { step: 'capturar_servicio' }
 
-    // ── Step A: Name capture (only for DEMO placeholder clients) ─────────────
+    // ── Step A: Name capture — DETERMINISTIC, no LLM fallback ───────────────
+    //
+    // P0.2.1 FIX: Steps A and B now set skipBot=true and generate responses
+    // directly instead of relying on the LLM to follow flowInject instructions.
+    // Claude Haiku was ignoring flowInject due to conflicting SYSTEM_PROMPT rules.
     if (!flowState.nombre_resuelto) {
-      const esDemo =
-        (cliente.nombre as string | null)?.toUpperCase() === 'CLIENTE' &&
-        ((cliente.apellido as string | null) ?? '').toUpperCase() === 'DEMO'
+      const esPlaceholder = isClientePlaceholder(
+        cliente.nombre as string | null,
+        cliente.apellido as string | null,
+      )
 
-      if (!esDemo) {
+      if (!esPlaceholder) {
         flowState = { ...flowState, nombre_resuelto: true }
+        // Fall through to Step B
       } else if (flowState.step !== 'capturar_nombre') {
+        // First detection: ask for name
         flowState = { ...flowState, step: 'capturar_nombre' }
         await setAppointmentFlowState(thread_id, flowState)
-        // Fall through to bot — it will ask for the client's name
+        respuesta = frustrado
+          ? `Disculpa. Para completar tu cita correctamente necesito tu nombre. ¿Cómo te llamas?`
+          : `¡Hola! Con gusto te ayudo a agendar tu cita. ¿Me dices tu nombre completo?`
+        skipBot = true
       } else {
+        // Already in capturar_nombre: try to parse name from this message
         const nombreParsed = parsearNombre(params.mensaje)
         if (nombreParsed) {
-          await actualizarNombreClienteBot({
+          const updResult = await actualizarNombreClienteBot({
             cliente_id: cliente.id as string,
             nombre:     nombreParsed.nombre,
             apellido:   nombreParsed.apellido,
           })
-          // Update local reference for bot context later
-          ;(cliente as Record<string, unknown>).nombre  = nombreParsed.nombre
-          ;(cliente as Record<string, unknown>).apellido = nombreParsed.apellido
-          flowState = { ...flowState, nombre_resuelto: true }
-          // Continue to vehicle step (fall through)
+          if (!updResult.ok) {
+            respuesta = `No pude guardar tu nombre. Un asesor se pondrá en contacto contigo.`
+            skipBot  = true
+            handoff  = true
+          } else {
+            // Update local reference for bot context used in Step 6
+            ;(cliente as Record<string, unknown>).nombre  = nombreParsed.nombre
+            ;(cliente as Record<string, unknown>).apellido = nombreParsed.apellido
+            flowState = { ...flowState, nombre_resuelto: true }
+            // Fall through to Step B
+          }
         } else {
+          // Could not parse name — ask again
           await setAppointmentFlowState(thread_id, flowState)
-          // Stay on capturar_nombre — bot will ask again
+          respuesta = frustrado
+            ? `Disculpa, necesito tu nombre completo (nombre y apellido) para continuar. ¿Cómo te llamas?`
+            : `Para continuar necesito tu nombre y apellido. ¿Cómo te llamas? (ejemplo: Juan Pérez)`
+          skipBot = true
         }
       }
     }
 
-    // ── Step B: Vehicle resolution ────────────────────────────────────────────
-    if (flowState.nombre_resuelto && !flowState.vehiculo_resuelto) {
+    // ── Step B: Vehicle resolution — DETERMINISTIC, no LLM fallback ──────────
+    //
+    // Vehicle is OBLIGATORY for P0.2.1. isNegacion in capturar_vehiculo keeps
+    // the user in the same step — skipping vehicle is not allowed.
+    if (!skipBot && flowState.nombre_resuelto && !flowState.vehiculo_resuelto) {
       const vehiculoStep = flowState.step
 
       if (vehiculoStep === 'resolver_vehiculo') {
@@ -452,65 +477,99 @@ export async function simularMensajeAction(params: {
         const idx      = parsearSeleccion(params.mensaje, opciones.length, opciones)
 
         if (idx !== null) {
+          // Client selected an existing vehicle
           flowState = { ...flowState, vehiculo_id: opciones[idx].id, vehiculo_resuelto: true }
+          // Fall through to Step C
         } else if (isNegacion(params.mensaje)) {
-          flowState = { ...flowState, vehiculo_resuelto: true }
+          // Client wants a different vehicle not in the list → capture new one
+          flowState = { ...flowState, step: 'capturar_vehiculo', vehiculos_opciones: [] }
+          await setAppointmentFlowState(thread_id, flowState)
+          respuesta = `Sin problema. ¿Qué vehículo vas a traer? Dime la marca, modelo y año.`
+          skipBot   = true
         } else {
-          // Client may have given new vehicle data
+          // Maybe gave new vehicle data inline
           const vData = parsearVehiculo(params.mensaje)
           if (vData) {
-            const vRes = await crearVehiculoYVincularBot({
-              grupo_id,
-              cliente_id: cliente.id as string,
-              ...vData,
-            })
+            const vRes = await crearVehiculoYVincularBot({ grupo_id, cliente_id: cliente.id as string, ...vData })
             if ('id' in vRes) {
               flowState = { ...flowState, vehiculo_id: vRes.id, vehiculo_resuelto: true }
+              // Fall through to Step C
             } else {
               await setAppointmentFlowState(thread_id, flowState)
-              // Stay on resolver_vehiculo — bot will re-present options
+              respuesta = `${vRes.error}`
+              skipBot   = true
             }
           } else {
+            // Could not parse — re-present options
             await setAppointmentFlowState(thread_id, flowState)
+            if (opciones.length === 1) {
+              respuesta = frustrado
+                ? `Disculpa, para completar tu cita necesito confirmar el vehículo: ${opciones[0].descripcion}. ¿Es este tu vehículo? (sí/no)`
+                : `¿Tu cita es para el ${opciones[0].descripcion}? (sí/no)`
+            } else {
+              const lista = opciones.map((o, i) => `${i + 1}) ${o.descripcion}`).join('\n')
+              respuesta = `¿Para cuál vehículo es la cita?\n${lista}\n(O dime la marca, modelo y año de otro vehículo)`
+            }
+            skipBot = true
           }
         }
       } else if (vehiculoStep === 'capturar_vehiculo') {
         const vData = parsearVehiculo(params.mensaje)
         if (vData) {
-          const vRes = await crearVehiculoYVincularBot({
-            grupo_id,
-            cliente_id: cliente.id as string,
-            ...vData,
-          })
+          const vRes = await crearVehiculoYVincularBot({ grupo_id, cliente_id: cliente.id as string, ...vData })
           if ('id' in vRes) {
             flowState = { ...flowState, vehiculo_id: vRes.id, vehiculo_resuelto: true }
+            // Fall through to Step C
           } else {
             await setAppointmentFlowState(thread_id, flowState)
+            respuesta = `${vRes.error}`
+            skipBot   = true
           }
         } else if (isNegacion(params.mensaje)) {
-          flowState = { ...flowState, vehiculo_resuelto: true }
+          // Vehicle is required — do not allow skipping
+          await setAppointmentFlowState(thread_id, flowState)
+          respuesta = `Para agendar una cita necesitamos registrar el vehículo. ¿Cuál es la marca, modelo y año del vehículo que vas a traer? (ejemplo: Honda City 2022)`
+          skipBot   = true
         } else {
           await setAppointmentFlowState(thread_id, flowState)
+          respuesta = frustrado
+            ? `Disculpa, para completar tu cita necesito los datos del vehículo: marca, modelo y año. ¿Cuáles son?`
+            : `Para registrar tu cita necesito el vehículo. ¿Cuál es la marca, modelo y año? (ejemplo: Nissan Sentra 2021)`
+          skipBot = true
         }
       } else {
-        // First time entering vehicle step — load vehicles from DB
+        // First time entering vehicle step — load from DB
         const vehiculos = await buscarVehiculosCliente(cliente.id as string)
         if (vehiculos.length === 0) {
           flowState = { ...flowState, step: 'capturar_vehiculo', vehiculos_opciones: [] }
+          await setAppointmentFlowState(thread_id, flowState)
+          respuesta = frustrado
+            ? `Para completar tu cita necesito el vehículo. ¿Cuál es la marca, modelo y año?`
+            : `Para registrar tu cita necesito saber qué vehículo traes. ¿Cuál es la marca, modelo y año?`
+          skipBot = true
+        } else if (vehiculos.length === 1) {
+          const desc = `${vehiculos[0].marca} ${vehiculos[0].modelo} ${vehiculos[0].anio}${vehiculos[0].placa ? ` (${vehiculos[0].placa})` : ''}`
+          flowState = { ...flowState, step: 'resolver_vehiculo', vehiculos_opciones: [{ id: vehiculos[0].id, descripcion: desc }] }
+          await setAppointmentFlowState(thread_id, flowState)
+          respuesta = `Tengo registrado el vehículo: *${desc}*. ¿Tu cita es para este vehículo?`
+          skipBot = true
         } else {
           const opciones = vehiculos.map(v => ({
             id:          v.id,
             descripcion: `${v.marca} ${v.modelo} ${v.anio}${v.placa ? ` (${v.placa})` : ''}`,
           }))
           flowState = { ...flowState, step: 'resolver_vehiculo', vehiculos_opciones: opciones }
+          await setAppointmentFlowState(thread_id, flowState)
+          const lista = opciones.map((o, i) => `${i + 1}) ${o.descripcion}`).join('\n')
+          respuesta = `Tengo registrados ${opciones.length} vehículos. ¿Para cuál es la cita?\n${lista}`
+          skipBot = true
         }
-        await setAppointmentFlowState(thread_id, flowState)
-        // Fall through to bot to present vehicle question
       }
     }
 
     // ── Step C: Service / fecha / hora / confirmation (P0.1) ─────────────────
-    if (flowState.nombre_resuelto && flowState.vehiculo_resuelto) {
+    // Safety gate: only proceed if both name and vehicle are resolved.
+    if (!skipBot && flowState.nombre_resuelto && flowState.vehiculo_resuelto) {
       // If coming from a vehicle step, transition to service capture
       const SERVICE_STEPS = new Set([
         'capturar_servicio', 'capturar_fecha', 'capturar_hora', 'esperando_confirmacion',

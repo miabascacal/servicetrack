@@ -460,3 +460,27 @@ export function intentoAgendar(texto: string): boolean {
   ]
   return INTENT.some(kw => t.includes(kw))
 }
+
+// ── Client identity helpers ───────────────────────────────────────────────────
+
+const PLACEHOLDER_NOMBRES = new Set([
+  'CLIENTE', 'SIN CLIENTE', 'SIN NOMBRE', 'DEMO', 'TEST', 'PRUEBA',
+  'UNKNOWN', 'DESCONOCIDO', 'NA', 'NOMBRE',
+])
+
+/**
+ * Returns true when the client record has no real identity.
+ * cliente_id existing does NOT mean client is resolved — use this to check.
+ */
+export function isClientePlaceholder(
+  nombre:   string | null | undefined,
+  apellido: string | null | undefined,
+): boolean {
+  if (!nombre) return true
+  const n = nombre.toUpperCase().trim()
+  const a = (apellido ?? '').toUpperCase().trim()
+  if (n.length < 2) return true
+  if (PLACEHOLDER_NOMBRES.has(n)) return true
+  if (n.includes('DEMO') || a.includes('DEMO')) return true
+  return false
+}
