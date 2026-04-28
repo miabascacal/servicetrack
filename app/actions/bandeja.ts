@@ -11,6 +11,7 @@ import { generarRespuestaSimple } from '@/lib/ai/bot-respuestas'
 import {
   crearCitaBot,
   confirmarCitaBot,
+  guardarConfirmacionPendiente,
   limpiarConfirmacionPendiente,
   type ConfirmacionPendiente,
 } from '@/lib/ai/bot-tools'
@@ -82,6 +83,83 @@ export async function getThreadMessagesAction(
   }
 
   return { data: mensajes ?? [], error: null }
+}
+
+// ── Slot detection helpers ───────────────────────────────────────────────────
+
+const MESES_ES: Record<string, number> = {
+  enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+  julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11,
+}
+
+/** Extrae fecha+hora+servicio del texto de un mensaje del bot */
+function extraerSlotDeTexto(texto: string): ConfirmacionPendiente | null {
+  const horaM =
+    texto.match(/a\s+las\s+(\d{1,2}):(\d{2})/) ??
+    texto.match(/a\s+las\s+(\d{1,2})\b/)        ??
+    texto.match(/\b(\d{1,2}):(\d{2})\s*hrs?/)
+  if (!horaM) return null
+  const hora = horaM[2] !== undefined
+    ? `${horaM[1].padStart(2, '0')}:${horaM[2]}`
+    : `${horaM[1].padStart(2, '0')}:00`
+
+  const nowMX = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }))
+  let fecha: string | null = null
+
+  if (/mañana/i.test(texto)) {
+    const d = new Date(nowMX); d.setDate(d.getDate() + 1)
+    fecha = d.toISOString().split('T')[0]
+  } else if (/\bhoy\b/i.test(texto)) {
+    fecha = nowMX.toISOString().split('T')[0]
+  } else {
+    const mNat = texto.match(/(\d{1,2})\s+de\s+(\w+)(?:\s+de\s+(\d{4}))?/i)
+    if (mNat) {
+      const dia = parseInt(mNat[1], 10)
+      const mes = MESES_ES[mNat[2].toLowerCase()]
+      if (mes !== undefined) {
+        const anio = mNat[3] ? parseInt(mNat[3], 10) : nowMX.getFullYear()
+        const d = new Date(anio, mes, dia)
+        if (d < nowMX) d.setFullYear(d.getFullYear() + 1)
+        fecha = d.toISOString().split('T')[0]
+      }
+    } else {
+      const mIso = texto.match(/\b(\d{4}-\d{2}-\d{2})\b/)
+      if (mIso) fecha = mIso[1]
+    }
+  }
+  if (!fecha) return null
+
+  let servicio: string | null = null
+  const srvMs = [
+    ...texto.matchAll(/\bpara\s+(?!mañana|el\s|la\s|hoy|las\s|\d{1,2}:)([A-Za-záéíóúüñÁÉÍÓÚÜÑ0-9][^,.!?:]{2,50})/gi),
+  ]
+  if (srvMs.length > 0) {
+    const cand = srvMs[srvMs.length - 1][1].trim()
+    if (!/^\d+:\d+/.test(cand)) servicio = cand.slice(0, 60)
+  }
+  return { fecha, hora, servicio }
+}
+
+/**
+ * Escanea mensajes salientes recientes del hilo buscando slot (fecha+hora+servicio).
+ * Fallback cuando el LLM omitió llamar a preparar_confirmacion_cita.
+ */
+async function detectarSlotDesdeHistorial(thread_id: string): Promise<ConfirmacionPendiente | null> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('mensajes')
+    .select('contenido, direccion')
+    .eq('thread_id', thread_id)
+    .order('enviado_at', { ascending: false })
+    .limit(10)
+
+  if (!data) return null
+  for (const msg of data) {
+    if (msg.direccion !== 'saliente' || !msg.contenido) continue
+    const slot = extraerSlotDeTexto(msg.contenido as string)
+    if (slot) return slot
+  }
+  return null
 }
 
 // ── Demo: Simular mensaje entrante por WhatsApp ───────────────────────────────
@@ -324,14 +402,47 @@ export async function simularMensajeAction(params: {
     }
   }
 
+  // 5c. Slot detection fallback: cliente dijo "sí" pero no había confirmacion_pendiente.
+  //     Detectar fecha+hora+servicio de los mensajes previos del bot y crear cita.
+  if (!skipBot && isAfirmacion(params.mensaje)) {
+    const detectedSlot = await detectarSlotDesdeHistorial(thread_id)
+    if (detectedSlot) {
+      await guardarConfirmacionPendiente({
+        thread_id,
+        fecha:    detectedSlot.fecha,
+        hora:     detectedSlot.hora,
+        servicio: detectedSlot.servicio ?? undefined,
+      })
+      const slotResult = await crearCitaBot({
+        sucursal_id,
+        cliente_id: cliente.id,
+        fecha:      detectedSlot.fecha,
+        hora:       detectedSlot.hora,
+        servicio:   detectedSlot.servicio ?? undefined,
+        confirmada: true,
+      })
+      if ('id' in slotResult) {
+        cita_id  = slotResult.id
+        const fechaLegible = new Date(detectedSlot.fecha + 'T12:00:00').toLocaleDateString('es-MX', {
+          weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
+        })
+        const srv = detectedSlot.servicio ? ` para ${detectedSlot.servicio}` : ''
+        respuesta = `¡Listo! Tu cita${srv} ha sido confirmada para el ${fechaLegible} a las ${detectedSlot.hora} hrs. ¡Te esperamos!`
+        skipBot   = true
+      }
+      await limpiarConfirmacionPendiente(thread_id)
+    }
+  }
+
   // 6. Generar respuesta del bot (si no se resolvió determinísticamente)
   if (!skipBot) {
     const ctx = {
       sucursal_id,
-      cliente_id:     cliente.id,
-      cliente_nombre: `${cliente.nombre} ${cliente.apellido}`.trim(),
+      cliente_id:              cliente.id,
+      cliente_nombre:          `${cliente.nombre} ${cliente.apellido}`.trim(),
       thread_id,
-      intent_tipo:    intentResult.intent,
+      intent_tipo:             intentResult.intent,
+      confirmacion_pendiente:  pendingConf,
     }
 
     const isBotActive = threadEstado === 'bot_active'
@@ -341,11 +452,13 @@ export async function simularMensajeAction(params: {
       (intentResult.intent === 'confirmar_asistencia' && intentResult.confidence >= 0.5) ||
       (intentResult.intent === 'consulta_cita_propia' && intentResult.confidence >= 0.5)
 
+    let existingConfirmed = false
     if (usarBotCompleto) {
-      const botResult = await generarRespuestaBot(params.mensaje, ctx)
-      respuesta = botResult.respuesta
-      cita_id   = botResult.cita_id
-      handoff   = botResult.handoff
+      const botResult   = await generarRespuestaBot(params.mensaje, ctx)
+      respuesta         = botResult.respuesta
+      cita_id           = botResult.cita_id
+      handoff           = botResult.handoff
+      existingConfirmed = botResult.existing_confirmed
     } else {
       const botResult = generarRespuestaSimple({
         intent:         intentResult.intent,
@@ -354,6 +467,20 @@ export async function simularMensajeAction(params: {
       })
       respuesta = botResult.respuesta
       handoff   = botResult.handoff
+    }
+
+    // Guardrail: si el bot dice "confirmada/agendada" sin cita real ni herramienta exitosa → escalar.
+    const FRASES_CREACION_FALSA = [
+      'te agend', 'cita confirmada', 'quedó confirmada', 'quedó agendada',
+      'queda confirmada', 'queda agendada', 'está confirmada', 'está agendada',
+    ]
+    if (
+      !existingConfirmed &&
+      !cita_id &&
+      FRASES_CREACION_FALSA.some(f => respuesta.toLowerCase().includes(f))
+    ) {
+      respuesta = 'Para cerrar tu cita necesito confirmar un dato más con un asesor. Te canalizo para que la agenda quede correctamente registrada.'
+      handoff   = true
     }
   }
 

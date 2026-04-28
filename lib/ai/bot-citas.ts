@@ -20,6 +20,7 @@ import {
   confirmarCitaBot,
   cancelarCitaBot,
   guardarConfirmacionPendiente,
+  type ConfirmacionPendiente,
 } from './bot-tools'
 
 const client = new Anthropic()
@@ -57,14 +58,22 @@ PASO 1. Pregunta el servicio o motivo (si no lo dio)
 PASO 2. Pregunta la fecha deseada (si no la dio)
 PASO 3. Con la fecha, llama SIEMPRE a buscar_disponibilidad — NUNCA propongas horarios sin esta herramienta
 PASO 4. Presenta máximo 5 horarios disponibles y pide que elija uno
-PASO 4.5. Cuando el cliente elige un horario específico: llama a preparar_confirmacion_cita
-          con los datos exactos (fecha YYYY-MM-DD, hora HH:MM, servicio).
-          Esto guarda los datos para la confirmación final — es OBLIGATORIO antes de preguntar.
+PASO 4.5. Cuando el cliente elige un horario (incluye respuestas como "11", "10:30", "las 11",
+          "la primera", "ese" refiriéndose al slot presentado):
+          Interpreta el número/hora como el slot elegido de la lista que mostraste.
+          Llama INMEDIATAMENTE a preparar_confirmacion_cita con fecha YYYY-MM-DD, hora HH:MM y servicio.
+          Este paso es OBLIGATORIO — sin él NO puedes preguntar confirmación.
 PASO 5. Confirma: "¿Confirmas tu cita el [fecha legible] a las [hora] para [servicio]?"
 PASO 6. Solo con confirmación explícita del cliente, llama a crear_cita
    → Después de crear_cita exitosa: da el mensaje de confirmación con todos los datos
      y termina con "Hasta pronto" — NO hagas más preguntas
    → CRÍTICO: llama a crear_cita SOLO UNA VEZ. Si ya fue creada, NO la vuelvas a crear
+
+━━━ REGLA CRÍTICA — NUNCA INVENTAR CONFIRMACIÓN ━━━
+NUNCA uses frases como "tu cita está confirmada", "cita confirmada", "te agendé",
+"quedaste agendado", "quedó confirmada", "está agendada" o variantes SALVO que acabas de
+llamar exitosamente a crear_cita (citas nuevas) o confirmar_cita_cliente (citas existentes).
+Si el cliente confirma pero no tienes datos de fecha+hora disponibles → llama escalar_a_asesor.
 
 ━━━ REGLAS GENERALES ━━━
 - Responde en español, tono amigable y breve — máximo 3 líneas por mensaje
@@ -82,17 +91,19 @@ export interface BotMensaje {
 }
 
 export interface BotContexto {
-  sucursal_id:    string
-  cliente_id:     string | null
-  cliente_nombre: string | null
-  thread_id:      string | null
-  intent_tipo?:   string
+  sucursal_id:             string
+  cliente_id:              string | null
+  cliente_nombre:          string | null
+  thread_id:               string | null
+  intent_tipo?:            string
+  confirmacion_pendiente?: ConfirmacionPendiente | null
 }
 
 export interface BotResultado {
-  respuesta: string
-  cita_id:   string | null
-  handoff:   boolean
+  respuesta:          string
+  cita_id:            string | null
+  handoff:            boolean
+  existing_confirmed: boolean
 }
 
 async function cargarHistorial(thread_id: string, limite = 14): Promise<BotMensaje[]> {
@@ -140,9 +151,11 @@ export async function generarRespuestaBot(
 
   // Always consult existing citas when: first interaction OR intent is cita-related
   const debeConsultarCitas =
-    esPrimeraInteraccion ||
-    ctx.intent_tipo === 'confirmar_asistencia' ||
-    ctx.intent_tipo === 'consulta_cita_propia'
+    !ctx.confirmacion_pendiente && (
+      esPrimeraInteraccion ||
+      ctx.intent_tipo === 'confirmar_asistencia' ||
+      ctx.intent_tipo === 'consulta_cita_propia'
+    )
 
   const today = new Date().toLocaleDateString('es-MX', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -232,13 +245,16 @@ export async function generarRespuestaBot(
     { role: 'user', content: mensajeCliente },
   ]
 
-  let cita_id: string | null = null
-  let handoff = false
+  let cita_id:              string | null = null
+  let handoff               = false
+  let existingCitaConfirmed = false
   let respuesta = 'En este momento no puedo procesar tu solicitud. Un asesor se pondrá en contacto contigo pronto.'
 
-  const systemPrimer = debeConsultarCitas
-    ? `\n\n[SISTEMA] Llama AHORA a consultar_citas_cliente antes de responder. No omitas este paso.`
-    : ''
+  const systemPrimer = ctx.confirmacion_pendiente
+    ? `\n\n[SISTEMA] Hay confirmación pendiente. Si el cliente dice "sí" o confirma → llama INMEDIATAMENTE a crear_cita con: fecha=${ctx.confirmacion_pendiente.fecha}, hora=${ctx.confirmacion_pendiente.hora}, servicio=${ctx.confirmacion_pendiente.servicio ?? 'sin especificar'}. NO llames consultar_citas_cliente ni ninguna otra herramienta antes.`
+    : debeConsultarCitas
+      ? `\n\n[SISTEMA] Llama AHORA a consultar_citas_cliente antes de responder. No omitas este paso.`
+      : ''
 
   const systemFull = SYSTEM_PROMPT
     + `\n\nHoy es ${today}.`
@@ -292,9 +308,12 @@ export async function generarRespuestaBot(
             toolResult = 'Se requiere el ID de la cita para confirmarla.'
           } else {
             const result = await confirmarCitaBot({ cita_id: citaId, sucursal_id: ctx.sucursal_id })
-            toolResult = result.ok
-              ? `SISTEMA: ${result.mensaje} — Ahora da al cliente el mensaje de confirmación final y termina con "Hasta pronto, ¡nos vemos!". NO hagas más preguntas.`
-              : result.mensaje
+            if (result.ok) {
+              existingCitaConfirmed = true
+              toolResult = `SISTEMA: ${result.mensaje} — Da al cliente el mensaje de confirmación final y termina con "Hasta pronto, ¡nos vemos!". NO hagas más preguntas.`
+            } else {
+              toolResult = result.mensaje
+            }
           }
           break
         }
@@ -326,7 +345,7 @@ export async function generarRespuestaBot(
               hora:      input.hora,
               servicio:  input.servicio,
             })
-            toolResult = `Datos guardados (fecha: ${input.fecha}, hora: ${input.hora}, servicio: ${input.servicio ?? 'no especificado'}). Ahora pregunta al cliente la confirmación.`
+            toolResult = `SISTEMA: Datos guardados — fecha: ${input.fecha}, hora: ${input.hora}, servicio: ${input.servicio ?? 'no especificado'}. Pregunta al cliente: "¿Confirmas tu cita el [fecha legible] a las ${input.hora}?" — NO digas que la cita ya está confirmada. La cita se crea SOLO después de que el cliente confirme.`
           } else {
             toolResult = 'Faltan datos (fecha u hora) para guardar la confirmación.'
           }
@@ -377,5 +396,5 @@ export async function generarRespuestaBot(
     messages.push({ role: 'user', content: toolResults })
   }
 
-  return { respuesta, cita_id, handoff }
+  return { respuesta, cita_id, handoff, existing_confirmed: existingCitaConfirmed }
 }
