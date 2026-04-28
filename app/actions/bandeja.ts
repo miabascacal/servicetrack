@@ -27,8 +27,18 @@ import {
   parsearServicio,
   parsearFecha,
   parsearHora,
+  parsearNombre,
+  parsearVehiculo,
+  parsearSeleccion,
+  isNegacion,
   type AppointmentFlowState,
 } from '@/lib/ai/appointment-flow'
+import {
+  buscarVehiculosCliente,
+  crearVehiculoYVincularBot,
+  actualizarNombreClienteBot,
+  leerInfoSucursal,
+} from '@/lib/ai/bot-crm'
 
 export interface MensajeRow {
   id:             string
@@ -384,11 +394,11 @@ export async function simularMensajeAction(params: {
   let handoff = false
   let skipBot = false
 
-  // ── P0.1 State machine — deterministic appointment flow ─────────────────────
+  // ── P0.2 + P0.1 State machine — deterministic appointment flow ──────────────
   //
-  // Tracks slot data (servicio/fecha/hora) in metadata.appointment_flow.
-  // Creates cita directly when all slots are captured and client confirms,
-  // bypassing the LLM entirely for the final confirmation step.
+  // P0.2: Captures client name (if DEMO placeholder) and resolves vehicle before
+  //       proceeding to the P0.1 slot-capture flow (servicio → fecha → hora → confirm).
+  // P0.1: Creates cita directly when all slots captured + client confirms, bypassing LLM.
   // Falls through to existing step-5a/5b/5c when state machine doesn't handle it.
   let flowState: AppointmentFlowState | null = getAppointmentFlowState(existingThread?.metadata ?? null)
   const frustrado = isFrustracion(params.mensaje)
@@ -399,47 +409,157 @@ export async function simularMensajeAction(params: {
     intentoAgendar(params.mensaje)
 
   if (shouldProcessFlow && !citaProxima) {
-    // Parse new slot data from current message (only fill missing slots)
-    const newServicio = !flowState?.servicio ? parsearServicio(params.mensaje) : null
-    const newFecha    = !flowState?.fecha    ? parsearFecha(params.mensaje)    : null
-    const newHora     = !flowState?.hora     ? parsearHora(params.mensaje)     : null
+    if (!flowState) flowState = { step: 'capturar_servicio' }
 
-    const patch: Partial<AppointmentFlowState> = { updated_at: new Date().toISOString() }
-    if (newServicio) patch.servicio = newServicio
-    if (newFecha)    patch.fecha    = newFecha
-    if (newHora)     patch.hora     = newHora
+    // ── Step A: Name capture (only for DEMO placeholder clients) ─────────────
+    if (!flowState.nombre_resuelto) {
+      const esDemo =
+        (cliente.nombre as string | null)?.toUpperCase() === 'CLIENTE' &&
+        ((cliente.apellido as string | null) ?? '').toUpperCase() === 'DEMO'
 
-    flowState = mergeAppointmentFlowState(flowState, patch)
-    flowState = { ...flowState, step: nextStep(flowState) }
-
-    // Create cita deterministically: all slots captured + client confirms
-    if (flowState.step === 'esperando_confirmacion' && isAfirmacionFlow(params.mensaje)) {
-      const flowResult = await crearCitaBot({
-        sucursal_id,
-        cliente_id: cliente.id,
-        fecha:      flowState.fecha!,
-        hora:       flowState.hora!,
-        servicio:   flowState.servicio ?? undefined,
-        confirmada: true,
-      })
-      if ('id' in flowResult) {
-        cita_id   = flowResult.id
-        const fechaLeg = new Date(flowState.fecha! + 'T12:00:00').toLocaleDateString('es-MX', {
-          weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
-        })
-        const srv = flowState.servicio ? ` para ${flowState.servicio}` : ''
-        respuesta = `¡Listo! Tu cita${srv} ha sido confirmada para el ${fechaLeg} a las ${flowState.hora} hrs. ¡Hasta pronto!`
-        flowState = { ...flowState, step: 'completado', cita_id: flowResult.id }
-        skipBot   = true
+      if (!esDemo) {
+        flowState = { ...flowState, nombre_resuelto: true }
+      } else if (flowState.step !== 'capturar_nombre') {
+        flowState = { ...flowState, step: 'capturar_nombre' }
+        await setAppointmentFlowState(thread_id, flowState)
+        // Fall through to bot — it will ask for the client's name
+      } else {
+        const nombreParsed = parsearNombre(params.mensaje)
+        if (nombreParsed) {
+          await actualizarNombreClienteBot({
+            cliente_id: cliente.id as string,
+            nombre:     nombreParsed.nombre,
+            apellido:   nombreParsed.apellido,
+          })
+          // Update local reference for bot context later
+          ;(cliente as Record<string, unknown>).nombre  = nombreParsed.nombre
+          ;(cliente as Record<string, unknown>).apellido = nombreParsed.apellido
+          flowState = { ...flowState, nombre_resuelto: true }
+          // Continue to vehicle step (fall through)
+        } else {
+          await setAppointmentFlowState(thread_id, flowState)
+          // Stay on capturar_nombre — bot will ask again
+        }
       }
-      // If crearCitaBot returned an error (slot taken etc.) fall through to LLM
     }
 
-    // Persist updated flow state (clear on completion, save on progress)
+    // ── Step B: Vehicle resolution ────────────────────────────────────────────
+    if (flowState.nombre_resuelto && !flowState.vehiculo_resuelto) {
+      const vehiculoStep = flowState.step
+
+      if (vehiculoStep === 'resolver_vehiculo') {
+        const opciones = flowState.vehiculos_opciones ?? []
+        const idx      = parsearSeleccion(params.mensaje, opciones.length, opciones)
+
+        if (idx !== null) {
+          flowState = { ...flowState, vehiculo_id: opciones[idx].id, vehiculo_resuelto: true }
+        } else if (isNegacion(params.mensaje)) {
+          flowState = { ...flowState, vehiculo_resuelto: true }
+        } else {
+          // Client may have given new vehicle data
+          const vData = parsearVehiculo(params.mensaje)
+          if (vData) {
+            const vRes = await crearVehiculoYVincularBot({
+              grupo_id,
+              cliente_id: cliente.id as string,
+              ...vData,
+            })
+            if ('id' in vRes) {
+              flowState = { ...flowState, vehiculo_id: vRes.id, vehiculo_resuelto: true }
+            } else {
+              await setAppointmentFlowState(thread_id, flowState)
+              // Stay on resolver_vehiculo — bot will re-present options
+            }
+          } else {
+            await setAppointmentFlowState(thread_id, flowState)
+          }
+        }
+      } else if (vehiculoStep === 'capturar_vehiculo') {
+        const vData = parsearVehiculo(params.mensaje)
+        if (vData) {
+          const vRes = await crearVehiculoYVincularBot({
+            grupo_id,
+            cliente_id: cliente.id as string,
+            ...vData,
+          })
+          if ('id' in vRes) {
+            flowState = { ...flowState, vehiculo_id: vRes.id, vehiculo_resuelto: true }
+          } else {
+            await setAppointmentFlowState(thread_id, flowState)
+          }
+        } else if (isNegacion(params.mensaje)) {
+          flowState = { ...flowState, vehiculo_resuelto: true }
+        } else {
+          await setAppointmentFlowState(thread_id, flowState)
+        }
+      } else {
+        // First time entering vehicle step — load vehicles from DB
+        const vehiculos = await buscarVehiculosCliente(cliente.id as string)
+        if (vehiculos.length === 0) {
+          flowState = { ...flowState, step: 'capturar_vehiculo', vehiculos_opciones: [] }
+        } else {
+          const opciones = vehiculos.map(v => ({
+            id:          v.id,
+            descripcion: `${v.marca} ${v.modelo} ${v.anio}${v.placa ? ` (${v.placa})` : ''}`,
+          }))
+          flowState = { ...flowState, step: 'resolver_vehiculo', vehiculos_opciones: opciones }
+        }
+        await setAppointmentFlowState(thread_id, flowState)
+        // Fall through to bot to present vehicle question
+      }
+    }
+
+    // ── Step C: Service / fecha / hora / confirmation (P0.1) ─────────────────
+    if (flowState.nombre_resuelto && flowState.vehiculo_resuelto) {
+      // If coming from a vehicle step, transition to service capture
+      const SERVICE_STEPS = new Set([
+        'capturar_servicio', 'capturar_fecha', 'capturar_hora', 'esperando_confirmacion',
+      ])
+      if (!SERVICE_STEPS.has(flowState.step)) {
+        flowState = { ...flowState, step: 'capturar_servicio' }
+      }
+
+      const newServicio = !flowState.servicio ? parsearServicio(params.mensaje) : null
+      const newFecha    = !flowState.fecha    ? parsearFecha(params.mensaje)    : null
+      const newHora     = !flowState.hora     ? parsearHora(params.mensaje)     : null
+
+      const patch: Partial<AppointmentFlowState> = { updated_at: new Date().toISOString() }
+      if (newServicio) patch.servicio = newServicio
+      if (newFecha)    patch.fecha    = newFecha
+      if (newHora)     patch.hora     = newHora
+
+      flowState = mergeAppointmentFlowState(flowState, patch)
+      flowState = { ...flowState, step: nextStep(flowState) }
+
+      if (flowState.step === 'esperando_confirmacion' && isAfirmacionFlow(params.mensaje)) {
+        const flowResult = await crearCitaBot({
+          sucursal_id,
+          cliente_id:  cliente.id as string,
+          fecha:       flowState.fecha!,
+          hora:        flowState.hora!,
+          servicio:    flowState.servicio ?? undefined,
+          vehiculo_id: flowState.vehiculo_id ?? undefined,
+          confirmada:  true,
+        })
+        if ('id' in flowResult) {
+          cita_id = flowResult.id
+          const fechaLeg = new Date(flowState.fecha! + 'T12:00:00').toLocaleDateString('es-MX', {
+            weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
+          })
+          const srv = flowState.servicio ? ` para ${flowState.servicio}` : ''
+          respuesta = `¡Listo! Tu cita${srv} ha sido confirmada para el ${fechaLeg} a las ${flowState.hora} hrs. ¡Hasta pronto!`
+          flowState = { ...flowState, step: 'completado', cita_id: flowResult.id }
+          skipBot   = true
+        }
+        // If crearCitaBot returned an error (slot taken etc.) fall through to LLM
+      }
+    }
+
+    // Persist state
     if (flowState.step === 'completado' || flowState.step === 'escalado') {
       await clearAppointmentFlowState(thread_id)
       await limpiarConfirmacionPendiente(thread_id)
-    } else {
+    } else if (!skipBot) {
       await setAppointmentFlowState(thread_id, flowState)
     }
   }
@@ -472,7 +592,8 @@ export async function simularMensajeAction(params: {
   // 5b. Fallback determinístico para cita existente:
   // Si el cliente dice que sí pero no había confirmacion_pendiente (nuevo slot),
   // verificar si tiene exactamente una cita próxima activa y confirmarla.
-  if (!skipBot && isAfirmacion(params.mensaje)) {
+  // Guard: skip if flowState is active (affirmation belongs to the appointment flow).
+  if (!skipBot && !flowState && isAfirmacion(params.mensaje)) {
     const hoy = new Date().toISOString().split('T')[0]
     const { data: citasActivas } = await admin
       .from('citas')
@@ -501,7 +622,8 @@ export async function simularMensajeAction(params: {
 
   // 5c. Slot detection fallback: cliente dijo "sí" pero no había confirmacion_pendiente.
   //     Detectar fecha+hora+servicio de los mensajes previos del bot y crear cita.
-  if (!skipBot && isAfirmacion(params.mensaje)) {
+  // Guard: skip if flowState is active.
+  if (!skipBot && !flowState && isAfirmacion(params.mensaje)) {
     const detectedSlot = await detectarSlotDesdeHistorial(thread_id)
     if (detectedSlot) {
       await guardarConfirmacionPendiente({
@@ -533,21 +655,32 @@ export async function simularMensajeAction(params: {
 
   // 6. Generar respuesta del bot (si no se resolvió determinísticamente)
   if (!skipBot) {
+    // Load sucursal info for location/hours questions — best-effort
+    const infoSucursal = await leerInfoSucursal(sucursal_id).catch(() => null)
+
+    const clienteNombre = [
+      (cliente as Record<string, unknown>).nombre,
+      (cliente as Record<string, unknown>).apellido,
+    ].filter(Boolean).join(' ') || null
+
     const ctx = {
       sucursal_id,
-      cliente_id:              cliente.id,
-      cliente_nombre:          `${cliente.nombre} ${cliente.apellido}`.trim(),
+      cliente_id:              cliente.id as string,
+      cliente_nombre:          clienteNombre,
       thread_id,
       intent_tipo:             intentResult.intent,
       confirmacion_pendiente:  pendingConf,
       cita_proxima:            citaProxima,
       appointment_flow:        flowState,
       es_frustracion:          frustrado,
+      info_sucursal:           infoSucursal,
     }
 
     const isBotActive = threadEstado === 'bot_active'
     const usarBotCompleto =
       isBotActive ||
+      !!citaProxima ||
+      !!flowState ||
       (intentResult.intent === 'agendar_cita'        && intentResult.confidence >= 0.6) ||
       (intentResult.intent === 'confirmar_asistencia' && intentResult.confidence >= 0.5) ||
       (intentResult.intent === 'consulta_cita_propia' && intentResult.confidence >= 0.5)

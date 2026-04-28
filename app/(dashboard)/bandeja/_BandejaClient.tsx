@@ -45,7 +45,7 @@ export interface ThreadRow {
   last_message_at:     string | null
   last_message_source: string | null
   assignee_id:         string | null
-  cliente:             { id: string; nombre: string | null; whatsapp: string | null } | null
+  cliente:             { id: string; nombre: string | null; apellido: string | null; whatsapp: string | null } | null
 }
 
 export interface PreviewRow {
@@ -250,7 +250,7 @@ export function BandejaClient({ threads, lastMsgByThread }: BandejaClientProps) 
     const sinRespuestaMin = calcSinRespuestaMin(t.last_message_at, t.last_message_source)
     return {
       ...t,
-      clienteNombre: t.cliente?.nombre ?? 'Sin cliente',
+      clienteNombre: [t.cliente?.nombre, t.cliente?.apellido].filter(Boolean).join(' ') || 'Sin cliente',
       preview:       lastMsgByThread[t.id] ?? null,
       sinRespuestaMin,
       escalada:      sinRespuestaMin >= ESCALADA_MIN,

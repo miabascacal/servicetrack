@@ -23,6 +23,7 @@ import {
   type ConfirmacionPendiente,
 } from './bot-tools'
 import { type AppointmentFlowState } from './appointment-flow'
+import { type InfoSucursal } from './bot-crm'
 
 const client = new Anthropic()
 
@@ -109,6 +110,7 @@ export interface BotContexto {
   cita_proxima?:           CitaProxima | null
   appointment_flow?:       AppointmentFlowState | null
   es_frustracion?:         boolean
+  info_sucursal?:          InfoSucursal | null
 }
 
 export interface BotResultado {
@@ -282,17 +284,60 @@ export async function generarRespuestaBot(
 
   const flowInject = ctx.appointment_flow
     ? (() => {
-        const f   = ctx.appointment_flow!
+        const f = ctx.appointment_flow!
+
+        // P0.2 — pre-service steps
+        if (f.step === 'capturar_nombre') {
+          return `\n\n[ESTADO DE AGENDAMIENTO]\n→ El cliente aún no tiene nombre registrado. Pregunta únicamente: "¿Cómo te llamas?" — Solo esta pregunta, nada más.`
+        }
+        if (f.step === 'capturar_vehiculo') {
+          return `\n\n[ESTADO DE AGENDAMIENTO]\n→ No hay vehículo registrado. Pregunta: "¿Qué vehículo vas a traer? (marca, modelo y año)" — Solo esta pregunta.`
+        }
+        if (f.step === 'resolver_vehiculo') {
+          const opts = f.vehiculos_opciones ?? []
+          if (opts.length === 0) {
+            return `\n\n[ESTADO DE AGENDAMIENTO]\n→ No se encontraron vehículos. Pregunta los datos del vehículo: "¿Qué vehículo vas a traer? (marca, modelo y año)"`
+          }
+          if (opts.length === 1) {
+            return `\n\n[ESTADO DE AGENDAMIENTO]\n→ Hay un vehículo registrado: ${opts[0].descripcion}. Pregunta: "¿Tu cita es para este vehículo: ${opts[0].descripcion}?"`
+          }
+          const lista = opts.map((o, i) => `${i + 1}) ${o.descripcion}`).join(', ')
+          return `\n\n[ESTADO DE AGENDAMIENTO]\n→ Hay ${opts.length} vehículos registrados: ${lista}. Pregunta: "¿Para cuál vehículo es la cita? Responde con el número o el nombre. Si es otro vehículo, dime la marca, modelo y año."`
+        }
+
+        // P0.1 — service/date/time slots
         const srv = f.servicio ? `✓ Servicio: ${f.servicio}` : '✗ Servicio: pendiente'
         const fch = f.fecha    ? `✓ Fecha: ${f.fecha}`       : '✗ Fecha: pendiente'
         const hr  = f.hora     ? `✓ Hora: ${f.hora}`         : '✗ Hora: pendiente'
         const siguiente =
           f.step === 'capturar_servicio'      ? 'Pregunta el tipo de servicio o motivo.' :
           f.step === 'capturar_fecha'         ? 'Pregunta la fecha deseada.' :
-          f.step === 'capturar_hora'          ? `Llama buscar_disponibilidad para fecha=${f.fecha} y presenta los horarios disponibles.` :
-          f.step === 'esperando_confirmacion' ? `Llama INMEDIATAMENTE preparar_confirmacion_cita con fecha=${f.fecha}, hora=${f.hora}, servicio=${f.servicio ?? 'sin especificar'}. Luego pregunta: "¿Confirmas tu cita?"` :
-          ''
+          f.step === 'capturar_hora'
+            ? `Llama buscar_disponibilidad para fecha=${f.fecha} y presenta los horarios disponibles.`
+            : f.step === 'esperando_confirmacion'
+            ? `Llama INMEDIATAMENTE preparar_confirmacion_cita con fecha=${f.fecha}, hora=${f.hora}, servicio=${f.servicio ?? 'sin especificar'}. Luego pregunta: "¿Confirmas tu cita?"`
+            : ''
         return `\n\n[ESTADO DE AGENDAMIENTO]\n${srv}\n${fch}\n${hr}\n→ ${siguiente}`
+      })()
+    : ''
+
+  const sucursalInject = ctx.info_sucursal
+    ? (() => {
+        const s = ctx.info_sucursal!
+        const DIAS: Record<number, string> = {
+          0: 'dom', 1: 'lun', 2: 'mar', 3: 'mié', 4: 'jue', 5: 'vie', 6: 'sáb',
+        }
+        const diasStr = s.dias_disponibles.map(d => DIAS[d] ?? String(d)).join(', ')
+        const lines: string[] = [
+          `Sucursal: ${s.nombre}`,
+          `Horario: ${diasStr} ${s.horario_inicio}–${s.horario_fin}`,
+        ]
+        if (s.direccion) lines.push(`Dirección: ${s.direccion}`)
+        if (s.telefono)  lines.push(`Teléfono: ${s.telefono}`)
+        return (
+          `\n\n[DATOS DE LA SUCURSAL]\n${lines.join('\n')}` +
+          `\n→ Usa estos datos para responder preguntas de dirección, horario o teléfono. NO inventes datos.`
+        )
       })()
     : ''
 
@@ -303,6 +348,7 @@ export async function generarRespuestaBot(
   const systemFull = SYSTEM_PROMPT
     + `\n\nHoy es ${today}.`
     + (nombreCliente !== 'cliente' ? `\n\nEl cliente se llama ${nombreCliente}.` : '')
+    + sucursalInject
     + citaProximaInject
     + flowInject
     + frustracionInject
