@@ -395,6 +395,8 @@ No es deuda de código. Acción: cuando exista número → poblar `wa_numeros` �
 9. Cada variable nueva lleva **comentario inline** explicando su propósito
 10. Antes de enviar cualquier WA o email: **verificar horario del bot** (8am–7:30pm)
 11. **Sin hardcodeo de configuración operativa** — responsables, tiempos de timeout, umbrales de confianza IA, reglas de escalación, horarios del bot y permisos de módulos deben vivir en tablas de configuración (`ai_settings`, `configuracion_citas_sucursal`, `automation_rules`) o en variables de entorno documentadas. Nunca en constantes del código ni en strings hardcodeados dentro de funciones.
+12. **BotIA no crea citas sin identidad ni vehículo resueltos** — El bot NUNCA debe crear una cita comercial final sin antes: (a) haber resuelto la identidad del cliente (si es placeholder "CLIENTE DEMO", capturar nombre real y actualizar CRM), y (b) haber resuelto el vehículo (confirmar existente o capturar y crear nuevo con `vehiculo_personas`). La cita debe incluir `vehiculo_id`. Excepción: si el cliente dice explícitamente que no tiene vehículo o pide saltarse el paso, documentar en notas de la cita.
+13. **Datos de sucursal vienen de configuración, nunca hardcodeados** — Dirección, teléfono, horarios y requisitos de la sucursal deben leerse de `sucursales` y `configuracion_citas_sucursal`. El bot (y cualquier otro componente) debe usar `leerInfoSucursal(sucursal_id)` para obtener estos datos. Si no están configurados, responder que no se tiene la información disponible — nunca inventar ni poner datos ficticios en código.
 
 ---
 

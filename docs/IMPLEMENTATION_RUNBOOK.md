@@ -199,6 +199,32 @@ ON CONFLICT (sucursal_id) DO UPDATE
 - Simular cliente que dice "sí" sin que el bot haya preguntado por cita: el bot debe escalar, NO crear cita fantasma.
 - Verificar que si se crea una cita, el bot no vuelve a intentar crear otra en la misma conversación.
 
+#### Pasos adicionales para validar P0.2 (commit d57c8c2)
+
+**Prerequisito:** deploy de `d57c8c2` activo en Vercel (confirmar con `git log --oneline -3` y estado de deploy en Vercel Dashboard).
+
+**Paso 5 — Validar CRM enrichment (nombre):**
+- [ ] Simular con cliente cuyo `nombre='CLIENTE'` y `apellido='DEMO'` en BD
+- [ ] Bot pregunta nombre → cliente responde → verificar en Supabase que `clientes.nombre` y `clientes.apellido` se actualizaron
+- [ ] Bandeja muestra nombre real (no "CLIENTE DEMO") en el header del chat
+
+**Paso 6 — Validar resolución de vehículo:**
+- [ ] Cliente sin vehículo vinculado: bot pregunta vehículo → cliente responde marca/modelo/año → verificar en `vehiculos` que se creó la fila → verificar en `vehiculo_personas` que existe fila `(vehiculo_id, cliente_id, rol='propietario')`
+- [ ] Cliente con 1 vehículo: bot presenta opción → cliente confirma → `flowState.vehiculo_id` resuelto
+- [ ] Cliente con N vehículos: bot presenta lista numerada → cliente elige → `flowState.vehiculo_id` resuelto
+
+**Paso 7 — Validar cita con vehiculo_id:**
+- [ ] Completar flujo hasta cita confirmada
+- [ ] En Supabase: `SELECT vehiculo_id FROM citas WHERE id = '<cita-id>'` → debe tener UUID (no NULL)
+
+**Paso 8 — Validar info de sucursal:**
+- [ ] Preguntar al bot "¿cuál es su dirección?" o "¿dónde están ubicados?"
+- [ ] Bot responde con datos de `sucursales.direccion` y `sucursales.telefono` reales — no inventa texto
+- [ ] Preguntar "¿cuál es su horario?" → bot responde con `configuracion_citas_sucursal.horario_inicio/horario_fin/dias_disponibles`
+- [ ] Si la sucursal no tiene dirección configurada: documentar como dependencia operativa pendiente del cliente
+
+**Nota:** si `sucursales.direccion` o `configuracion_citas_sucursal.horario_*` están vacíos, el bot no puede responder preguntas de ubicación/horario y debe decir que no tiene esa información disponible. Configurar estos campos como parte del onboarding del cliente.
+
 ### 4.7 Email
 
 | Elemento | Valor |

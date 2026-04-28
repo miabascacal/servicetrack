@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-27 — P0 BotIA Citas operativo (commit 713e605): asesor_id configurable, actividad trazable, cita_proxima en contexto, guardrails, WhatsApp en Bandeja. Migración 019 pendiente de ejecutar en producción. Demo NO cerrada hasta validación completa._
+_Actualizado: 2026-04-28 — P0.2 BotIA CRM Enrichment + Vehicle Resolution implementado (commit d57c8c2): bot captura nombre real si CLIENTE DEMO, resuelve/crea vehículo, inyecta info de sucursal (dirección/horario/teléfono) desde configuración. Pendiente re-prueba y validación de flujo completo._
 
 ---
 
@@ -37,11 +37,51 @@ alter table public.citas
 
 ---
 
+## 🤖 P0.2 BotIA CRM Enrichment + Vehículo — PENDIENTES POST-COMMIT d57c8c2
+
+> Commit d57c8c2 implementa el flujo completo P0.2. Las validaciones siguientes deben completarse antes de cerrar la demo.
+
+### Qué implementa P0.2 (código listo, pendiente re-prueba)
+
+- **Captura de nombre real**: si el cliente está registrado como "CLIENTE DEMO", el bot pregunta su nombre, parsea y actualiza el CRM (`actualizarNombreClienteBot`).
+- **Resolución de vehículo**: consulta `vehiculo_personas` del cliente. Si tiene 1 → confirma. Si tiene N → presenta lista. Si no tiene → captura datos y crea vehículo + `vehiculo_personas` (`crearVehiculoYVincularBot`).
+- **vehiculo_id en cita**: `crearCitaBot` recibe y guarda `vehiculo_id` desde el `flowState` del state machine.
+- **Info de sucursal en contexto**: `leerInfoSucursal` inyecta `nombre`, `dirección`, `teléfono`, `horario_inicio`, `horario_fin`, `dias_disponibles` en el system prompt. El bot puede responder preguntas de ubicación/horario sin hardcodear datos.
+
+### Archivos creados/modificados en d57c8c2
+
+| Archivo | Cambio |
+|---------|--------|
+| `lib/ai/bot-crm.ts` | NUEVO — operaciones CRM/vehículo/sucursal via `createAdminClient()` |
+| `lib/ai/appointment-flow.ts` | Extendido con pasos `capturar_nombre`, `resolver_vehiculo`, `capturar_vehiculo`; nuevos parsers |
+| `lib/ai/bot-citas.ts` | `sucursalInject` en system prompt; `flowInject` para pasos P0.2 |
+| `app/actions/bandeja.ts` | State machine P0.2 (Steps A+B+C); guards 5b/5c; `leerInfoSucursal` |
+| `app/(dashboard)/bandeja/page.tsx` | Agrega `apellido` al query de clientes |
+| `app/(dashboard)/bandeja/_BandejaClient.tsx` | `clienteNombre` muestra nombre+apellido |
+
+### Validación obligatoria antes de cerrar la demo P0.2
+
+- [ ] Ejecutar migración 019 en Supabase SQL Editor (ver arriba)
+- [ ] Configurar `ai_settings.escalation_assignee_id` con UUID de un usuario responsable
+- [ ] **Re-probar con teléfono 5511117777** (cliente demo nuevo, sin nombre real ni vehículo):
+  - [ ] Bot pregunta nombre → actualizar CRM → nombre aparece en `clientes` BD
+  - [ ] Bot resuelve/crea vehículo → aparece en `vehiculos` BD con `vehiculo_personas` vinculado al cliente
+  - [ ] Bot crea cita → `citas.vehiculo_id` poblado (no NULL)
+  - [ ] `actividades` tiene fila `tipo='cita_agendada'`, `cita_id` referenciando la cita
+  - [ ] La cita aparece en "Mi Agenda" del responsable configurado
+  - [ ] Preguntar al bot "¿cuál es su dirección?" → responde con datos reales de la sucursal (no inventa)
+  - [ ] Preguntar "¿cuál es el horario?" → responde horario real de `configuracion_citas_sucursal`
+
+### Pendiente si sucursal no tiene dirección/horario configurado
+
+Si `sucursales.direccion` está vacío o `configuracion_citas_sucursal` no tiene `horario_inicio/horario_fin`, el bot no podrá responder preguntas de ubicación/horario. Documentar como dependencia de configuración operativa del cliente.
+
 ## 🤖 P0 BotIA CITAS — PENDIENTES POST-COMMIT 713e605
 
-> Commit 713e605 es el estado de código. Las validaciones siguientes deben completarse antes de cerrar la demo.
+> Commit 713e605 implementa asesor_id configurable, actividad trazable, cita_proxima en contexto, guardrails.
+> P0.1 validado: flujo seguimiento+confirmación cita existente funciona correctamente.
 
-### Validación obligatoria antes de cerrar la demo
+### Validación obligatoria (P0.1 base)
 
 - [ ] Ejecutar migración 019 en Supabase SQL Editor (ver arriba)
 - [ ] Configurar `ai_settings.escalation_assignee_id` con UUID de un usuario responsable en la sucursal de prueba
@@ -49,14 +89,6 @@ alter table public.citas
 - [ ] Verificar que se creó una fila en `actividades` con `tipo='cita_agendada'`, `modulo_origen='ia'`, `cita_id` referenciando la cita creada
 - [ ] Verificar que la cita aparece en "Mi Agenda" del usuario configurado en `escalation_assignee_id`
 - [ ] Verificar que Bandeja muestra el número de WhatsApp del cliente en el header del chat
-
-### Pendiente de código: CRM enrichment completo del bot
-
-⬜ El bot actualmente sabe: nombre del cliente, próxima cita.
-⬜ Falta: mostrar vehículo del cliente en el chat de Bandeja.
-⬜ Falta: bot pueda referirse al vehículo del cliente por marca/modelo en sus respuestas.
-
-Impacto: el bot dice "tu próxima cita" pero no dice "tu Nissan Sentra tiene cita". El CRM enrichment completo requiere JOIN `citas → vehiculos` al construir el contexto del bot.
 
 ### Pendiente de diseño: Automation Engine sin n8n
 

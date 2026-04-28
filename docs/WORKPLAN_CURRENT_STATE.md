@@ -1,9 +1,9 @@
 # WORKPLAN_CURRENT_STATE.md — ServiceTrack
 > **FUENTE DE VERDAD ÚNICA del proyecto. Todo análisis, bug, decisión y mejora debe integrarse aquí.**
 > Documento de estado consolidado para arquitectos, asistentes IA y equipo de desarrollo.
-> **Última actualización:** 2026-04-27 (commit 713e605: P0 BotIA Citas operativo — asesor_id desde ai_settings, actividad trazable con cita_id, cita_proxima en contexto bot, guardrails anti-hallucination, WhatsApp en Bandeja)
-> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento) + P0 BotIA (commit 713e605)
-> **Estado general:** ~46% del producto completo — CRM+Citas+Taller+Usuarios operativos, bot con prioridad seguimiento de citas ya agendadas, flujo crear cita confirmada operativo en código. Demo pendiente de validación (migración 019 + ai_settings config).
+> **Última actualización:** 2026-04-28 (commit d57c8c2: P0.2 BotIA CRM Enrichment + Vehicle Resolution — bot captura nombre real, resuelve/crea vehículo, inyecta info de sucursal desde configuración)
+> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento) + P0 BotIA (commit 713e605) + P0.2 BotIA CRM+Vehículo (commit d57c8c2)
+> **Estado general:** ~47% del producto completo — CRM+Citas+Taller+Usuarios operativos, bot con flujo completo captura nombre+vehículo+servicio+fecha+hora+confirmación. Demo pendiente de re-prueba con teléfono 5511117777 (validación completa: CRM enrichment + vehiculo_personas + cita con vehiculo_id + actividad con cita_id).
 
 ---
 
@@ -296,9 +296,10 @@ cancelado → (final)
 | 5.8 | **Flush `outbound_queue`** (`app/api/cron/outbound-queue-flush/route.ts`) | ✅ Código completo | 🔴 No activo — requiere deploy para que Vercel registre el cron |
 | 5.9 | **Bot: seguimiento de citas ya agendadas** — `consultarCitasCliente` + `confirmarCitaBot` | ✅ 2026-04-27: herramientas en `lib/ai/bot-tools.ts`; bot redesignado en `bot-citas.ts` con prioridad seguimiento → confirmación → nueva cita | 🔴 No activo — depende de WA activo; testeable en Demo Bot |
 | 5.9b | **P0 BotIA — crearCitaBot con asesor_id + actividad** — commit 713e605 | ✅ `crearCitaBot` sets `asesor_id` desde `ai_settings.escalation_assignee_id`; crea actividad `cita_agendada` best-effort; `cita_proxima` en contexto; guardrails anti-hallucination; WA en Bandeja | ⬜ **Demo pendiente validación** — requiere migración 019 + `ai_settings` configurado |
+| 5.9c | **P0.2 BotIA CRM Enrichment + Vehicle Resolution** — commit d57c8c2 | ✅ Bot captura nombre real si CLIENTE DEMO (`actualizarNombreClienteBot`); resuelve/crea vehículo (`buscarVehiculosCliente`, `crearVehiculoYVincularBot`); `vehiculo_id` en cita; `leerInfoSucursal` inyecta dirección/horario/teléfono en system prompt. Nuevos parsers: `parsearNombre`, `parsearVehiculo`, `parsearSeleccion`, `isNegacion`. Guard `MARCAS_CONOCIDAS` evita false positives. | ⬜ **Demo pendiente re-prueba** — teléfono 5511117777; validar CRM enrichment + vehiculo_personas + cita.vehiculo_id + actividad.cita_id + respuesta de dirección/horario |
 | 5.10 | **Workflow Studio / AI Copilot** | ⬜ No implementado | ⬜ — pasada futura |
 | 5.11 | **Bot flotante / overlay por módulo** | ⬜ Sugerencia futura — NO implementar aún. El bot hoy vive solo en Automatizaciones/Demo. En el futuro podría invocarse desde Citas, Taller, CRM como ventana flotante. | ⬜ — pendiente diseño |
-| 5.12 | **CRM enrichment del bot** — vehículo del cliente en contexto | ⬜ Bot dice "tu próxima cita" pero no menciona el vehículo. Requiere JOIN `citas → vehiculos` al construir `BotContexto`. | ⬜ — pasada futura |
+| 5.12 | **CRM enrichment del bot** — vehículo del cliente en contexto del bot | 🟡 Parcial — vehículo se resuelve antes de crear la cita (P0.2). El bot no menciona el vehículo en el seguimiento de citas existentes (JOIN `citas → vehiculos` pendiente en `BotContexto`). | ⬜ — completar en pasada futura junto a seguimiento enriquecido |
 | 5.13 | **Automation Engine sin n8n** — reglas determinísticas | ⬜ Las reglas de escalación, timeouts y handoff deben configurarse desde UI. `automation_rules` existe en BD pero sin engine de ejecución. | ⬜ — diseño pendiente |
 
 ---
