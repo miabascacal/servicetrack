@@ -311,6 +311,34 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
   - `page.tsx` añade `whatsapp` a la query de `clientes`.
   - `_BandejaClient.tsx` muestra `whatsapp` con ícono verde `<Phone>` bajo el nombre en el header del chat.
 
+### Decisiones clave — P0.2.1 BotIA Hard Gates (2026-04-28 — commit 8fdc771)
+
+- **Steps A y B son completamente deterministas (`skipBot=true`).**
+  - El LLM (Claude Haiku) nunca se invoca para captura de nombre ni vehículo.
+  - Fix raíz: el SYSTEM_PROMPT principal (`PRIMERA INTERACCIÓN: llama a consultar_citas_cliente`) conflictúa con las instrucciones `flowInject` secundarias. Claude Haiku prioriza el prompt y las ignora.
+  - `bandeja.ts` genera las respuestas directamente y guarda el estado sin pasar por el bot.
+
+- **`isClientePlaceholder(nombre, apellido): boolean` en `appointment-flow.ts`.**
+  - Reemplaza el check inline `nombre==='CLIENTE' && apellido==='DEMO'`.
+  - Cubre variantes: `SIN NOMBRE`, `TEST`, `PRUEBA`, `UNKNOWN`, `DESCONOCIDO`, `NA`, `NOMBRE`, nombres de 1 carácter, y cualquier nombre/apellido que contenga `DEMO`.
+
+- **`crearCitaBot` hard gates — `vehiculo_id` y `servicio` obligatorios.**
+  - Retorna `{ error: '...' }` si alguno es null antes de consultar la BD.
+  - Protege la integridad independientemente del caller (LLM path o Step C determinista).
+
+- **`buscarDisponibilidad` filtra slots pasados para hoy.**
+  - Timezone: `America/Mexico_City` vía `toLocaleString('en-US', { timeZone: ... })`.
+  - Buffer: 30 min hardcoded como fallback — TODO: leer de `configuracion_citas_sucursal`.
+  - Mensaje diferenciado cuando `isToday` y no hay slots disponibles.
+
+- **`vehiculo_id` siempre pasa desde `ctx.appointment_flow` en el handler LLM.**
+  - `bot-citas.ts` handler de `crear_cita`: `vehiculo_id: ctx.appointment_flow?.vehiculo_id ?? null`.
+  - El hard gate en `crearCitaBot` rechaza si null — el LLM no necesita "recordar" el vehículo.
+
+- **Vehículo obligatorio — no se puede saltar.**
+  - `isNegacion` en `capturar_vehiculo` ya no avanza al siguiente paso; mantiene al usuario en el mismo step con mensaje de que el vehículo es requerido.
+  - Antes de P0.2.1: `isNegacion` saltaba → `vehiculo_id=null` → cita sin vehículo.
+
 ### Decisiones clave — Sprint 9 (2026-04-15 → 2026-04-16)
 
 - **ENUM `estado_ot`: valor canónico es `'en_proceso'`, no `'en_reparacion'`.**

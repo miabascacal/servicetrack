@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-28 — P0.2 BotIA CRM Enrichment + Vehicle Resolution implementado (commit d57c8c2): bot captura nombre real si CLIENTE DEMO, resuelve/crea vehículo, inyecta info de sucursal (dirección/horario/teléfono) desde configuración. Pendiente re-prueba y validación de flujo completo._
+_Actualizado: 2026-04-28 — P0.2.1 BotIA hard gates (commit 8fdc771): Steps A+B completamente deterministas, vehiculo_id y servicio obligatorios en crearCitaBot, filtro disponibilidad hoy. Fix raíz del fallo P0.2 (test real 5511117777 donde bot ignoraba flowInject). Pendiente demo re-prueba con teléfono 5511118888._
 
 ---
 
@@ -37,16 +37,62 @@ alter table public.citas
 
 ---
 
-## 🤖 P0.2 BotIA CRM Enrichment + Vehículo — PENDIENTES POST-COMMIT d57c8c2
+## 🤖 P0.2.1 BotIA Hard Gates — PENDIENTES POST-COMMIT 8fdc771
 
-> Commit d57c8c2 implementa el flujo completo P0.2. Las validaciones siguientes deben completarse antes de cerrar la demo.
+> Commit 8fdc771 es el fix raíz del fallo P0.2. El test real con teléfono 5511117777 reveló que Claude Haiku ignoraba las instrucciones `flowInject` por conflicto con el SYSTEM_PROMPT principal. P0.2.1 hace que Steps A y B sean completamente deterministas.
 
-### Qué implementa P0.2 (código listo, pendiente re-prueba)
+### Qué corrige P0.2.1 (sobre d57c8c2)
 
-- **Captura de nombre real**: si el cliente está registrado como "CLIENTE DEMO", el bot pregunta su nombre, parsea y actualiza el CRM (`actualizarNombreClienteBot`).
-- **Resolución de vehículo**: consulta `vehiculo_personas` del cliente. Si tiene 1 → confirma. Si tiene N → presenta lista. Si no tiene → captura datos y crea vehículo + `vehiculo_personas` (`crearVehiculoYVincularBot`).
-- **vehiculo_id en cita**: `crearCitaBot` recibe y guarda `vehiculo_id` desde el `flowState` del state machine.
-- **Info de sucursal en contexto**: `leerInfoSucursal` inyecta `nombre`, `dirección`, `teléfono`, `horario_inicio`, `horario_fin`, `dias_disponibles` en el system prompt. El bot puede responder preguntas de ubicación/horario sin hardcodear datos.
+- **Steps A y B deterministas**: `skipBot=true` — el LLM nunca se invoca para captura de nombre ni vehículo. La respuesta se genera directamente en `bandeja.ts`.
+- **`isClientePlaceholder()`**: helper en `appointment-flow.ts` reemplaza el check inline `nombre==='CLIENTE' && apellido==='DEMO'`. Cubre variantes como `SIN NOMBRE`, `TEST`, `PRUEBA`, `UNKNOWN`, `DESCONOCIDO`.
+- **`crearCitaBot` hard gates**: rechaza `vehiculo_id=null` y `servicio=null` antes de tocar la BD — protege la integridad independientemente del caller.
+- **Disponibilidad hoy filtrada**: `buscarDisponibilidad` filtra slots pasados para hoy con buffer de 30 min (timezone `America/Mexico_City`). Mensaje especial cuando ya no hay slots hoy.
+- **`vehiculo_id` desde `ctx.appointment_flow`**: el handler de la tool `crear_cita` en `bot-citas.ts` pasa `ctx.appointment_flow?.vehiculo_id` — ya no depende de que el LLM lo recuerde.
+- **Vehículo obligatorio**: `isNegacion` en `capturar_vehiculo` mantiene al usuario en el mismo paso (antes saltaba al siguiente → `vehiculo_id=null`).
+- **Respuestas de frustración**: variantes en todos los pasos deterministas A y B.
+- **Step C safety gate**: `if (!skipBot && flowState.nombre_resuelto && flowState.vehiculo_resuelto)` — no avanza a servicio/fecha/hora si A o B generaron una respuesta de error.
+
+### Archivos modificados en 8fdc771
+
+| Archivo | Cambio |
+|---------|--------|
+| `lib/ai/appointment-flow.ts` | `isClientePlaceholder()` exportada al final del archivo |
+| `lib/ai/bot-tools.ts` | `buscarDisponibilidad` → filtro hoy + mensaje especial; `crearCitaBot` → hard gates vehiculo_id + servicio |
+| `lib/ai/bot-citas.ts` | Handler `crear_cita` pasa `vehiculo_id: ctx.appointment_flow?.vehiculo_id ?? null` |
+| `app/actions/bandeja.ts` | Import `isClientePlaceholder`; Steps A+B reescritos como deterministas; Step C guarded |
+
+### Checklist de demo con 5511118888 (telefono nuevo, sin historial)
+
+Usar **Bandeja → Automatizaciones → Simular mensaje** con teléfono `5511118888`.
+
+**Flujo nominal:**
+- [ ] Mensaje "quiero una cita" → bot pregunta nombre (no el LLM, respuesta directa)
+- [ ] Responder con nombre "Carlos Mendez" → nombre guardado en `clientes` BD, bot avanza a vehículo
+- [ ] Cliente dice que no tiene vehículo registrado → bot pide datos (marca, modelo, año)
+- [ ] "Honda City 2022" → vehículo creado en `vehiculos` + `vehiculo_personas` vinculado
+- [ ] Bot pregunta servicio → responder "cambio de aceite"
+- [ ] Bot pregunta fecha → responder fecha futura → bot muestra slots (no pasados)
+- [ ] Bot pregunta hora → responder hora disponible
+- [ ] Bot resume y pide confirmación → responder "sí"
+- [ ] Cita creada: `vehiculo_id` NOT NULL, `servicio` NOT NULL, `estado='confirmada'`
+
+**Validaciones BD:**
+- [ ] `SELECT nombre, apellido FROM clientes WHERE whatsapp='+525511118888'` → muestra nombre real
+- [ ] `SELECT * FROM vehiculo_personas vp JOIN vehiculos v ON v.id=vp.vehiculo_id WHERE vp.cliente_id=...` → registro existe
+- [ ] `SELECT vehiculo_id, servicio, estado FROM citas WHERE cliente_id=...` → ambos NOT NULL, estado confirmada
+- [ ] `SELECT cita_id FROM actividades WHERE cliente_id=... ORDER BY created_at DESC LIMIT 1` → cita_id NOT NULL (requiere migración 019)
+
+**Prueba de disponibilidad hoy:**
+- [ ] Simular con "quiero cita para hoy" → slots mostrados son todos futuros (≥ ahora + 30 min)
+
+**Prueba de frustración:**
+- [ ] En paso nombre, escribir "no quiero dar mi nombre" → bot insiste con mensaje de disculpa
+
+---
+
+## 🤖 P0.2 BotIA CRM Enrichment + Vehículo — HISTÓRICO d57c8c2
+
+> P0.2 implementó la infraestructura. P0.2.1 (8fdc771) corrige el fallo de ejecución (LLM ignoraba flowInject). La re-prueba debe realizarse con 5511118888 usando el checklist P0.2.1 arriba.
 
 ### Archivos creados/modificados en d57c8c2
 
@@ -58,15 +104,6 @@ alter table public.citas
 | `app/actions/bandeja.ts` | State machine P0.2 (Steps A+B+C); guards 5b/5c; `leerInfoSucursal` |
 | `app/(dashboard)/bandeja/page.tsx` | Agrega `apellido` al query de clientes |
 | `app/(dashboard)/bandeja/_BandejaClient.tsx` | `clienteNombre` muestra nombre+apellido |
-
-### Validación obligatoria antes de cerrar la demo P0.2
-
-- [ ] Ejecutar migración 019 en Supabase SQL Editor (ver arriba)
-- [ ] Configurar `ai_settings.escalation_assignee_id` con UUID de un usuario responsable
-- [ ] **Re-probar con teléfono 5511117777** (cliente demo nuevo, sin nombre real ni vehículo):
-  - [ ] Bot pregunta nombre → actualizar CRM → nombre aparece en `clientes` BD
-  - [ ] Bot resuelve/crea vehículo → aparece en `vehiculos` BD con `vehiculo_personas` vinculado al cliente
-  - [ ] Bot crea cita → `citas.vehiculo_id` poblado (no NULL)
   - [ ] `actividades` tiene fila `tipo='cita_agendada'`, `cita_id` referenciando la cita
   - [ ] La cita aparece en "Mi Agenda" del responsable configurado
   - [ ] Preguntar al bot "¿cuál es su dirección?" → responde con datos reales de la sucursal (no inventa)
