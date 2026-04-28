@@ -257,7 +257,7 @@ export async function simularMensajeAction(params: {
         ai_intent:            intentResult.intent,
         ai_intent_confidence: intentResult.confidence,
         ai_sentiment:         sentimentResult.sentiment,
-        processing_status:    'processed',
+        processing_status:    'done',
       })
       .eq('id', msgIn.id)
   }
@@ -369,7 +369,7 @@ export async function simularMensajeAction(params: {
       thread_id,
       message_source:    'agent_bot',
       enviado_por_bot:   true,
-      processing_status: 'skipped',
+      processing_status: 'done',
       enviado_at:        new Date().toISOString(),
     })
 
@@ -453,9 +453,9 @@ export async function enviarMensajeAsesorAction(params: {
       direccion:         'saliente',
       contenido:         params.contenido.trim(),
       thread_id:         params.thread_id,
-      message_source:    'agent',
+      message_source:    'agent_manual',
       enviado_por_bot:   false,
-      processing_status: 'skipped',
+      processing_status: 'done',
       enviado_at:        now,
     })
 
@@ -465,7 +465,7 @@ export async function enviarMensajeAsesorAction(params: {
     .from('conversation_threads')
     .update({
       last_message_at:     now,
-      last_message_source: 'agent',
+      last_message_source: 'agent_manual',
     })
     .eq('id', params.thread_id)
 
