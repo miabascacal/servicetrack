@@ -22,6 +22,7 @@ import {
   guardarConfirmacionPendiente,
   type ConfirmacionPendiente,
 } from './bot-tools'
+import { type AppointmentFlowState } from './appointment-flow'
 
 const client = new Anthropic()
 
@@ -106,6 +107,8 @@ export interface BotContexto {
   intent_tipo?:            string
   confirmacion_pendiente?: ConfirmacionPendiente | null
   cita_proxima?:           CitaProxima | null
+  appointment_flow?:       AppointmentFlowState | null
+  es_frustracion?:         boolean
 }
 
 export interface BotResultado {
@@ -277,10 +280,32 @@ export async function generarRespuestaBot(
       }. Menciónala de inmediato al saludar. NO llames consultar_citas_cliente (datos ya disponibles).`
     : ''
 
+  const flowInject = ctx.appointment_flow
+    ? (() => {
+        const f   = ctx.appointment_flow!
+        const srv = f.servicio ? `✓ Servicio: ${f.servicio}` : '✗ Servicio: pendiente'
+        const fch = f.fecha    ? `✓ Fecha: ${f.fecha}`       : '✗ Fecha: pendiente'
+        const hr  = f.hora     ? `✓ Hora: ${f.hora}`         : '✗ Hora: pendiente'
+        const siguiente =
+          f.step === 'capturar_servicio'      ? 'Pregunta el tipo de servicio o motivo.' :
+          f.step === 'capturar_fecha'         ? 'Pregunta la fecha deseada.' :
+          f.step === 'capturar_hora'          ? `Llama buscar_disponibilidad para fecha=${f.fecha} y presenta los horarios disponibles.` :
+          f.step === 'esperando_confirmacion' ? `Llama INMEDIATAMENTE preparar_confirmacion_cita con fecha=${f.fecha}, hora=${f.hora}, servicio=${f.servicio ?? 'sin especificar'}. Luego pregunta: "¿Confirmas tu cita?"` :
+          ''
+        return `\n\n[ESTADO DE AGENDAMIENTO]\n${srv}\n${fch}\n${hr}\n→ ${siguiente}`
+      })()
+    : ''
+
+  const frustracionInject = ctx.es_frustracion
+    ? '\n\n[CLIENTE FRUSTRADO] El cliente indica que ya proporcionó esta información. NO repitas preguntas por datos que ya dio en mensajes anteriores. Revisa el historial y avanza al siguiente paso.'
+    : ''
+
   const systemFull = SYSTEM_PROMPT
     + `\n\nHoy es ${today}.`
     + (nombreCliente !== 'cliente' ? `\n\nEl cliente se llama ${nombreCliente}.` : '')
     + citaProximaInject
+    + flowInject
+    + frustracionInject
     + systemPrimer
 
   // Agentic loop — máximo 8 iteraciones

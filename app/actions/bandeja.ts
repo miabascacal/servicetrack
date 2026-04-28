@@ -15,6 +15,20 @@ import {
   limpiarConfirmacionPendiente,
   type ConfirmacionPendiente,
 } from '@/lib/ai/bot-tools'
+import {
+  getAppointmentFlowState,
+  setAppointmentFlowState,
+  clearAppointmentFlowState,
+  mergeAppointmentFlowState,
+  isAfirmacionFlow,
+  isFrustracion,
+  intentoAgendar,
+  nextStep,
+  parsearServicio,
+  parsearFecha,
+  parsearHora,
+  type AppointmentFlowState,
+} from '@/lib/ai/appointment-flow'
 
 export interface MensajeRow {
   id:             string
@@ -370,9 +384,69 @@ export async function simularMensajeAction(params: {
   let handoff = false
   let skipBot = false
 
+  // ── P0.1 State machine — deterministic appointment flow ─────────────────────
+  //
+  // Tracks slot data (servicio/fecha/hora) in metadata.appointment_flow.
+  // Creates cita directly when all slots are captured and client confirms,
+  // bypassing the LLM entirely for the final confirmation step.
+  // Falls through to existing step-5a/5b/5c when state machine doesn't handle it.
+  let flowState: AppointmentFlowState | null = getAppointmentFlowState(existingThread?.metadata ?? null)
+  const frustrado = isFrustracion(params.mensaje)
+
+  const shouldProcessFlow =
+    flowState !== null ||
+    (intentResult.intent === 'agendar_cita' && intentResult.confidence >= 0.5) ||
+    intentoAgendar(params.mensaje)
+
+  if (shouldProcessFlow && !citaProxima) {
+    // Parse new slot data from current message (only fill missing slots)
+    const newServicio = !flowState?.servicio ? parsearServicio(params.mensaje) : null
+    const newFecha    = !flowState?.fecha    ? parsearFecha(params.mensaje)    : null
+    const newHora     = !flowState?.hora     ? parsearHora(params.mensaje)     : null
+
+    const patch: Partial<AppointmentFlowState> = { updated_at: new Date().toISOString() }
+    if (newServicio) patch.servicio = newServicio
+    if (newFecha)    patch.fecha    = newFecha
+    if (newHora)     patch.hora     = newHora
+
+    flowState = mergeAppointmentFlowState(flowState, patch)
+    flowState = { ...flowState, step: nextStep(flowState) }
+
+    // Create cita deterministically: all slots captured + client confirms
+    if (flowState.step === 'esperando_confirmacion' && isAfirmacionFlow(params.mensaje)) {
+      const flowResult = await crearCitaBot({
+        sucursal_id,
+        cliente_id: cliente.id,
+        fecha:      flowState.fecha!,
+        hora:       flowState.hora!,
+        servicio:   flowState.servicio ?? undefined,
+        confirmada: true,
+      })
+      if ('id' in flowResult) {
+        cita_id   = flowResult.id
+        const fechaLeg = new Date(flowState.fecha! + 'T12:00:00').toLocaleDateString('es-MX', {
+          weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
+        })
+        const srv = flowState.servicio ? ` para ${flowState.servicio}` : ''
+        respuesta = `¡Listo! Tu cita${srv} ha sido confirmada para el ${fechaLeg} a las ${flowState.hora} hrs. ¡Hasta pronto!`
+        flowState = { ...flowState, step: 'completado', cita_id: flowResult.id }
+        skipBot   = true
+      }
+      // If crearCitaBot returned an error (slot taken etc.) fall through to LLM
+    }
+
+    // Persist updated flow state (clear on completion, save on progress)
+    if (flowState.step === 'completado' || flowState.step === 'escalado') {
+      await clearAppointmentFlowState(thread_id)
+      await limpiarConfirmacionPendiente(thread_id)
+    } else {
+      await setAppointmentFlowState(thread_id, flowState)
+    }
+  }
+
   const pendingConf = parsePendingConfirmation(existingThread?.metadata)
 
-  if (pendingConf && isAfirmacion(params.mensaje)) {
+  if (!skipBot && pendingConf && isAfirmacion(params.mensaje)) {
     const result = await crearCitaBot({
       sucursal_id,
       cliente_id: cliente.id,
@@ -467,6 +541,8 @@ export async function simularMensajeAction(params: {
       intent_tipo:             intentResult.intent,
       confirmacion_pendiente:  pendingConf,
       cita_proxima:            citaProxima,
+      appointment_flow:        flowState,
+      es_frustracion:          frustrado,
     }
 
     const isBotActive = threadEstado === 'bot_active'

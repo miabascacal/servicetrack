@@ -71,12 +71,13 @@ export async function buscarDisponibilidad(
 }
 
 export async function crearCitaBot(params: {
-  sucursal_id: string
-  cliente_id: string
-  fecha: string
-  hora: string
-  servicio?: string
-  confirmada?: boolean   // true → la cita se crea en estado 'confirmada' (cliente ya confirmó)
+  sucursal_id:  string
+  cliente_id:   string
+  fecha:        string
+  hora:         string
+  servicio?:    string
+  confirmada?:  boolean    // true → estado 'confirmada' (cliente ya confirmó)
+  vehiculo_id?: string | null
 }): Promise<{ id: string; confirmacion: string } | { error: string }> {
   const supabase = createAdminClient()
 
@@ -107,6 +108,7 @@ export async function crearCitaBot(params: {
     .insert({
       sucursal_id:          params.sucursal_id,
       cliente_id:           params.cliente_id,
+      vehiculo_id:          params.vehiculo_id ?? null,
       fecha_cita:           params.fecha,
       hora_cita:            params.hora,
       servicio:             params.servicio ?? null,
@@ -144,9 +146,12 @@ export async function crearCitaBot(params: {
       fecha_programada: fechaProgr,
       fecha_vencimiento: fechaProgr,
       modulo_origen:    'ia',
-      notas: responsableId
-        ? null
-        : 'Sin responsable configurado en ai_settings.escalation_assignee_id',
+      notas: (() => {
+        const lines: string[] = []
+        if (!responsableId)      lines.push('Sin responsable configurado en ai_settings.escalation_assignee_id')
+        if (!params.vehiculo_id) lines.push('Vehículo pendiente por confirmar')
+        return lines.length > 0 ? lines.join(' — ') : null
+      })(),
     }
     if (responsableId) actividadData.usuario_asignado_id = responsableId
 
