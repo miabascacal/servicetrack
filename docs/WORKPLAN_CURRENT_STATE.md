@@ -1,8 +1,8 @@
 # WORKPLAN_CURRENT_STATE.md — ServiceTrack
 > **FUENTE DE VERDAD ÚNICA del proyecto. Todo análisis, bug, decisión y mejora debe integrarse aquí.**
 > Documento de estado consolidado para arquitectos, asistentes IA y equipo de desarrollo.
-> **Última actualización:** 2026-04-28 (commit 8fdc771: P0.2.1 BotIA hard gates — Steps A+B completamente deterministas, vehiculo_id obligatorio, guard servicio, filtro disponibilidad hoy)
-> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento) + P0 BotIA (commit 713e605) + P0.2 BotIA CRM+Vehículo (commit d57c8c2) + P0.2.1 hard gates (commit 8fdc771)
+> **Última actualización:** 2026-04-28 (P0.3 BotIA Operational Brain — docs/ai/ 9 archivos, lib/ai/botia-brain.ts, integración appointment-flow.ts)
+> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento) + P0 BotIA (commit 713e605) + P0.2 BotIA CRM+Vehículo (commit d57c8c2) + P0.2.1 hard gates (commit 8fdc771) + P0.3 Operational Brain
 > **Estado general:** ~47% del producto completo — CRM+Citas+Taller+Usuarios operativos, bot con flujo completo captura nombre+vehículo+servicio+fecha+hora+confirmación. Demo pendiente de re-prueba con teléfono 5511118888 (validar: nombre capturado, vehiculo_personas poblado, cita.vehiculo_id NOT NULL, cita.servicio NOT NULL, horarios filtran pasados para hoy).
 
 ---
@@ -302,6 +302,7 @@ cancelado → (final)
 | 5.11 | **Bot flotante / overlay por módulo** | ⬜ Sugerencia futura — NO implementar aún. El bot hoy vive solo en Automatizaciones/Demo. En el futuro podría invocarse desde Citas, Taller, CRM como ventana flotante. | ⬜ — pendiente diseño |
 | 5.12 | **CRM enrichment del bot** — vehículo del cliente en contexto del bot | 🟡 Parcial — vehículo se resuelve antes de crear la cita (P0.2). El bot no menciona el vehículo en el seguimiento de citas existentes (JOIN `citas → vehiculos` pendiente en `BotContexto`). | ⬜ — completar en pasada futura junto a seguimiento enriquecido |
 | 5.13 | **Automation Engine sin n8n** — reglas determinísticas | ⬜ Las reglas de escalación, timeouts y handoff deben configurarse desde UI. `automation_rules` existe en BD pero sin engine de ejecución. | ⬜ — diseño pendiente |
+| 5.14 | **P0.3 BotIA Operational Brain** — documentación y constantes centralizadas | ✅ 2026-04-28: `docs/ai/` con 9 archivos (BOTIA_OPERATIONAL_BRAIN, INTENTS, ENTITIES, SLOT_RULES, RESPONSE_POLICIES, ESCALATION_RULES, LEARNING_POLICY, TRAINING_CORPUS, MODULE_PLAYBOOKS). `lib/ai/botia-brain.ts` con constantes centralizadas. `appointment-flow.ts` integrado: ya no tiene duplicados inline — importa BOTIA_PLACEHOLDER_NOMBRES, BOTIA_FRUSTRATION_PATTERNS, BOTIA_CONFIRMATION_PATTERNS, BOTIA_NEGATION_PATTERNS, BOTIA_SCHEDULING_PHRASES, BOTIA_SERVICE_SYNONYMS, BOTIA_VEHICLE_HINTS desde botia-brain.ts. Política de aprendizaje supervisado documentada. Corpus semilla con ~45 ejemplos YAML clasificados. | ⬜ No activo en producción — bot requiere WA + ai_settings |
 
 ---
 

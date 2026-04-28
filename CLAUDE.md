@@ -339,6 +339,27 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
   - `isNegacion` en `capturar_vehiculo` ya no avanza al siguiente paso; mantiene al usuario en el mismo step con mensaje de que el vehículo es requerido.
   - Antes de P0.2.1: `isNegacion` saltaba → `vehiculo_id=null` → cita sin vehículo.
 
+### Decisiones clave — P0.3 BotIA Operational Brain (2026-04-28)
+
+- **`lib/ai/botia-brain.ts` es la fuente única de verdad para constantes del bot.**
+  - Exporta: `BOTIA_PLACEHOLDER_NOMBRES`, `BOTIA_FRUSTRATION_PATTERNS`, `BOTIA_CONFIRMATION_PATTERNS`, `BOTIA_NEGATION_PATTERNS`, `BOTIA_SCHEDULING_PHRASES`, `BOTIA_SERVICE_SYNONYMS`, `BOTIA_VEHICLE_HINTS`, intents, entidades, escalation reasons, response policies y forbidden patterns.
+  - `appointment-flow.ts` ya no tiene duplicados inline — importa todo desde aquí.
+  - Nuevas constantes del bot se agregan solo aquí. No crear conjuntos inline en otros archivos.
+
+- **`docs/ai/` contiene la documentación operativa completa del bot.**
+  - 9 archivos: BOTIA_OPERATIONAL_BRAIN, INTENTS, ENTITIES, SLOT_RULES, RESPONSE_POLICIES, ESCALATION_RULES, LEARNING_POLICY, TRAINING_CORPUS, MODULE_PLAYBOOKS.
+  - Son la referencia de diseño para PRs, onboarding de asesores y revisión de corpus.
+  - Actualizar cuando cambie el comportamiento esperado del bot.
+
+- **Política de aprendizaje supervisado: NUNCA automático a producción.**
+  - Todo ejemplo candidato requiere revisión humana antes de incorporarse al corpus.
+  - `BOTIA_FORBIDDEN_LEARNING_PATTERNS` en `botia-brain.ts` bloquea groserías, prompt injection y price bypass.
+  - Tabla `botia_ejemplos_candidatos` se crea en migración futura (cuando volumen supere ~200 ejemplos).
+
+- **`BOTIA_SERVICE_SYNONYMS` y `BOTIA_VEHICLE_HINTS` son superconjuntos de las listas anteriores.**
+  - `parsearServicio()` y `parsearVehiculo()` en appointment-flow.ts ya los usan.
+  - Amplían cobertura sin cambiar comportamiento existente.
+
 ### Decisiones clave — Sprint 9 (2026-04-15 → 2026-04-16)
 
 - **ENUM `estado_ot`: valor canónico es `'en_proceso'`, no `'en_reparacion'`.**

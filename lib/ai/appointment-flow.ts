@@ -1,4 +1,13 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  BOTIA_PLACEHOLDER_NOMBRES,
+  BOTIA_FRUSTRATION_PATTERNS,
+  BOTIA_CONFIRMATION_PATTERNS,
+  BOTIA_NEGATION_PATTERNS,
+  BOTIA_SCHEDULING_PHRASES,
+  BOTIA_SERVICE_SYNONYMS,
+  BOTIA_VEHICLE_HINTS,
+} from '@/lib/ai/botia-brain'
 
 export type AppointmentFlowStep =
   | 'capturar_nombre'
@@ -122,25 +131,7 @@ export async function clearAppointmentFlowState(thread_id: string): Promise<void
 
 // ── Text parsers ──────────────────────────────────────────────────────────────
 
-const SERVICIOS_KEYWORD: Record<string, string> = {
-  mantenimiento:      'Mantenimiento',
-  revision:           'Revisión general',
-  revisión:           'Revisión general',
-  frenos:             'Revisión de frenos',
-  lavado:             'Lavado',
-  afinación:          'Afinación',
-  afinacion:          'Afinación',
-  aceite:             'Cambio de aceite',
-  'cambio de aceite': 'Cambio de aceite',
-  diagnostico:        'Diagnóstico',
-  diagnóstico:        'Diagnóstico',
-  pintura:            'Pintura',
-  llantas:            'Servicio de llantas',
-  bateria:            'Revisión de batería',
-  batería:            'Revisión de batería',
-  suspension:         'Revisión de suspensión',
-  suspensión:         'Revisión de suspensión',
-}
+// Service synonyms imported from botia-brain — single source of truth
 
 export function parsearServicio(texto: string): string | null {
   const t = texto.toLowerCase()
@@ -151,7 +142,7 @@ export function parsearServicio(texto: string): string | null {
   if (mMil) return `Servicio ${mMil[1]} mil km`
 
   // keyword exact match
-  for (const [kw, label] of Object.entries(SERVICIOS_KEYWORD)) {
+  for (const [kw, label] of Object.entries(BOTIA_SERVICE_SYNONYMS)) {
     if (t.includes(kw)) return label
   }
 
@@ -254,15 +245,7 @@ export function parsearHora(texto: string): string | null {
 
 export function isAfirmacionFlow(texto: string): boolean {
   const t = texto.toLowerCase().trim().replace(/[¡!¿?.]/g, '').trim()
-  const AFFIRMATIVES = [
-    'sí', 'si', 'confirmo', 'correcto', 'ok', 'adelante', 'dale',
-    'claro', 'de acuerdo', 'perfecto', 'confirmado', 'va', 'sale',
-    'ándale', 'andale', 'con gusto', 'listo', 'órale', 'orale',
-    'está bien', 'esta bien', 'acepto', 'sí por favor', 'si por favor',
-    'así es', 'asi es', 'exacto', 'efectivamente', 'eso es',
-    'sí quiero', 'si quiero', 'sí confirmo', 'si confirmo',
-  ]
-  return AFFIRMATIVES.some(a =>
+  return BOTIA_CONFIRMATION_PATTERNS.some(a =>
     t === a ||
     t.startsWith(a + ' ') ||
     t.endsWith(' ' + a) ||
@@ -272,15 +255,7 @@ export function isAfirmacionFlow(texto: string): boolean {
 
 export function isFrustracion(texto: string): boolean {
   const t = texto.toLowerCase()
-  const FRUSTRACION = [
-    'ya te dije', 'ya te había dicho', 'ya te habia dicho',
-    'otra vez me preguntas', 'me vuelves a preguntar',
-    'ya lo dije', 'pues ya qué', 'pues ya que',
-    'lo acabo de decir', 'acabo de decirte',
-    'ya lo mencioné', 'ya lo mencione', 'ya dije',
-    'te acabo de decir', 'cuántas veces', 'cuantas veces',
-  ]
-  return FRUSTRACION.some(f => t.includes(f))
+  return BOTIA_FRUSTRATION_PATTERNS.some(f => t.includes(f))
 }
 
 // ── P0.2 Parsers ─────────────────────────────────────────────────────────────
@@ -328,13 +303,7 @@ export function parsearNombre(
   return { nombre, apellido }
 }
 
-const MARCAS_CONOCIDAS = new Set([
-  'toyota', 'honda', 'nissan', 'chevrolet', 'ford', 'volkswagen', 'vw',
-  'bmw', 'mercedes', 'audi', 'hyundai', 'kia', 'mazda', 'subaru', 'jeep',
-  'dodge', 'ram', 'gmc', 'cadillac', 'buick', 'lincoln', 'acura', 'lexus',
-  'infiniti', 'mitsubishi', 'suzuki', 'seat', 'peugeot', 'renault', 'fiat',
-  'volvo', 'mini', 'porsche', 'tesla', 'jaguar',
-])
+// Known brands imported from botia-brain — single source of truth
 
 export interface VehiculoParseado {
   marca:   string
@@ -365,7 +334,7 @@ export function parsearVehiculo(texto: string): VehiculoParseado | null {
   let marca:  string | null = null
   let modelo: string | null = null
 
-  for (const m of MARCAS_CONOCIDAS) {
+  for (const m of BOTIA_VEHICLE_HINTS) {
     if (t.includes(m)) {
       marca = m.charAt(0).toUpperCase() + m.slice(1)
       // modelo = next 1–2 words after brand that aren't year/numbers
@@ -438,35 +407,17 @@ export function parsearSeleccion(
  */
 export function isNegacion(texto: string): boolean {
   const t = texto.toLowerCase().trim().replace(/[¡!¿?.]/g, '')
-  const NEGACIONES = [
-    'no', 'ninguno', 'ninguna', 'otro', 'otra', 'otros', 'otras',
-    'sin vehículo', 'sin vehiculo', 'no tengo', 'no tengo carro',
-    'no tengo vehiculo', 'no tengo coche', 'sáltate', 'saltate',
-    'omitir', 'continuar sin', 'después', 'despues', 'luego',
-  ]
-  return NEGACIONES.some(
+  return BOTIA_NEGATION_PATTERNS.some(
     n => t === n || t.startsWith(n + ' ') || t.endsWith(' ' + n),
   )
 }
 
 export function intentoAgendar(texto: string): boolean {
   const t = texto.toLowerCase()
-  const INTENT = [
-    'agendar', 'quiero una cita', 'necesito una cita', 'hacer una cita',
-    'quiero ir', 'quiero llevar', 'llevar el carro', 'llevar mi carro',
-    'llevar el coche', 'llevar mi coche', 'llevar la camioneta',
-    'llevar mi camioneta', 'programar una cita', 'quisiera agendar',
-    'quisiera una cita', 'puedo llevar', 'puedo ir',
-  ]
-  return INTENT.some(kw => t.includes(kw))
+  return BOTIA_SCHEDULING_PHRASES.some(kw => t.includes(kw))
 }
 
 // ── Client identity helpers ───────────────────────────────────────────────────
-
-const PLACEHOLDER_NOMBRES = new Set([
-  'CLIENTE', 'SIN CLIENTE', 'SIN NOMBRE', 'DEMO', 'TEST', 'PRUEBA',
-  'UNKNOWN', 'DESCONOCIDO', 'NA', 'NOMBRE',
-])
 
 /**
  * Returns true when the client record has no real identity.
@@ -480,7 +431,7 @@ export function isClientePlaceholder(
   const n = nombre.toUpperCase().trim()
   const a = (apellido ?? '').toUpperCase().trim()
   if (n.length < 2) return true
-  if (PLACEHOLDER_NOMBRES.has(n)) return true
+  if (BOTIA_PLACEHOLDER_NOMBRES.has(n)) return true
   if (n.includes('DEMO') || a.includes('DEMO')) return true
   return false
 }

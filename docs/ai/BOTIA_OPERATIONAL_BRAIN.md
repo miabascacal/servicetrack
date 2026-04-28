@@ -1,0 +1,175 @@
+# BotIA Operational Brain — ServiceTrack
+
+> Arquitectura de inteligencia operativa del asistente Ara.
+> **Última actualización:** 2026-04-28 — P0.3
+
+---
+
+## 1. Principio Rector
+
+**La IA redacta y ayuda a interpretar, pero las acciones críticas las decide código determinístico.**
+
+El LLM (Claude Haiku) puede:
+- Generar texto de respuesta
+- Interpretar intención aproximada
+- Sugerir siguiente paso
+
+El LLM **NUNCA** puede:
+- Crear una cita sin que código determinístico valide los slots
+- Confirmar una cita sin un `cita_id` real en BD
+- Inventar dirección, horario o costo no configurados
+- Aprender patrones sin aprobación de admin
+
+---
+
+## 2. Flujo de Procesamiento
+
+```
+Mensaje cliente (WA / Demo)
+        │
+        ▼
+[1] Normalización
+     - Strip whitespace, lowercase para análisis
+     - Detectar frustración → isFrustracion()
+     - Detectar afirmación → isAfirmacionFlow()
+
+        │
+        ▼
+[2] Intent Detection
+     - classifyIntent() → intent + confidence
+     - Si confidence < threshold → ambiguous path
+
+        │
+        ▼
+[3] Entity Extraction
+     - parsearNombre(), parsearFecha(), parsearHora()
+     - parsearVehiculo(), parsearServicio()
+     - parsearSeleccion() para respuestas de lista
+
+        │
+        ▼
+[4] State / Slot Check
+     - getAppointmentFlowState() → AppointmentFlowState
+     - isClientePlaceholder() → ¿cliente resuelto?
+     - ¿vehiculo_id resuelto?
+     - ¿servicio, fecha, hora presentes?
+
+        │
+        ▼
+[5] Rules Engine (bandeja.ts — determinístico)
+     - Step A: nombre_resuelto? → capturar nombre
+     - Step B: vehiculo_resuelto? → resolver vehículo
+     - Step C: slots completos? → capturar servicio/fecha/hora
+     - Pre-check: confirmacion_pendiente + isAfirmacion → crear cita directo
+
+        │
+        ▼
+[6] Allowed Action
+     - skipBot=true → respuesta ya generada determinísticamente
+     - skipBot=false → pasar al LLM con contexto enriquecido
+
+        │
+        ▼
+[7] LLM (Claude Haiku) — solo si skipBot=false
+     - system prompt + sucursalInject + citaProximaInject + flowInject
+     - tools: buscar_disponibilidad, crear_cita, confirmar_cita, escalar_a_asesor
+     - máximo 8 iteraciones del loop agéntico
+
+        │
+        ▼
+[8] Response Policy
+     - Guardrail anti-hallucination: si dice "confirmada" sin cita_id → reemplazar
+     - Tono: profesional, breve, ≤3 líneas, 1 pregunta por turno
+     - Si handoff=true → estado thread → waiting_agent
+
+        │
+        ▼
+[9] Audit / Log
+     - mensajes INSERT con message_source='agent_bot'
+     - automation_logs INSERT (best-effort)
+     - setAppointmentFlowState() → persiste estado en metadata
+```
+
+---
+
+## 3. Relación con Módulos
+
+| Módulo | BotIA puede | BotIA no puede (aún) |
+|--------|-------------|----------------------|
+| **CRM / Clientes** | Buscar por WA, actualizar nombre real, crear cliente DEMO | Crear cliente completo con todos los campos |
+| **CRM / Vehículos** | Buscar por cliente, crear vehículo simple, vincular | Buscar por placa/VIN, OCR tarjeta de circulación |
+| **Citas** | Consultar, crear, confirmar, cancelar | Reagendar con cambio de fecha (pendiente) |
+| **Taller / OTs** | Notificar estado (WA saliente cuando OT→listo) | Consultar estado de OT por WA (pendiente) |
+| **Refacciones** | — | Consultar disponibilidad de pieza (futuro) |
+| **CSI** | — | Enviar encuesta post-servicio (futuro) |
+| **Ventas** | — | Seguimiento de leads (futuro) |
+| **Atención a Clientes** | Escalar conversación a asesor | Resolver quejas complejas autónomamente |
+| **Automatizaciones** | Crear actividad best-effort | Ejecutar reglas de automation_rules (motor pendiente) |
+| **Configuración** | Leer horarios, dirección, teléfono de sucursal | Modificar configuración |
+
+---
+
+## 4. Acciones Permitidas
+
+### Sin confirmación adicional del cliente
+- Buscar cliente por WA
+- Consultar citas del cliente
+- Buscar disponibilidad de horarios
+- Leer info de sucursal
+
+### Requieren confirmación explícita del cliente
+- Crear cita nueva (resumen → "¿Confirmas?")
+- Cancelar cita existente
+- Reagendar cita (resumen → "¿Confirmas el nuevo horario?")
+- Crear vehículo si datos son ambiguos
+
+### Requieren asesor humano
+Ver `BOTIA_ESCALATION_RULES.md`.
+
+---
+
+## 5. Reglas de No-Hardcode
+
+Toda la siguiente información **debe venir de configuración**, no de constantes de código:
+
+| Dato | Fuente |
+|------|--------|
+| Horarios de atención | `configuracion_citas_sucursal.horario_inicio / horario_fin` |
+| Días disponibles | `configuracion_citas_sucursal.dias_disponibles` |
+| Dirección y teléfono | `sucursales.direccion / telefono` |
+| Responsable (asesor) | `ai_settings.escalation_assignee_id` |
+| Buffer mínimo para hoy | `configuracion_citas_sucursal` (TODO: agregar columna) |
+| Umbral de confianza IA | `ai_settings.confidence_threshold` |
+| Horario del bot | `ai_settings` (activo/inactivo, hora_inicio, hora_fin) |
+| Permisos por módulo | `configuracion` / `permisos` (pendiente FASE 4) |
+
+---
+
+## 6. Estado Actual (2026-04-28)
+
+| Componente | Estado |
+|------------|--------|
+| Steps A+B deterministas (nombre + vehículo) | ✅ P0.2.1 |
+| Hard gates (vehiculo_id + servicio no null) | ✅ P0.2.1 |
+| Disponibilidad hoy filtrada | ✅ P0.2.1 |
+| Seguimiento citas existentes (P0.1) | ✅ |
+| Sucursal info en contexto | ✅ P0.2 |
+| Cerebro operativo documental | ✅ P0.3 (este documento) |
+| Motor de automatizaciones | ⬜ Pendiente |
+| OCR tarjeta de circulación | ⬜ Futuro |
+| Widget flotante global | ⬜ Futuro |
+| Permisos por rol en Bandeja | ⬜ Pendiente FASE 4 |
+| Búsqueda por placa/VIN | ⬜ Pendiente |
+| Aprendizaje supervisado (UI) | ⬜ Pendiente |
+
+---
+
+## 7. Próximos Pasos
+
+1. **Demo re-prueba** con teléfono `5511118888` usando checklist PENDIENTES.md
+2. **Migración 019** ejecutar en Supabase (cita_id en actividades)
+3. **ai_settings** configurar `escalation_assignee_id`
+4. **Búsqueda por placa/VIN** — `buscarVehiculoPorPlaca()` en bot-crm.ts
+5. **Motor de automatizaciones** — `automation_rules` engine
+6. **Vistas de Citas** — Hoy / Semana / Mes / Todas
+7. **Widget global BotIA** — botón flotante en todas las pantallas

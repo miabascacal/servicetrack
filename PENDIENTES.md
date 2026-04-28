@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-28 — P0.2.1 BotIA hard gates (commit 8fdc771): Steps A+B completamente deterministas, vehiculo_id y servicio obligatorios en crearCitaBot, filtro disponibilidad hoy. Fix raíz del fallo P0.2 (test real 5511117777 donde bot ignoraba flowInject). Pendiente demo re-prueba con teléfono 5511118888._
+_Actualizado: 2026-04-28 — P0.3 BotIA Operational Brain: docs/ai/ 9 archivos, lib/ai/botia-brain.ts con constantes centralizadas, appointment-flow.ts integrado sin duplicados inline._
 
 ---
 
@@ -87,6 +87,40 @@ Usar **Bandeja → Automatizaciones → Simular mensaje** con teléfono `5511118
 
 **Prueba de frustración:**
 - [ ] En paso nombre, escribir "no quiero dar mi nombre" → bot insiste con mensaje de disculpa
+
+---
+
+## 🤖 P0.3 BotIA Operational Brain — COMPLETADO 2026-04-28
+
+> Centraliza las constantes del bot en `lib/ai/botia-brain.ts` como fuente única de verdad. Documenta la arquitectura completa de la IA en `docs/ai/`. Limpia los duplicados inline de `appointment-flow.ts`.
+
+### Qué incluye P0.3
+
+| Artefacto | Archivo | Estado |
+|-----------|---------|--------|
+| Constantes centralizadas | `lib/ai/botia-brain.ts` | ✅ Creado |
+| Integraciones en flujo | `lib/ai/appointment-flow.ts` | ✅ Integrado — 7 importaciones desde botia-brain.ts |
+| Arquitectura del brain | `docs/ai/BOTIA_OPERATIONAL_BRAIN.md` | ✅ Creado |
+| Catálogo de intents | `docs/ai/BOTIA_INTENTS.md` | ✅ Creado |
+| Entidades y extracción | `docs/ai/BOTIA_ENTITIES.md` | ✅ Creado |
+| Reglas de slots | `docs/ai/BOTIA_SLOT_RULES.md` | ✅ Creado |
+| Políticas de respuesta | `docs/ai/BOTIA_RESPONSE_POLICIES.md` | ✅ Creado |
+| Reglas de escalación | `docs/ai/BOTIA_ESCALATION_RULES.md` | ✅ Creado |
+| Política de aprendizaje | `docs/ai/BOTIA_LEARNING_POLICY.md` | ✅ Creado |
+| Corpus semilla | `docs/ai/BOTIA_TRAINING_CORPUS.md` | ✅ Creado (~45 ejemplos YAML) |
+| Playbooks por módulo | `docs/ai/BOTIA_MODULE_PLAYBOOKS.md` | ✅ Creado |
+
+### Lo que cambia en appointment-flow.ts
+
+Duplicados eliminados: `PLACEHOLDER_NOMBRES`, `SERVICIOS_KEYWORD`, `MARCAS_CONOCIDAS`, `AFFIRMATIVES` (inline en isAfirmacionFlow), `FRUSTRACION` (inline en isFrustracion), `NEGACIONES` (inline en isNegacion), `INTENT` (inline en intentoAgendar). Todos reemplazados por imports de `botia-brain.ts`. **Sin cambios de comportamiento ni en tipos.**
+
+### Pendientes de P0.3 (futuro)
+
+- [ ] Migrar corpus semilla a tabla `botia_ejemplos_candidatos` cuando volumen supere ~200 ejemplos
+- [ ] UI admin de revisión de ejemplos candidatos (pendiente webhook WA activo)
+- [ ] Integrar `BOTIA_SERVICE_SYNONYMS` en `classify-intent.ts` cuando se refactorice el clasificador
+- [ ] Reagendamiento como flujo único (`reagendarCitaBot()`) — ver BOTIA_MODULE_PLAYBOOKS.md
+- [ ] Consulta de estado OT entrante por WA (bloqueante: webhook WA activo)
 
 ---
 
