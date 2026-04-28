@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-27 — Bot seguimiento de citas implementado. Fix stale closure bandeja. Asesor puede responder tras tomar conversación. WA coche listo desde taller. Schema drift detectado en `citas` (producción), migración 018 creada._
+_Actualizado: 2026-04-27 — P0 BotIA Citas operativo (commit 713e605): asesor_id configurable, actividad trazable, cita_proxima en contexto, guardrails, WhatsApp en Bandeja. Migración 019 pendiente de ejecutar en producción. Demo NO cerrada hasta validación completa._
 
 ---
 
@@ -8,6 +8,22 @@ _Actualizado: 2026-04-27 — Bot seguimiento de citas implementado. Fix stale cl
 > **Ejecutar ANTES de hacer push/deploy o probar el bot en producción.**
 
 ✅ **Migración 018** — `supabase/migrations/018_add_bot_confirmation_fields_to_citas.sql`
+- **YA EJECUTADA en producción.**
+
+⬜ **Migración 019** — `supabase/migrations/019_add_cita_id_to_actividades.sql`
+- Agrega `cita_id UUID` + índice a tabla `actividades` para trazabilidad BotIA.
+- `crearCitaBot` ya escribe `cita_id` al crear la actividad — falla silenciosamente sin esta columna.
+- **Ejecutar manualmente en Supabase SQL Editor antes del próximo deploy:**
+
+```sql
+alter table public.actividades
+  add column if not exists cita_id uuid references public.citas(id) on delete set null;
+create index if not exists idx_actividades_cita_id on public.actividades(cita_id);
+```
+
+---
+
+✅ **Migración 018 (archivo)** — referencia original:
 - Detectada en validación pre-deploy 2026-04-27: producción no tenía `contacto_bot`, `confirmacion_cliente`, `confirmacion_at` en tabla `citas`.
 - `lib/ai/bot-tools.ts` (`crearCitaBot`, `confirmarCitaBot`) usa estas columnas — INSERT/UPDATE falla en producción sin esta migración.
 - **Ejecutar manualmente en Supabase SQL Editor** antes de push.
@@ -18,6 +34,37 @@ alter table public.citas
   add column if not exists confirmacion_cliente boolean,
   add column if not exists confirmacion_at      timestamptz;
 ```
+
+---
+
+## 🤖 P0 BotIA CITAS — PENDIENTES POST-COMMIT 713e605
+
+> Commit 713e605 es el estado de código. Las validaciones siguientes deben completarse antes de cerrar la demo.
+
+### Validación obligatoria antes de cerrar la demo
+
+- [ ] Ejecutar migración 019 en Supabase SQL Editor (ver arriba)
+- [ ] Configurar `ai_settings.escalation_assignee_id` con UUID de un usuario responsable en la sucursal de prueba
+- [ ] Simular conversación bot → crear cita → verificar que la cita aparece en BD con `asesor_id` y `estado='confirmada'`
+- [ ] Verificar que se creó una fila en `actividades` con `tipo='cita_agendada'`, `modulo_origen='ia'`, `cita_id` referenciando la cita creada
+- [ ] Verificar que la cita aparece en "Mi Agenda" del usuario configurado en `escalation_assignee_id`
+- [ ] Verificar que Bandeja muestra el número de WhatsApp del cliente en el header del chat
+
+### Pendiente de código: CRM enrichment completo del bot
+
+⬜ El bot actualmente sabe: nombre del cliente, próxima cita.
+⬜ Falta: mostrar vehículo del cliente en el chat de Bandeja.
+⬜ Falta: bot pueda referirse al vehículo del cliente por marca/modelo en sus respuestas.
+
+Impacto: el bot dice "tu próxima cita" pero no dice "tu Nissan Sentra tiene cita". El CRM enrichment completo requiere JOIN `citas → vehiculos` al construir el contexto del bot.
+
+### Pendiente de diseño: Automation Engine sin n8n
+
+⬜ El proyecto usa código nativo (Next.js + Vercel Cron). No usa n8n.
+⬜ El Workflow Studio (`/bandeja/workflow-studio`) es el embrión del engine.
+⬜ Las reglas de BotIA (umbrales, intents, horarios, escalación) viven en `ai_settings` y `automation_rules`.
+⬜ Falta: UI para configurar reglas de escalación, timeouts y handoff desde Configuración.
+⬜ Falta: engine que ejecute reglas de `automation_rules` de forma determinística (no depender solo del LLM).
 
 ---
 
@@ -107,6 +154,12 @@ ALTER TABLE configuracion_citas_sucursal
 - [x] Sprint 9 — Estado OT canónico: `en_proceso` (migración 008 ejecutada + TypeScript + UI alineados)
 - [x] Sprint 9 — Normalización MAYÚSCULAS: clientes (crear+editar), empresas (crear+editar), vehículos (crear+editar), OT diagnóstico + numero_ot_dms
 - [x] Sprint 9 — OT: `version` agregado a `createVehiculoAction` y `createVehiculoYVincularAction`
+- [x] P0 BotIA — `crearCitaBot` sets `asesor_id` desde `ai_settings.escalation_assignee_id` (configurable, sin hardcodeo)
+- [x] P0 BotIA — `crearCitaBot` crea actividad CRM best-effort (`tipo=cita_agendada`, `modulo_origen=ia`, `cita_id`)
+- [x] P0 BotIA — `cita_proxima` inyectada en contexto del bot para clientes con cita próxima (flujo follow-up)
+- [x] P0 BotIA — Guardrail anti-hallucination: bloquea frases "cita confirmada" si no hay `cita_id` real
+- [x] P0 BotIA — Slot detection fallback: si cliente confirma con "sí" y LLM saltó `preparar_confirmacion_cita`, extrae slot del historial y crea cita directamente
+- [x] P0 Bandeja — WhatsApp del cliente visible en header del chat con ícono verde
 - [x] Sprint 9 — OT: `updateOTAction` acepta `numero_ot_dms` para edición posterior
 - [x] Sprint 9 — Cita detalle: bloque "Orden de Trabajo" visible en estados `en_agencia` y `show`
 - [x] Sprint 9 — `vincularOTCitaAction`: vincular OT existente a una cita con validaciones de sucursal+cliente+vehículo

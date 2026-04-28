@@ -278,6 +278,39 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
   - No implementar hasta que el bot WhatsApp esté activo en producción.
   - No agregar UI de bot dentro de módulos Taller/Citas/CRM mientras no haya validación real.
 
+### Decisiones clave — P0 BotIA Citas Operativo (2026-04-27 — commit 713e605)
+
+- **`crearCitaBot` sets `asesor_id` desde `ai_settings.escalation_assignee_id`.**
+  - Configurable por sucursal — nunca hardcodeado.
+  - `asesor_id = NULL` en cita si `escalation_assignee_id` no está configurado.
+  - La cita con `asesor_id` aparece en "Mi Agenda" del responsable configurado.
+
+- **`crearCitaBot` crea actividad CRM best-effort.**
+  - `tipo = 'cita_agendada'`, `modulo_origen = 'ia'`, `cita_id` (FK a `citas`).
+  - `usuario_asignado_id = escalation_assignee_id` si está configurado.
+  - Fallo de actividad NO bloquea la creación de la cita.
+  - Requiere migración 019 ejecutada en Supabase (agrega columna `cita_id` a `actividades`).
+
+- **`cita_proxima` en contexto del bot.**
+  - `bandeja.ts` consulta `citas` para el cliente ANTES de llamar al bot.
+  - Si existe cita próxima (futuro, estados activos), se pasa como `cita_proxima` a `BotContexto`.
+  - `bot-citas.ts` inyecta los datos en el system prompt — bot abre con seguimiento en lugar de saludo frío.
+  - `debeConsultarCitas` retorna `false` cuando `ctx.cita_proxima` ya está presente.
+
+- **Guardrail anti-hallucination (tres capas).**
+  1. Step 5c — slot detection fallback: si cliente dice "sí" y `confirmacion_pendiente` está vacío, `detectarSlotDesdeHistorial()` parsea fecha/hora del historial y crea cita directamente sin pasar por el bot.
+  2. Contexto determinístico: `confirmacion_pendiente` del thread metadata se pasa al bot explícitamente — si existe, el bot llama `crear_cita` directamente.
+  3. Guardrail de texto: si respuesta contiene frases "cita confirmada/agendada" sin `cita_id` real → reemplazar por mensaje de escalación.
+
+- **Migración 019 — pendiente de ejecutar en producción.**
+  - Archivo: `supabase/migrations/019_add_cita_id_to_actividades.sql`
+  - Sin esta migración, la actividad falla silenciosamente (best-effort) pero la cita se crea.
+  - Ejecutar en Supabase SQL Editor antes del próximo deploy.
+
+- **Bandeja — WhatsApp del cliente visible en header.**
+  - `page.tsx` añade `whatsapp` a la query de `clientes`.
+  - `_BandejaClient.tsx` muestra `whatsapp` con ícono verde `<Phone>` bajo el nombre en el header del chat.
+
 ### Decisiones clave — Sprint 9 (2026-04-15 → 2026-04-16)
 
 - **ENUM `estado_ot`: valor canónico es `'en_proceso'`, no `'en_reparacion'`.**
@@ -361,6 +394,7 @@ No es deuda de código. Acción: cuando exista número → poblar `wa_numeros` �
 8. **Claude API** para: clasificar mensajes, generar WA personalizados, sugerencias IA
 9. Cada variable nueva lleva **comentario inline** explicando su propósito
 10. Antes de enviar cualquier WA o email: **verificar horario del bot** (8am–7:30pm)
+11. **Sin hardcodeo de configuración operativa** — responsables, tiempos de timeout, umbrales de confianza IA, reglas de escalación, horarios del bot y permisos de módulos deben vivir en tablas de configuración (`ai_settings`, `configuracion_citas_sucursal`, `automation_rules`) o en variables de entorno documentadas. Nunca en constantes del código ni en strings hardcodeados dentro de funciones.
 
 ---
 

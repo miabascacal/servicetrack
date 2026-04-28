@@ -1,9 +1,9 @@
 # WORKPLAN_CURRENT_STATE.md — ServiceTrack
 > **FUENTE DE VERDAD ÚNICA del proyecto. Todo análisis, bug, decisión y mejora debe integrarse aquí.**
 > Documento de estado consolidado para arquitectos, asistentes IA y equipo de desarrollo.
-> **Última actualización:** 2026-04-27 (sesión: bot rediseñado como asistente de seguimiento de citas; herramientas consultarCitasCliente + confirmarCitaBot; aviso WA coche listo; fix cierre de cita; intents confirmar_asistencia + consulta_cita_propia)
-> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento)
-> **Estado general:** ~45% del producto completo — CRM+Citas+Taller+Usuarios operativos, bot con prioridad seguimiento de citas ya agendadas, aviso coche listo implementado.
+> **Última actualización:** 2026-04-27 (commit 713e605: P0 BotIA Citas operativo — asesor_id desde ai_settings, actividad trazable con cita_id, cita_proxima en contexto bot, guardrails anti-hallucination, WhatsApp en Bandeja)
+> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento) + P0 BotIA (commit 713e605)
+> **Estado general:** ~46% del producto completo — CRM+Citas+Taller+Usuarios operativos, bot con prioridad seguimiento de citas ya agendadas, flujo crear cita confirmada operativo en código. Demo pendiente de validación (migración 019 + ai_settings config).
 
 ---
 
@@ -25,7 +25,10 @@ ServiceTrack es un SaaS vertical automotriz (Next.js 16 + Supabase + Vercel). El
 - **Acceso multiusuario roto** — el link de invitación falla con `access_denied` / `otp_expired`. Migración 009 creada pero sin ejecutar. Sin segundo usuario funcional no se puede validar aislamiento multi-tenant real.
 - Bandeja UI — conecta a `conversation_threads` + `mensajes`, pero incompleta: webhook WA implementado en código pero sin activar (requiere número Meta + config externa), sin compose/respuesta real.
 - **WhatsApp + IA MVP** — código completo (webhook, classify-intent, detect-sentiment, outbound-queue-flush), pero nada activo en producción: requiere deploy + `wa_numeros` poblado + `WA_VERIFY_TOKEN` + habilitar `ai_settings`.
-- **Bot demo NO listo para producción hasta que se ejecute migración 018** en Supabase SQL Editor. `citas` en producción no tiene `contacto_bot`, `confirmacion_cliente`, `confirmacion_at`. Bot falla en INSERT/UPDATE sin esas columnas. Ver `PENDIENTES.md` para el SQL exacto y el checklist de prueba A/B/C/D.
+- **Migración 018** — ✅ ejecutada en Supabase producción. `citas` tiene `contacto_bot`, `confirmacion_cliente`, `confirmacion_at`.
+- **Migración 019 — ⬜ PENDIENTE de ejecutar.** `actividades` aún no tiene columna `cita_id`. El bot crea la cita correctamente, pero la actividad de trazabilidad falla silenciosamente hasta ejecutar esta migración.
+- **BotIA — ⬜ ai_settings no configurado.** El bot crea citas con `asesor_id = NULL` hasta que se configure `escalation_assignee_id` en la fila `ai_settings` de la sucursal. La cita NO aparece en Mi Agenda de nadie sin este paso.
+- **Demo NO cerrada** — no cerrar la demo del bot hasta: (a) migración 019 ejecutada, (b) `ai_settings.escalation_assignee_id` configurado, (c) actividad visible en BD con `cita_id`, (d) cita visible en Mi Agenda del responsable.
 
 ---
 
@@ -100,6 +103,9 @@ cancelado → (final)
 | `011_csi_schema.sql` | Tablas CSI: `csi_encuestas`, `csi_preguntas`, `csi_envios`, `csi_respuestas` | ⬜ Pendiente crear |
 | `012_seguros_schema.sql` | ENUMs `tipo_poliza`/`estado_poliza`; tablas `companias_seguro` + `seguros_vehiculo` | ⬜ Pendiente crear |
 | `013_workflow_studio.sql` | Tablas `automation_rules` + `automation_rule_logs` | ⬜ Pendiente crear |
+| `015_citas_asesor_and_agenda_config.sql` | `asesor_id` en `citas` + `agenda_vista_default` en `configuracion_citas_sucursal` | ✅ Ejecutada |
+| `018_add_bot_confirmation_fields_to_citas.sql` | `contacto_bot`, `confirmacion_cliente`, `confirmacion_at` en `citas` | ✅ Ejecutada |
+| `019_add_cita_id_to_actividades.sql` | `cita_id UUID` + índice en `actividades` — trazabilidad BotIA | ⬜ **Pendiente ejecutar en producción** |
 
 ### 2.5 Automatizaciones y mensajería
 
@@ -289,8 +295,11 @@ cancelado → (final)
 | 5.7 | **Handoff bot → humano** (en webhook, umbral `confidence_threshold`) | ✅ Código completo | 🔴 No activo — depende de 5.2 y 5.5 |
 | 5.8 | **Flush `outbound_queue`** (`app/api/cron/outbound-queue-flush/route.ts`) | ✅ Código completo | 🔴 No activo — requiere deploy para que Vercel registre el cron |
 | 5.9 | **Bot: seguimiento de citas ya agendadas** — `consultarCitasCliente` + `confirmarCitaBot` | ✅ 2026-04-27: herramientas en `lib/ai/bot-tools.ts`; bot redesignado en `bot-citas.ts` con prioridad seguimiento → confirmación → nueva cita | 🔴 No activo — depende de WA activo; testeable en Demo Bot |
+| 5.9b | **P0 BotIA — crearCitaBot con asesor_id + actividad** — commit 713e605 | ✅ `crearCitaBot` sets `asesor_id` desde `ai_settings.escalation_assignee_id`; crea actividad `cita_agendada` best-effort; `cita_proxima` en contexto; guardrails anti-hallucination; WA en Bandeja | ⬜ **Demo pendiente validación** — requiere migración 019 + `ai_settings` configurado |
 | 5.10 | **Workflow Studio / AI Copilot** | ⬜ No implementado | ⬜ — pasada futura |
 | 5.11 | **Bot flotante / overlay por módulo** | ⬜ Sugerencia futura — NO implementar aún. El bot hoy vive solo en Automatizaciones/Demo. En el futuro podría invocarse desde Citas, Taller, CRM como ventana flotante. | ⬜ — pendiente diseño |
+| 5.12 | **CRM enrichment del bot** — vehículo del cliente en contexto | ⬜ Bot dice "tu próxima cita" pero no menciona el vehículo. Requiere JOIN `citas → vehiculos` al construir `BotContexto`. | ⬜ — pasada futura |
+| 5.13 | **Automation Engine sin n8n** — reglas determinísticas | ⬜ Las reglas de escalación, timeouts y handoff deben configurarse desde UI. `automation_rules` existe en BD pero sin engine de ejecución. | ⬜ — diseño pendiente |
 
 ---
 

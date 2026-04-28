@@ -24,7 +24,8 @@ No es un manual comercial. Es un documento de operación para quien ejecuta la i
 | Citas (Kanban) | ✅ Operativo |
 | Taller / OTs | ✅ Operativo — `numero_ot_dms` implementado; estados OT canónicos (`en_proceso`); eventos internos activos; crash `/taller` resuelto; vincular OT desde cita funcional |
 | Refacciones | ✅ Construido |
-| Bandeja / Automatizaciones (UI) | 🟡 Parcialmente operativa — `/bandeja` usa `conversation_threads` + `mensajes`; webhook implementado pero no activo; sin composición real ni validación operativa |
+| Bandeja / Automatizaciones (UI) | 🟡 Parcialmente operativa — `/bandeja` usa `conversation_threads` + `mensajes`; WhatsApp del cliente visible en header del chat; webhook implementado pero no activo; sin composición real ni validación operativa |
+| BotIA Citas — crear cita confirmada | 🟡 Código completo (commit 713e605). Requiere: migración 019 ejecutada + `ai_settings.escalation_assignee_id` configurado. Demo pendiente de validación. |
 | WhatsApp — canal saliente | ✅ Operativo (`lib/whatsapp.ts`) — bloqueado por `wa_numeros` sin número activo |
 | WhatsApp — canal entrante (webhook) | 🟡 Código completo (`app/api/webhooks/whatsapp/route.ts`) — no activo: requiere deploy + `WA_VERIFY_TOKEN` + Meta config |
 | Email (Resend) | ✅ Operativo (`lib/email.ts`) |
@@ -115,9 +116,12 @@ Migraciones aplicadas en Supabase:
 - `005_taller_foundation.sql` ✅ ejecutada — crea `ordenes_trabajo` y `lineas_ot`
 - `006_ot_dms_and_taller_events.sql` ✅ ejecutada — agrega `numero_ot_dms`; expande `canal` de `conversation_threads` con `'interno'`
 - `007_canal_interno_enum.sql` ✅ ejecutada — agrega `'interno'` al ENUM `canal_mensaje`; trigger `message_count`
-- `008_estado_ot_en_proceso.sql` ✅ ejecutada y validada — renombra ENUM `en_reparacion` → `en_proceso` (validado: `SELECT estado, COUNT(*) FROM ordenes_trabajo GROUP BY estado`)
+- `008_estado_ot_en_proceso.sql` ✅ ejecutada y validada — renombra ENUM `en_reparacion` → `en_proceso`
+- `015_citas_asesor_and_agenda_config.sql` ✅ ejecutada — `asesor_id` en `citas` + `agenda_vista_default` en config
+- `018_add_bot_confirmation_fields_to_citas.sql` ✅ ejecutada — `contacto_bot`, `confirmacion_cliente`, `confirmacion_at` en `citas`
+- `019_add_cita_id_to_actividades.sql` ⬜ **PENDIENTE** — `cita_id UUID` + índice en `actividades` (trazabilidad BotIA)
 
-**Orden obligatorio para nuevas instalaciones:** 001 → 002 → 003 → 004 → 005 → 006 → 007 → 008.
+**Orden obligatorio para nuevas instalaciones:** 001 → 002 → 003 → 004 → 005 → 006 → 007 → 008 → 015 → 018 → 019.
 
 ### 4.4 Cron Jobs
 
@@ -145,15 +149,55 @@ Cuando se implemente deberá:
 
 | Componente | Archivo | Estado |
 |---|---|---|
-| Clasificador de intención | `lib/ai/classify-intent.ts` | ⬜ Pendiente |
-| Detector de sentimiento | `lib/ai/detect-sentiment.ts` | ⬜ Pendiente |
-| Configuración por sucursal | tabla `ai_settings` | ✅ Tabla creada — UI pendiente |
+| Clasificador de intención | `lib/ai/classify-intent.ts` | ✅ Código completo — no activo sin WA |
+| Detector de sentimiento | `lib/ai/detect-sentiment.ts` | ✅ Código completo — no activo sin WA |
+| Bot de citas (loop agéntico) | `lib/ai/bot-citas.ts` | ✅ Código completo (commit 713e605) |
+| Herramientas del bot | `lib/ai/bot-tools.ts` | ✅ Código completo (commit 713e605) |
+| Configuración por sucursal | tabla `ai_settings` | ✅ Tabla creada — requiere configuración manual post-deploy |
 
-El bot está **apagado por defecto** (`ai_settings.activo = FALSE`). Requiere habilitación manual por admin desde la UI.
+El bot está **apagado por defecto** (`ai_settings.activo = FALSE`). Requiere habilitación manual por admin.
 
 Modelos configurados por defecto en `ai_settings`:
 - `intent_model`: `claude-haiku-4-5-20251001`
 - `reply_model`: `claude-sonnet-4-6`
+
+#### Pasos para activar BotIA Citas en una sucursal nueva
+
+**Prerequisitos:**
+1. Migración 019 ejecutada en Supabase (ver sección 4.3 arriba)
+2. Número Meta WhatsApp activo y `wa_numeros` poblado
+
+**Paso 1 — Ejecutar migración 019** en Supabase SQL Editor:
+```sql
+alter table public.actividades
+  add column if not exists cita_id uuid references public.citas(id) on delete set null;
+create index if not exists idx_actividades_cita_id on public.actividades(cita_id);
+```
+
+**Paso 2 — Configurar ai_settings** para la sucursal:
+```sql
+-- Obtener sucursal_id y UUID del responsable primero
+-- Insertar o actualizar la fila de ai_settings
+INSERT INTO ai_settings (sucursal_id, activo, escalation_assignee_id)
+VALUES ('<uuid-sucursal>', true, '<uuid-usuario-responsable>')
+ON CONFLICT (sucursal_id) DO UPDATE
+  SET activo = true,
+      escalation_assignee_id = '<uuid-usuario-responsable>';
+```
+- `escalation_assignee_id` es el usuario que aparecerá en la cita creada por el bot y en Mi Agenda.
+- Sin este valor, la cita se crea con `asesor_id = NULL` y no aparece en Mi Agenda de nadie.
+
+**Paso 3 — Validar que el bot funciona:**
+- [ ] Enviar mensaje de prueba al número WA de la sucursal con el teléfono de un cliente existente en BD
+- [ ] Verificar en `/bandeja` que la conversación aparece y el bot responde
+- [ ] Verificar que la cita creada aparece en Supabase con `asesor_id` poblado y `estado='confirmada'`
+- [ ] Verificar que en `actividades` hay una fila con `tipo='cita_agendada'`, `modulo_origen='ia'`, `cita_id` referenciando la cita
+- [ ] Verificar en `/agenda` del responsable configurado que la cita aparece en el calendario
+- [ ] Verificar en `/bandeja` que el número de WhatsApp del cliente es visible en el header del chat
+
+**Paso 4 — Validar guardrails:**
+- Simular cliente que dice "sí" sin que el bot haya preguntado por cita: el bot debe escalar, NO crear cita fantasma.
+- Verificar que si se crea una cita, el bot no vuelve a intentar crear otra en la misma conversación.
 
 ### 4.7 Email
 
