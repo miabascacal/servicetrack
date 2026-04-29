@@ -25,6 +25,10 @@ const VALID_INTENTS: IntentTipo[] = [
   'confirmacion',
   'confirmar_asistencia',
   'consulta_cita_propia',
+  'informacion_sucursal',
+  'humano_requerido',
+  'seguimiento_refacciones',
+  'encuesta_csi',
   'otro',
 ]
 
@@ -51,6 +55,10 @@ Intenciones posibles:
 - confirmacion: confirma recepción de información genérica (no relacionada con asistencia a cita)
 - confirmar_asistencia: confirma explícitamente que asistirá a una cita ya agendada ("sí confirmo", "ahí estaré", "sí voy")
 - consulta_cita_propia: pregunta por los detalles de su propia cita ya agendada ("¿cuándo es mi cita?", "¿a qué hora?")
+- informacion_sucursal: pregunta por dirección, teléfono, servicios disponibles o ubicación de la agencia
+- humano_requerido: exige explícitamente hablar con una persona humana, no con un bot ("quiero hablar con alguien", "ponme con una persona")
+- seguimiento_refacciones: consulta el estado de una pieza o refacción ya solicitada o encargada
+- encuesta_csi: responde una encuesta de satisfacción o pide que le envíen la encuesta de su visita
 - otro: cualquier otra intención no listada
 
 Responde SOLO con este JSON, sin texto adicional:

@@ -56,9 +56,33 @@ export async function crearVehiculoYVincularBot(params: {
   modelo:     string
   anio:       number
   placa?:     string | null
+  vin?:       string | null
   color?:     string | null
 }): Promise<{ id: string; descripcion: string } | { error: string }> {
   const admin = createAdminClient()
+
+  // Dedup by placa: if a vehicle with the same placa already exists in the group,
+  // reuse it and link it to the client rather than creating a duplicate.
+  if (params.placa) {
+    const placaNorm = params.placa.toUpperCase()
+    const { data: existing } = await admin
+      .from('vehiculos')
+      .select('id, marca, modelo, anio, placa')
+      .eq('grupo_id', params.grupo_id)
+      .eq('placa', placaNorm)
+      .limit(1)
+      .maybeSingle()
+
+    if (existing) {
+      await admin
+        .from('vehiculo_personas')
+        .insert({ vehiculo_id: existing.id, cliente_id: params.cliente_id, rol_vehiculo: 'propietario' })
+        .select()
+        .maybeSingle()
+      const desc = `${existing.marca} ${existing.modelo} ${existing.anio} (${placaNorm})`
+      return { id: existing.id as string, descripcion: desc }
+    }
+  }
 
   const { data: vehiculo, error: vError } = await admin
     .from('vehiculos')
@@ -68,6 +92,7 @@ export async function crearVehiculoYVincularBot(params: {
       modelo:   params.modelo.toUpperCase(),
       anio:     params.anio,
       placa:    params.placa?.toUpperCase() ?? null,
+      vin:      params.vin?.toUpperCase() ?? null,
       color:    params.color?.toUpperCase() ?? null,
     })
     .select('id')

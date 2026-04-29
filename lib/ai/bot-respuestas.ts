@@ -115,6 +115,30 @@ export function generarRespuestaSimple(params: RespuestaSimpleParams): Respuesta
         handoff: false,
       }
 
+    case 'informacion_sucursal':
+      return {
+        respuesta: `Claro, ${nombre}. Estoy revisando la información de la sucursal.\n¿Qué necesitas saber? (horario, dirección, teléfono o servicios disponibles)`,
+        handoff: false,
+      }
+
+    case 'humano_requerido':
+      return {
+        respuesta: `Entendido, ${nombre}. Te comunico de inmediato con un asesor para que te atienda personalmente.`,
+        handoff: true,
+      }
+
+    case 'seguimiento_refacciones':
+      return {
+        respuesta: `Hola ${nombre}, para darte información precisa sobre el estado de tu pieza necesito que un asesor de Refacciones revise tu pedido. Te comunico ahora.`,
+        handoff: true,
+      }
+
+    case 'encuesta_csi':
+      return {
+        respuesta: `Gracias, ${nombre}. Tu opinión es muy valiosa para nosotros. Voy a canalizar tu respuesta con el área de Calidad para que quede registrada.`,
+        handoff: false,
+      }
+
     case 'agendar_cita':
       // Fallback — normalmente este caso lo maneja generarRespuestaBot
       return {

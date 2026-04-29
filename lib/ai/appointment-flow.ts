@@ -254,8 +254,16 @@ export function parsearHora(texto: string): string | null {
   return null
 }
 
+/**
+ * Returns true if the text looks like a plate attempt that contains Ñ.
+ * Mexican plates never use Ñ — caller should ask for clarification instead of parsing.
+ */
+export function tieneCaracteresInvalidosPlaca(texto: string): boolean {
+  return /Ñ/i.test(texto) && /\b[A-ZÁÉÍÓÚÜÑ]{2,3}[-\s]?\d{2,4}/i.test(texto)
+}
+
 export function parsearPlaca(texto: string): string | null {
-  const placaM = texto.match(/\b([A-ZÑ]{2,3}[-\s]?\d{3,4}[A-ZÑ]{0,2}|\d{3,4}[-\s]?[A-ZÑ]{2,3})\b/i)
+  const placaM = texto.match(/\b([A-Z]{2,3}[-\s]?\d{3,4}[A-Z]{0,2}|\d{3,4}[-\s]?[A-Z]{2,3})\b/i)
   return placaM ? placaM[1].replace(/[-\s]/g, '').toUpperCase() : null
 }
 
@@ -364,8 +372,8 @@ export function parsearVehiculo(texto: string): VehiculoParseado | null {
   const yearM = texto.match(/\b(19|20)\d{2}\b/)
   const anio  = yearM ? parseInt(yearM[0], 10) : null
 
-  // Mexican placa pattern (very loose: ABC-123 or 123-ABC etc.)
-  const placaM = texto.match(/\b([A-ZÑ]{2,3}[-\s]?\d{3,4}[A-ZÑ]{0,2}|\d{3,4}[-\s]?[A-ZÑ]{2,3})\b/i)
+  // Mexican placa pattern — Ñ excluded (not valid in Mexican plates)
+  const placaM = texto.match(/\b([A-Z]{2,3}[-\s]?\d{3,4}[A-Z]{0,2}|\d{3,4}[-\s]?[A-Z]{2,3})\b/i)
   const placa  = placaM
     ? placaM[1].replace(/[-\s]/g, '').toUpperCase()
     : undefined

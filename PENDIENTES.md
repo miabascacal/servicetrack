@@ -1,5 +1,52 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-28 — P0.6 hotfix: /citas restituido (RLS bypass), BotIA siempre pendiente_contactar en booking inicial, placa loop fix._
+_Actualizado: 2026-04-29 — P0.7 enforce operational config resolver, workflow rules, intents, Ñ plate fix._
+
+---
+
+## 🤖 P0.7 — Operational Config Resolver + Workflow Rules (2026-04-29)
+
+### Qué incluye P0.7
+
+| Cambio | Archivo | Estado |
+|--------|---------|--------|
+| Migración 020: per-day horarios + holidays + timezone | `supabase/migrations/020_configuracion_horarios_sucursal.sql` | ⬜ Pendiente ejecutar en Supabase |
+| Migración 021: extiende automation_rules con ot_pendiente_refacciones | `supabase/migrations/021_workflow_automation_refacciones.sql` | ⬜ Pendiente ejecutar en Supabase |
+| `buscarDisponibilidad` usa nuevas tablas (020) con fallback seguro | `lib/ai/bot-tools.ts` | ✅ Código |
+| Revert Ñ en parsearPlaca + parsearVehiculo; nueva `tieneCaracteresInvalidosPlaca()` | `lib/ai/appointment-flow.ts` | ✅ Código |
+| Guarda capturar_placa en bandeja.ts para Ñ; guards else-if | `app/actions/bandeja.ts` | ✅ Código |
+| Vehicle placa dedup en crearVehiculoYVincularBot | `lib/ai/bot-crm.ts` | ✅ Código |
+| 4 nuevos intents: informacion_sucursal, humano_requerido, seguimiento_refacciones, encuesta_csi | `lib/ai/types.ts`, `classify-intent.ts`, `bot-respuestas.ts` | ✅ Código |
+| detectAgencyModule mapea nuevos intents | `app/actions/bandeja.ts` | ✅ Código |
+
+### Decisiones P0.7
+
+- **`tieneCaracteresInvalidosPlaca(texto)`: bool** — Las placas mexicanas nunca usan Ñ. Si el texto se ve como placa y contiene Ñ → responder con mensaje de validación, no parsear.
+- **`buscarDisponibilidad` prioridad**: día no laborable > override por día > días disponibles global > fallback hardcoded.
+- **`crearVehiculoYVincularBot` dedup por placa**: si ya existe vehículo con esa placa en el grupo, se reutiliza y vincula en lugar de crear duplicado.
+- **4 nuevos intents**: `informacion_sucursal` (LLM responde con datos de sucursal), `humano_requerido` → handoff `atencion_clientes`, `seguimiento_refacciones` → handoff `refacciones`, `encuesta_csi` → handoff `csi`.
+- **`automation_rules.trigger_tipo`** ahora incluye `ot_pendiente_refacciones` y `solicitud_refacciones` (migración 021).
+
+### Migraciones a ejecutar en Supabase antes del próximo deploy
+
+```sql
+-- Migración 020: ejecutar en Supabase SQL Editor
+-- (ver supabase/migrations/020_configuracion_horarios_sucursal.sql)
+
+-- Migración 021: ejecutar en Supabase SQL Editor
+-- (ver supabase/migrations/021_workflow_automation_refacciones.sql)
+```
+
+### BLOQUE 6 — Backlog de permisos y gestión de usuarios (pendiente de implementar)
+
+> No hay código roto, pero el flujo es incompleto para un segundo operador real.
+
+- [ ] **Creación de usuario debe incluir sucursal + asignación de rol en el mismo formulario.**
+  - Actualmente `/usuarios` crea el usuario pero la asignación de rol es un paso separado.
+  - Riesgo: usuarios activos sin rol asignado que ven todo (o nada) según RLS.
+- [ ] **Bug de pérdida de rol**: si se elimina el único rol de un usuario activo, el usuario queda sin permisos visibles pero el acceso físico no se revoca (RLS solo filtra vistas, no auth).
+  - Fix: agregar validación en `removerRolAction` — no permitir eliminar el último rol de un usuario activo.
+- [ ] **Admin no puede ver usuarios de otras sucursales**: `usuarios/page.tsx` filtra por `sucursal_id` del admin. Correcto para modelo multi-tenant. Documentar como comportamiento esperado.
+- [ ] **Invitaciones**: el link de invitación falla con `access_denied`/`otp_expired`. **Bloqueante para onboarding de clientes reales.** Requiere investigar configuración de Supabase Auth (PKCE vs implicit, redirect URIs en Vercel).
 
 ---
 

@@ -40,6 +40,7 @@ import {
   isSolicitudConfirmacionHumana,
   isSolicitudRecordatorio,
   isClientePlaceholder,
+  tieneCaracteresInvalidosPlaca,
   type AppointmentFlowState,
 } from '@/lib/ai/appointment-flow'
 import {
@@ -269,11 +270,12 @@ function detectAgencyModule(
 
   if (intent === 'agendar_cita') return 'citas'
   if (intent === 'consulta_estado_ot' || intent === 'solicitud_taller') return 'taller'
-  if (intent === 'solicitud_refacciones') return 'refacciones'
+  if (intent === 'solicitud_refacciones' || intent === 'seguimiento_refacciones') return 'refacciones'
   if (intent === 'solicitud_ventas') return 'ventas'
-  if (intent === 'solicitud_csi') return 'csi'
+  if (intent === 'solicitud_csi' || intent === 'encuesta_csi') return 'csi'
   if (intent === 'solicitud_seguros') return 'seguros'
-  if (intent === 'solicitud_atencion_clientes' || intent === 'queja') return 'atencion_clientes'
+  if (intent === 'solicitud_atencion_clientes' || intent === 'queja' || intent === 'humano_requerido') return 'atencion_clientes'
+  // informacion_sucursal → handled by the LLM bot directly (no module escalation)
 
   for (const [moduleName, keywords] of Object.entries(BOTIA_AGENCY_MODULE_KEYWORDS)) {
     if (keywords.some(keyword => lowered.includes(keyword))) {
@@ -896,9 +898,16 @@ export async function simularMensajeAction(params: {
 
     // ── Step C: Service / fecha / hora / confirmation (P0.1) ─────────────────
     if (!skipBot && flowState.nombre_resuelto && flowState.vehiculo_resuelto && !flowState.placa && !flowState.placa_pendiente) {
-      const placaDetectada = parsearPlaca(params.mensaje)
+      // Reject Ñ in plate text — Mexican plates never use Ñ
+      if (tieneCaracteresInvalidosPlaca(params.mensaje)) {
+        await setAppointmentFlowState(thread_id, { ...flowState, step: 'capturar_placa' })
+        respuesta = `La placa parece tener un carácter no válido. ¿Puedes confirmarla tal como aparece en la tarjeta de circulación?`
+        skipBot = true
+      }
 
-      if (placaDetectada && flowState.vehiculo_id) {
+      const placaDetectada = skipBot ? null : parsearPlaca(params.mensaje)
+
+      if (!skipBot && placaDetectada && flowState.vehiculo_id) {
         const updPlaca = await actualizarPlacaVehiculoBot({
           vehiculo_id: flowState.vehiculo_id,
           placa: placaDetectada,
@@ -906,13 +915,13 @@ export async function simularMensajeAction(params: {
         if (updPlaca.ok) {
           flowState = { ...flowState, placa: placaDetectada, placa_pendiente: false }
         }
-      } else if (isNoTienePlaca(params.mensaje)) {
+      } else if (!skipBot && isNoTienePlaca(params.mensaje)) {
         flowState = { ...flowState, placa_pendiente: true, step: 'capturar_servicio' }
-      } else if (flowState.step === 'capturar_placa') {
+      } else if (!skipBot && flowState.step === 'capturar_placa') {
         // Already asked once — accept as placa_pendiente and continue
         flowState = { ...flowState, placa_pendiente: true }
         // Fall through to service capture
-      } else {
+      } else if (!skipBot) {
         flowState = { ...flowState, step: 'capturar_placa' }
         await setAppointmentFlowState(thread_id, flowState)
         respuesta = `¿Me compartes la placa? Si no la tienes a la mano, puedo continuar y dejarla pendiente.`

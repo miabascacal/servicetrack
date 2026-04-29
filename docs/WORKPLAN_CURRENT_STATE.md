@@ -1,11 +1,11 @@
 # WORKPLAN_CURRENT_STATE.md — ServiceTrack
 > **FUENTE DE VERDAD ÚNICA del proyecto. Todo análisis, bug, decisión y mejora debe integrarse aquí.**
 > Documento de estado consolidado para arquitectos, asistentes IA y equipo de desarrollo.
-> **Última actualización:** 2026-04-28 (P0.5 BotIA agencia completa + confirmación humana; P0.4.1 filtros reales + calendario mensual de Citas)
-> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento) + P0 BotIA (commit 713e605) + P0.2 BotIA CRM+Vehículo (commit d57c8c2) + P0.2.1 hard gates (commit 8fdc771) + P0.3 Operational Brain + P0.4.1 + P0.5
-> **Estado general:** ~47% del producto completo — CRM+Citas+Taller+Usuarios operativos, bot con flujo completo captura nombre+vehículo+servicio+fecha+hora+confirmación. Demo pendiente de re-prueba con teléfono 5511118888 (validar: nombre capturado, vehiculo_personas poblado, cita.vehiculo_id NOT NULL, cita.servicio NOT NULL, horarios filtran pasados para hoy).
+> **Última actualización:** 2026-04-29 (P0.7: operational config resolver, workflow rules, 4 intents, Ñ plate fix, vehicle dedup)
+> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento) + P0 BotIA (commit 713e605) + P0.2 BotIA CRM+Vehículo (commit d57c8c2) + P0.2.1 hard gates (commit 8fdc771) + P0.3 Operational Brain + P0.4.1 + P0.5 + P0.6 + P0.7
+> **Estado general:** ~49% del producto completo — CRM+Citas+Taller+Usuarios operativos, bot con flujo completo captura nombre+vehículo+servicio+fecha+hora+confirmación. Demo pendiente de re-prueba con teléfono 5511118888 (validar: nombre capturado, vehiculo_personas poblado, cita.vehiculo_id NOT NULL, cita.servicio NOT NULL, horarios filtran pasados para hoy).
 
-> **Hotfix 2026-04-28:** P0.4.2 restaura la carga real de `/citas` por RLS con enrichment separado y conserva calendario mensual. P0.5.1 fuerza identity gates antes de agendar y agrega trazabilidad best-effort en `automation_logs` + metadata de `conversation_threads`. P0.6 CRM Entity Resolver global sigue pendiente.
+> **P0.7 2026-04-29:** Configuración operativa real (horarios por día + holidays + timezone vía migración 020), fix Ñ en placas, vehicle dedup, 4 nuevos intents (informacion_sucursal, humano_requerido, seguimiento_refacciones, encuesta_csi), workflow trigger refacciones (migración 021). Migraciones 020+021 ⬜ pendientes de ejecutar en Supabase.
 
 ---
 

@@ -301,7 +301,59 @@ Formato por intent:
 |--------|--------|--------|
 | `taller_estado_ot` | Taller | ⬜ Pendiente |
 | `vehiculo_listo` | Taller | ✅ WA saliente (sin consulta entrante aún) |
-| `encuesta_csi` | CSI | ⬜ Pendiente |
 | `queja_cliente` | Atención | ⬜ Pendiente |
-| `refacciones_pieza` | Refacciones | ⬜ Pendiente |
 | `venta_cotizacion` | Ventas | ⬜ Pendiente |
+
+---
+
+## INTENTS AÑADIDOS EN P0.7 (2026-04-29)
+
+### `informacion_sucursal`
+**Descripción:** Cliente pregunta por dirección, teléfono, servicios disponibles o ubicación.
+
+**Ejemplos:**
+- "¿dónde están?"
+- "¿cuál es su dirección?"
+- "¿a qué número llamo?"
+- "¿qué servicios tienen?"
+
+**Acción permitida:** Responder con datos de `leerInfoSucursal(sucursal_id)`. Si datos no configurados → informar que no se tiene el dato disponible.
+
+**Cuándo escalar:** Nunca — el LLM responde directamente con contexto de sucursal inyectado.
+
+---
+
+### `humano_requerido`
+**Descripción:** Cliente exige explícitamente hablar con una persona, no con el bot.
+
+**Ejemplos:**
+- "quiero hablar con alguien"
+- "ponme con una persona"
+- "no quiero el bot"
+- "necesito un asesor"
+
+**Acción permitida:** Escalar inmediatamente → módulo `atencion_clientes`.
+
+---
+
+### `seguimiento_refacciones`
+**Descripción:** Cliente consulta el estado de una pieza o refacción ya solicitada.
+
+**Ejemplos:**
+- "¿llegó mi refacción?"
+- "¿tienen la pieza que pedí?"
+- "¿cómo va lo del filtro?"
+
+**Acción permitida:** Escalar → módulo `refacciones`. Crear actividad de seguimiento en CRM.
+
+---
+
+### `encuesta_csi`
+**Descripción:** Cliente responde una encuesta de satisfacción o pide que le envíen la encuesta de su visita.
+
+**Ejemplos:**
+- "les doy 10 de calificación"
+- "quiero dejar mi opinión"
+- "¿me pueden mandar la encuesta?"
+
+**Acción permitida:** Canalizar respuesta al módulo `csi`. No escalar a asesor en primera instancia — solo si hay queja implícita.

@@ -8,12 +8,29 @@ export async function buscarDisponibilidad(
 ): Promise<{ slots: SlotDisponible[]; mensaje: string }> {
   const supabase = createAdminClient()
 
-  const [cfgRes, citasRes] = await Promise.all([
+  const diaSemana = new Date(fecha + 'T12:00:00').getDay()
+
+  const [cfgRes, horarioDiaRes, diaNoLaborableRes, citasRes] = await Promise.all([
     supabase
       .from('configuracion_citas_sucursal')
-      .select('horario_inicio, horario_fin, intervalo_minutos, dias_disponibles, activa')
+      .select('horario_inicio, horario_fin, intervalo_minutos, dias_disponibles, activa, timezone')
       .eq('sucursal_id', sucursal_id)
       .single(),
+    // Per-day schedule override (migration 020)
+    supabase
+      .from('configuracion_horarios_sucursal')
+      .select('horario_inicio, horario_fin')
+      .eq('sucursal_id', sucursal_id)
+      .eq('dia_semana', diaSemana)
+      .eq('activo', true)
+      .maybeSingle(),
+    // Holiday / non-working day check (migration 020)
+    supabase
+      .from('configuracion_dias_no_laborables')
+      .select('motivo')
+      .eq('sucursal_id', sucursal_id)
+      .eq('fecha', fecha)
+      .maybeSingle(),
     supabase
       .from('citas')
       .select('hora_cita, estado')
@@ -27,17 +44,31 @@ export async function buscarDisponibilidad(
     intervalo_minutos: 30,
     dias_disponibles: [1, 2, 3, 4, 5, 6],
     activa: true,
+    timezone: 'America/Mexico_City',
   }
 
   if (!cfg.activa) {
     return { slots: [], mensaje: 'El servicio de citas no está disponible en este momento.' }
   }
 
-  const diaSemana = new Date(fecha + 'T12:00:00').getDay()
-  const diasDisponibles: number[] = cfgRes.data?.dias_disponibles ?? [1, 2, 3, 4, 5, 6]
-  if (!diasDisponibles.includes(diaSemana)) {
+  // Holiday / non-working day takes priority over day-of-week check
+  if (diaNoLaborableRes.data) {
+    const motivo = (diaNoLaborableRes.data as { motivo?: string | null }).motivo
+    const msg = motivo
+      ? `Lo sentimos, ese día no hay servicio (${motivo}). Por favor elige otra fecha.`
+      : 'Lo sentimos, ese día no hay servicio. Por favor elige otra fecha.'
+    return { slots: [], mensaje: msg }
+  }
+
+  const diasDisponibles: number[] = (cfgRes.data?.dias_disponibles as number[]) ?? [1, 2, 3, 4, 5, 6]
+  const tieneOverrideDia = !!horarioDiaRes.data
+  if (!diasDisponibles.includes(diaSemana) && !tieneOverrideDia) {
     return { slots: [], mensaje: 'Lo sentimos, no atendemos ese día de la semana.' }
   }
+
+  // Per-day override takes precedence over global horario
+  const horarioEfectivo = horarioDiaRes.data ?? cfg
+  const tz = (cfg.timezone as string | null) ?? 'America/Mexico_City'
 
   const ocupadas = new Set(
     (citasRes.data ?? [])
@@ -45,21 +76,20 @@ export async function buscarDisponibilidad(
       .map(c => (c.hora_cita as string).slice(0, 5)),
   )
 
-  // Filter past slots when fecha is today (America/Mexico_City)
-  const nowMX = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }))
+  // Filter past slots when fecha is today (use sucursal timezone)
+  const nowMX = new Date(new Date().toLocaleString('en-US', { timeZone: tz }))
   const todayMX = [
     nowMX.getFullYear(),
     String(nowMX.getMonth() + 1).padStart(2, '0'),
     String(nowMX.getDate()).padStart(2, '0'),
   ].join('-')
   const isToday = fecha === todayMX
-  // 30-minute operational buffer (fallback default — should come from configuracion_citas_sucursal)
   const BUFFER_MIN = 30
   const nowTotalMin = nowMX.getHours() * 60 + nowMX.getMinutes()
 
-  const [startH = 8, startM = 0] = (cfg.horario_inicio as string).split(':').map(Number)
-  const [endH = 18, endM = 0] = (cfg.horario_fin as string).split(':').map(Number)
-  const intervalo = cfg.intervalo_minutos as number ?? 30
+  const [startH = 8, startM = 0] = (horarioEfectivo.horario_inicio as string).split(':').map(Number)
+  const [endH = 18, endM = 0] = (horarioEfectivo.horario_fin as string).split(':').map(Number)
+  const intervalo = (cfg.intervalo_minutos as number) ?? 30
 
   const slots: SlotDisponible[] = []
   let currentMin = startH * 60 + startM

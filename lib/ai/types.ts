@@ -18,6 +18,10 @@ export type IntentTipo =
   | 'confirmacion'
   | 'confirmar_asistencia'   // cliente confirma que asistirá a una cita ya agendada
   | 'consulta_cita_propia'   // cliente pregunta por su cita existente (fecha, hora, estado)
+  | 'informacion_sucursal'   // pregunta por dirección, teléfono, servicios disponibles de la agencia
+  | 'humano_requerido'        // exige explícitamente hablar con una persona humana, no bot
+  | 'seguimiento_refacciones' // consulta el estado de una pieza o refacción ya solicitada
+  | 'encuesta_csi'            // responde encuesta de satisfacción o pide que le envíen la encuesta
   | 'otro'
 
 export type SentimentTipo = 'positive' | 'neutral' | 'negative' | 'urgent'

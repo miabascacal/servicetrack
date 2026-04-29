@@ -380,6 +380,31 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
 - **`crearCitaBot` valida duplicados de cliente+fecha antes del gate de horario.**
   - Si el cliente ya tiene una cita activa en la misma fecha → error descriptivo pide confirmar la existente o cambiar fecha.
 
+### Decisiones clave — P0.7 Operational Config Resolver + Workflow Rules (2026-04-29)
+
+- **Migraciones 020 + 021 creadas — ⬜ pendientes de ejecutar en Supabase producción.**
+  - `020_configuracion_horarios_sucursal.sql`: nueva tabla `configuracion_horarios_sucursal` (override por día), `configuracion_dias_no_laborables` (holidays), columna `timezone` en `configuracion_citas_sucursal`.
+  - `021_workflow_automation_refacciones.sql`: extiende `automation_rules.trigger_tipo` con `ot_pendiente_refacciones` y `solicitud_refacciones`.
+
+- **`buscarDisponibilidad` usa las nuevas tablas con fallback seguro.**
+  - Prioridad: día no laborable > override per-day (`configuracion_horarios_sucursal`) > global (`configuracion_citas_sucursal`) > hardcoded `08:00-18:00`.
+  - Usa `timezone` de `configuracion_citas_sucursal` para filtrar slots pasados (antes hardcodeado a `America/Mexico_City`).
+
+- **`tieneCaracteresInvalidosPlaca(texto): boolean` en `appointment-flow.ts`.**
+  - Las placas mexicanas NUNCA usan Ñ. Si el texto parece una placa y contiene Ñ → responder con mensaje de validación, NO parsear.
+  - `parsearPlaca` y `parsearVehiculo` usan `[A-Z]` (sin Ñ) — revertido desde `[A-ZÑ]` del commit anterior.
+
+- **`crearVehiculoYVincularBot` hace dedup por placa antes de crear.**
+  - Si ya existe un vehículo con la misma placa en el `grupo_id`, lo reutiliza y vincula en lugar de crear duplicado.
+  - Aplica solo cuando `params.placa` está presente.
+
+- **4 nuevos intents añadidos a `types.ts`, `classify-intent.ts`, `bot-respuestas.ts`:**
+  - `informacion_sucursal` → LLM responde con datos de `leerInfoSucursal(sucursal_id)`.
+  - `humano_requerido` → handoff inmediato a `atencion_clientes`.
+  - `seguimiento_refacciones` → handoff a `refacciones`.
+  - `encuesta_csi` → canaliza a `csi` sin handoff por defecto.
+  - `detectAgencyModule` en `bandeja.ts` mapeado para los 4 nuevos intents.
+
 ### Decisiones clave — Sprint 9 (2026-04-15 → 2026-04-16)
 
 - **ENUM `estado_ot`: valor canónico es `'en_proceso'`, no `'en_reparacion'`.**
