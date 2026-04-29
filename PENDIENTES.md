@@ -758,3 +758,33 @@ Orden recomendado:
 - Hardening de seguridad en actions y rutas admin
 - Validar multiusuario real con segundo usuario
 - Recién después seguir con webhook WhatsApp, IA y madurez de bandeja
+---
+
+## P0.4 Dashboard Citas â€” COMPLETADO 2026-04-28
+
+> `/citas` ya no muestra todo el historial mezclado en una sola vista. El kanban ahora soporta vistas temporales operativas.
+
+### QuÃ© implementa P0.4
+
+| Elemento | Estado |
+|---------|--------|
+| Vista `Hoy` | âœ… `fecha_cita = hoy` en `America/Mexico_City` |
+| Vista `Semana actual` | âœ… lunes a domingo de la semana actual |
+| Vista `Mes` | âœ… primer dÃ­a a Ãºltimo dÃ­a del mes actual |
+| Vista `Todas` | âœ… sin filtro de fecha |
+| Resumen visible | âœ… vista activa + rango visible + total de citas |
+| Columnas por estado | âœ… `pendiente_contactar`, `contactada`, `confirmada`, `en_agencia`, `show`, `no_show`, `cancelada` |
+
+### DiagnÃ³stico previo
+
+- `/citas` hacÃ­a `select` de todas las citas visibles por RLS y solo ordenaba por `fecha_cita` y `hora_cita`.
+- No habÃ­a control visible para separar hoy, semana actual, mes actual o histÃ³rico completo.
+- El kanban no renderizaba la columna `show` aunque el estado existe en tipos y transiciones.
+
+### Pendientes posteriores a P0.4
+
+- [ ] Rango personalizado
+- [ ] Filtro por asesor
+- [ ] Filtro por sucursal
+- [ ] Filtro por estado como control explÃ­cito de UI
+- [ ] Vista calendario mensual completa de Citas

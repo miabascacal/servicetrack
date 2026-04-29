@@ -595,3 +595,29 @@ FASE 3    → Integridad de negocio (KM, duplicados, flujo contextual)
 FASE 4    → Gobernanza (middleware permisos, auditoría, taller calendario)
 Módulos   → Ventas/CSI/Seguros/Atención (ya tienen placeholders, no son prioridad)
 ```
+
+## P0.4 Dashboard Citas â€” IMPLEMENTADO 2026-04-28
+
+**Problema que resolvÃ­a:** `/citas` mezclaba citas pasadas, de hoy y futuras en un solo kanban, lo que impedÃ­a operaciÃ³n diaria clara.
+
+**ImplementaciÃ³n validada en cÃ³digo:**
+- `app/(dashboard)/citas/page.tsx` ahora acepta `searchParams` y filtra server-side por `vista`.
+- Vistas disponibles: `Hoy`, `Semana actual`, `Mes`, `Todas`.
+- Reglas de rango:
+  - `Hoy` = `fecha_cita` igual a la fecha actual en `America/Mexico_City`
+  - `Semana actual` = lunes a domingo de la semana actual
+  - `Mes` = primer dÃ­a a Ãºltimo dÃ­a del mes actual
+  - `Todas` = sin filtro de fecha
+- El resumen superior del dashboard ahora muestra vista activa + rango visible + total de citas.
+- `app/_components/citas/CitasKanban.tsx` vuelve a alinear el tablero con el dominio y renderiza tambiÃ©n la columna `show`.
+
+**DiagnÃ³stico previo:**
+- El page component de `/citas` hacÃ­a `select` de todas las citas accesibles por RLS y solo ordenaba por `fecha_cita`/`hora_cita`.
+- No existÃ­a selector visible para separar operaciÃ³n diaria, semanal, mensual o histÃ³rica.
+- No habÃ­a filtro por asesor ni por sucursal en la UI de `/citas`.
+
+**Pendientes posteriores a P0.4:**
+- Rango personalizado.
+- Filtro por asesor.
+- Filtro por sucursal.
+- Vista calendario mensual completa para Citas, si se requiere mÃ¡s que el selector temporal del kanban.

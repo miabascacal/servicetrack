@@ -870,3 +870,35 @@ No debería ocurrir — los índices parciales únicos en BD previenen duplicado
 | **numero_ot** | Número de OT interno de ServiceTrack. Formato `OT-YYYYMM-XXXX`. Inmutable. Siempre presente. Es el identificador de referencia dentro del sistema. |
 | **numero_ot_dms** | Número de OT en el DMS externo del cliente (Autoline u otro). Opcional. `NULL` si el cliente no usa DMS o no ingresó el número. Nunca reemplaza `numero_ot`. |
 | **evento_interno** | Mensaje con `canal = 'interno'` y `message_source = 'system'` en la tabla `mensajes`. Registra acciones del sistema (ej. creación OT, cambio de estado). Visible en bandeja bajo "Todos". No dispara WA ni email. |
+
+#### ValidaciÃ³n P0.4 â€” Dashboard Citas Hoy / Semana / Mes / Todas
+
+**Objetivo:** que el tablero `/citas` pueda usarse operativamente sin mezclar histÃ³rico, citas del dÃ­a y citas futuras en un mismo backlog visual.
+
+**Confirmaciones funcionales:**
+- `/citas` soporta selector visible de vista con opciones `Hoy`, `Semana actual`, `Mes`, `Todas`.
+- La consulta filtra por `fecha_cita` en `America/Mexico_City`.
+- `Hoy` muestra solo la fecha actual.
+- `Semana actual` muestra solo lunes a domingo de la semana actual.
+- `Mes` muestra solo el mes actual.
+- `Todas` mantiene visibilidad completa sin filtro temporal.
+- El encabezado muestra vista activa + rango visible + total de citas.
+- El kanban mantiene estados: `pendiente_contactar`, `contactada`, `confirmada`, `en_agencia`, `show`, `no_show`, `cancelada`.
+
+**InterpretaciÃ³n operativa:**
+- P0.4 mejora lectura operativa del mÃ³dulo de Citas, pero no reemplaza una vista calendario completa.
+- P0.4 no agrega filtros de asesor ni sucursal en la UI de `/citas`; si se requieren, quedan como pendiente posterior.
+- P0.4 no cambia reglas de negocio de BotIA ni flujo de creaciÃ³n/confirmaciÃ³n de citas.
+
+**Pendientes posteriores a P0.4:**
+- Rango personalizado.
+- Filtro por asesor.
+- Filtro por sucursal.
+- Vista calendario mensual completa de Citas.
+
+**Checklist post-deploy P0.4:**
+- [ ] Vista Hoy solo muestra citas de hoy.
+- [ ] Vista Semana actual solo muestra citas entre lunes y domingo de la semana actual.
+- [ ] Vista Mes solo muestra citas del mes actual.
+- [ ] Vista Todas muestra todo el historial visible por RLS.
+- [ ] Las columnas por estado siguen funcionando.
