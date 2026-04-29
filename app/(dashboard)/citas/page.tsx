@@ -3,8 +3,6 @@ import { Plus } from 'lucide-react'
 import { CitasMonthCalendar } from '@/app/_components/citas/CitasMonthCalendar'
 import { CitasKanban } from '@/app/_components/citas/CitasKanban'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { ensureUsuario } from '@/lib/ensure-usuario'
 import { cn } from '@/lib/utils'
 import type { EstadoCita } from '@/types/database'
 
@@ -84,8 +82,9 @@ function endOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0)
 }
 
-function formatRangeDate(date: Date) {
-  return date.toLocaleDateString('es-MX', {
+// Accepts YYYY-MM-DD string to avoid UTC midnight → Mexico City previous-day shift
+function formatRangeDate(dateStr: string) {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('es-MX', {
     day: 'numeric',
     month: 'short',
     timeZone: 'America/Mexico_City',
@@ -106,36 +105,41 @@ function resolveMonthMode(rawMode: string | string[] | undefined): MonthDisplayM
 
 function getVistaRange(vista: CitasVista) {
   const nowMX = getMexicoNow()
+  const todayStr = formatDateKey(nowMX)
+  const monthStartStr = formatDateKey(startOfMonth(nowMX))
 
   if (vista === 'hoy') {
-    const today = formatDateKey(nowMX)
     return {
-      start: today,
-      end: today,
-      rangeLabel: formatRangeDate(nowMX),
-      monthDate: startOfMonth(nowMX),
+      start: todayStr,
+      end: todayStr,
+      rangeLabel: formatRangeDate(todayStr),
+      monthDate: monthStartStr,
     }
   }
 
   if (vista === 'semana') {
     const start = startOfOperationalWeek(nowMX)
     const end = endOfOperationalWeek(nowMX)
+    const startStr = formatDateKey(start)
+    const endStr = formatDateKey(end)
     return {
-      start: formatDateKey(start),
-      end: formatDateKey(end),
-      rangeLabel: `${formatRangeDate(start)} - ${formatRangeDate(end)}`,
-      monthDate: startOfMonth(nowMX),
+      start: startStr,
+      end: endStr,
+      rangeLabel: `${formatRangeDate(startStr)} - ${formatRangeDate(endStr)}`,
+      monthDate: monthStartStr,
     }
   }
 
   if (vista === 'mes') {
     const start = startOfMonth(nowMX)
     const end = endOfMonth(nowMX)
+    const startStr = formatDateKey(start)
+    const endStr = formatDateKey(end)
     return {
-      start: formatDateKey(start),
-      end: formatDateKey(end),
-      rangeLabel: `${formatRangeDate(start)} - ${formatRangeDate(end)}`,
-      monthDate: start,
+      start: startStr,
+      end: endStr,
+      rangeLabel: `${formatRangeDate(startStr)} - ${formatRangeDate(endStr)}`,
+      monthDate: startStr,
     }
   }
 
@@ -143,105 +147,43 @@ function getVistaRange(vista: CitasVista) {
     start: null,
     end: null,
     rangeLabel: 'Sin filtro de fecha',
-    monthDate: startOfMonth(nowMX),
+    monthDate: monthStartStr,
   }
 }
 
 export default async function CitasPage({ searchParams }: { searchParams: SearchParams }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
 
   const resolvedSearchParams = await searchParams
   const vistaActiva = resolveVista(resolvedSearchParams.vista)
   const monthMode = resolveMonthMode(resolvedSearchParams.modo)
   const visibleRange = getVistaRange(vistaActiva)
 
-  let sucursal_id: string | null = null
-  if (user) {
-    try {
-      const ctx = await ensureUsuario(supabase, user.id, user.email ?? '')
-      sucursal_id = ctx.sucursal_id
-    } catch {
-      // sucursal_id stays null — admin client query will return empty safely
-    }
-  }
-
-  const admin = createAdminClient()
-
-  let query = admin
+  let citasQuery = supabase
     .from('citas')
     .select(`
-      id, fecha_cita, hora_cita, estado, servicio, notas, cliente_id, vehiculo_id
+      id, fecha_cita, hora_cita, estado, servicio, notas, cliente_id, vehiculo_id,
+      cliente:clientes(id, nombre, apellido, whatsapp),
+      vehiculo:vehiculos(id, marca, modelo, anio, placa)
     `)
     .order('fecha_cita', { ascending: true })
     .order('hora_cita', { ascending: true })
 
-  if (sucursal_id) {
-    query = query.eq('sucursal_id', sucursal_id)
-  }
-
   if (visibleRange.start && visibleRange.end) {
-    query = query
+    citasQuery = citasQuery
       .gte('fecha_cita', visibleRange.start)
       .lte('fecha_cita', visibleRange.end)
   }
 
-  const { data: citasBase, error: citasError } = await query
+  const { data: citasData, error: citasError } = await citasQuery
 
   if (citasError) {
     console.error('[citas/page] error cargando citas:', citasError.message)
   }
 
-  const citasRows = (citasBase as Array<{
-    id: string
-    fecha_cita: string
-    hora_cita: string
-    estado: EstadoCita
-    servicio: string | null
-    notas: string | null
-    cliente_id: string | null
-    vehiculo_id: string | null
-  }> | null) ?? []
-
-  const clienteIds = [...new Set(citasRows.map((cita) => cita.cliente_id).filter((id): id is string => Boolean(id)))]
-  const vehiculoIds = [...new Set(citasRows.map((cita) => cita.vehiculo_id).filter((id): id is string => Boolean(id)))]
-
-  const [{ data: clientesData, error: clientesError }, { data: vehiculosData, error: vehiculosError }] = await Promise.all([
-    clienteIds.length > 0
-      ? admin
-          .from('clientes')
-          .select('id, nombre, apellido, whatsapp')
-          .in('id', clienteIds)
-      : Promise.resolve({ data: [], error: null }),
-    vehiculoIds.length > 0
-      ? admin
-          .from('vehiculos')
-          .select('id, marca, modelo, anio, placa')
-          .in('id', vehiculoIds)
-      : Promise.resolve({ data: [], error: null }),
-  ])
-
-  if (clientesError) {
-    console.error('[citas/page] error cargando clientes:', clientesError.message)
-  }
-  if (vehiculosError) {
-    console.error('[citas/page] error cargando vehiculos:', vehiculosError.message)
-  }
-
-  const clientesById = new Map(
-    ((clientesData as Array<{ id: string; nombre: string; apellido: string; whatsapp: string }> | null) ?? [])
-      .map((cliente) => [cliente.id, cliente] as const)
-  )
-  const vehiculosById = new Map(
-    ((vehiculosData as Array<{ id: string; marca: string; modelo: string; anio: number; placa: string | null }> | null) ?? [])
-      .map((vehiculo) => [vehiculo.id, vehiculo] as const)
-  )
-
-  const filteredCitas: CitaRow[] = citasRows.map((cita) => ({
-    ...cita,
-    cliente: cita.cliente_id ? clientesById.get(cita.cliente_id) ?? null : null,
-    vehiculo: cita.vehiculo_id ? vehiculosById.get(cita.vehiculo_id) ?? null : null,
-  }))
+  const filteredCitas = (citasData as unknown as CitaRow[]) ?? []
 
   const summaryLabel = `${VISTAS_CONFIG[vistaActiva].label} - ${visibleRange.rangeLabel} - ${filteredCitas.length} cita${filteredCitas.length !== 1 ? 's' : ''}`
   const kanbanKey = [

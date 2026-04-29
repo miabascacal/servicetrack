@@ -47,17 +47,23 @@ function toDateKey(date: Date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
 }
 
-function formatMonthTitle(date: Date) {
-  return date.toLocaleDateString('es-MX', {
+// Accepts YYYY-MM-DD string to avoid UTC midnight → browser timezone deserialization shift
+function formatMonthTitle(monthStr: string) {
+  const [yearPart, monthPart] = monthStr.split('-')
+  return new Date(Number(yearPart), Number(monthPart) - 1, 15).toLocaleDateString('es-MX', {
     month: 'long',
     year: 'numeric',
     timeZone: 'America/Mexico_City',
   })
 }
 
-function buildMonthGrid(baseDate: Date): CalendarDay[] {
-  const firstDay = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1)
-  const lastDay = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0)
+function buildMonthGrid(monthStr: string): CalendarDay[] {
+  const [yearPart, monthPart] = monthStr.split('-')
+  const year = Number(yearPart)
+  const month = Number(monthPart) // 1-based
+
+  const firstDay = new Date(year, month - 1, 1)
+  const lastDay = new Date(year, month, 0)
 
   const startOffset = firstDay.getDay()
   const gridStart = new Date(firstDay)
@@ -73,7 +79,7 @@ function buildMonthGrid(baseDate: Date): CalendarDay[] {
     days.push({
       date: current,
       dateKey: toDateKey(current),
-      inCurrentMonth: current.getMonth() === baseDate.getMonth(),
+      inCurrentMonth: current.getMonth() === month - 1,
     })
   }
 
@@ -85,7 +91,7 @@ export function CitasMonthCalendar({
   monthDate,
 }: {
   citas: CitaCalendarItem[]
-  monthDate: Date
+  monthDate: string
 }) {
   const days = buildMonthGrid(monthDate)
   const todayKey = toDateKey(new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' })))

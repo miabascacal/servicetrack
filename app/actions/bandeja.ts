@@ -44,6 +44,7 @@ import {
 } from '@/lib/ai/appointment-flow'
 import {
   buscarVehiculosCliente,
+  buscarClientesPorNombre,
   crearVehiculoYVincularBot,
   actualizarPlacaVehiculoBot,
   actualizarNombreClienteBot,
@@ -670,49 +671,106 @@ export async function simularMensajeAction(params: {
     // directly instead of relying on the LLM to follow flowInject instructions.
     // Claude Haiku was ignoring flowInject due to conflicting SYSTEM_PROMPT rules.
     if (!flowState.nombre_resuelto) {
-      const esPlaceholder = isClientePlaceholder(
-        cliente.nombre as string | null,
-        cliente.apellido as string | null,
-      )
-
-      if (!esPlaceholder) {
-        flowState = { ...flowState, nombre_resuelto: true }
-        // Fall through to Step B
-      } else if (flowState.step !== 'capturar_nombre') {
-        // First detection: ask for name
-        flowState = { ...flowState, step: 'capturar_nombre' }
-        await setAppointmentFlowState(thread_id, flowState)
-        respuesta = frustrado
-          ? `Disculpa. Para completar tu cita correctamente necesito tu nombre. ¿Cómo te llamas?`
-          : `¡Hola! Con gusto te ayudo a agendar tu cita. ¿Me dices tu nombre completo?`
-        skipBot = true
-      } else {
-        // Already in capturar_nombre: try to parse name from this message
-        const nombreParsed = parsearNombre(params.mensaje)
-        if (nombreParsed) {
-          const updResult = await actualizarNombreClienteBot({
-            cliente_id: cliente.id as string,
-            nombre:     nombreParsed.nombre,
-            apellido:   nombreParsed.apellido,
-          })
-          if (!updResult.ok) {
-            respuesta = `No pude guardar tu nombre. Un asesor se pondrá en contacto contigo.`
-            skipBot  = true
-            handoff  = true
-          } else {
-            // Update local reference for bot context used in Step 6
-            ;(cliente as Record<string, unknown>).nombre  = nombreParsed.nombre
-            ;(cliente as Record<string, unknown>).apellido = nombreParsed.apellido
-            flowState = { ...flowState, nombre_resuelto: true }
-            // Fall through to Step B
+      if (flowState.step === 'confirmar_identidad' && flowState.cliente_alternativo_id) {
+        // Client is answering "are you [existing record]?"
+        if (isAfirmacion(params.mensaje) || isAfirmacionFlow(params.mensaje)) {
+          const altId = flowState.cliente_alternativo_id
+          // Reassign thread + messages to the existing client record
+          await Promise.all([
+            admin.from('conversation_threads').update({ cliente_id: altId }).eq('id', thread_id),
+            admin.from('mensajes').update({ cliente_id: altId }).eq('thread_id', thread_id),
+          ])
+          const { data: altCliente } = await admin
+            .from('clientes').select('id, nombre, apellido').eq('id', altId).single()
+          if (altCliente) {
+            ;(cliente as Record<string, unknown>).id      = altCliente.id
+            ;(cliente as Record<string, unknown>).nombre  = altCliente.nombre
+            ;(cliente as Record<string, unknown>).apellido = altCliente.apellido
           }
+          flowState = { ...flowState, nombre_resuelto: true, cliente_alternativo_id: null }
+          // Fall through to Step B
+        } else if (isNegacion(params.mensaje)) {
+          // Different person: ask for their name again
+          flowState = { ...flowState, step: 'capturar_nombre', cliente_alternativo_id: null }
+          await setAppointmentFlowState(thread_id, flowState)
+          respuesta = `Entendido. ¿Podrías confirmarme tu nombre completo para registrarte correctamente?`
+          skipBot = true
         } else {
-          // Could not parse name — ask again
+          await setAppointmentFlowState(thread_id, flowState)
+          const altNombre = ((await admin.from('clientes').select('nombre, apellido').eq('id', flowState.cliente_alternativo_id).single()).data) as { nombre: string; apellido: string } | null
+          const hint = altNombre ? `${altNombre.nombre} ${altNombre.apellido}` : 'ese registro'
+          respuesta = `¿Eres ${hint}? Por favor responde sí o no.`
+          skipBot = true
+        }
+      } else {
+        const esPlaceholder = isClientePlaceholder(
+          cliente.nombre as string | null,
+          cliente.apellido as string | null,
+        )
+
+        if (!esPlaceholder) {
+          flowState = { ...flowState, nombre_resuelto: true }
+          // Fall through to Step B
+        } else if (flowState.step !== 'capturar_nombre') {
+          // First detection: ask for name
+          flowState = { ...flowState, step: 'capturar_nombre' }
           await setAppointmentFlowState(thread_id, flowState)
           respuesta = frustrado
-            ? `Disculpa, necesito tu nombre completo (nombre y apellido) para continuar. ¿Cómo te llamas?`
-            : `Para continuar necesito tu nombre y apellido. ¿Cómo te llamas? (ejemplo: Juan Pérez)`
+            ? `Disculpa. Para completar tu cita correctamente necesito tu nombre. ¿Cómo te llamas?`
+            : `¡Hola! Con gusto te ayudo a agendar tu cita. ¿Me dices tu nombre completo?`
           skipBot = true
+        } else {
+          // Already in capturar_nombre: try to parse name from this message
+          const nombreParsed = parsearNombre(params.mensaje)
+          if (nombreParsed) {
+            // Check for name-based duplicates before updating DEMO record
+            const candidates = await buscarClientesPorNombre(
+              grupo_id,
+              nombreParsed.nombre,
+              nombreParsed.apellido,
+            )
+            const alternates = candidates.filter(c =>
+              c.id !== (cliente.id as string) && !isClientePlaceholder(c.nombre, c.apellido),
+            )
+
+            if (alternates.length === 1) {
+              // Single non-placeholder match: ask client to confirm identity
+              const alt = alternates[0]
+              const waHint = alt.whatsapp ? ` con número ${alt.whatsapp}` : ''
+              flowState = {
+                ...flowState,
+                step: 'confirmar_identidad',
+                cliente_alternativo_id: alt.id,
+              }
+              await setAppointmentFlowState(thread_id, flowState)
+              respuesta = `Tenemos un registro para ${nombreParsed.nombre} ${nombreParsed.apellido}${waHint}. ¿Eres tú? (responde sí o no)`
+              skipBot = true
+            } else {
+              // No clear match or multiple ambiguous: update DEMO directly
+              const updResult = await actualizarNombreClienteBot({
+                cliente_id: cliente.id as string,
+                nombre:     nombreParsed.nombre,
+                apellido:   nombreParsed.apellido,
+              })
+              if (!updResult.ok) {
+                respuesta = `No pude guardar tu nombre. Un asesor se pondrá en contacto contigo.`
+                skipBot  = true
+                handoff  = true
+              } else {
+                ;(cliente as Record<string, unknown>).nombre  = nombreParsed.nombre
+                ;(cliente as Record<string, unknown>).apellido = nombreParsed.apellido
+                flowState = { ...flowState, nombre_resuelto: true }
+                // Fall through to Step B
+              }
+            }
+          } else {
+            // Could not parse name — ask again
+            await setAppointmentFlowState(thread_id, flowState)
+            respuesta = frustrado
+              ? `Disculpa, necesito tu nombre completo (nombre y apellido) para continuar. ¿Cómo te llamas?`
+              : `Para continuar necesito tu nombre y apellido. ¿Cómo te llamas? (ejemplo: Juan Pérez)`
+            skipBot = true
+          }
         }
       }
     }

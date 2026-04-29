@@ -15,6 +15,7 @@ import {
 
 export type AppointmentFlowStep =
   | 'capturar_nombre'
+  | 'confirmar_identidad'
   | 'resolver_vehiculo'
   | 'capturar_vehiculo'
   | 'capturar_placa'
@@ -26,19 +27,20 @@ export type AppointmentFlowStep =
   | 'escalado'
 
 export interface AppointmentFlowState {
-  step:                     AppointmentFlowStep
-  nombre_resuelto?:         boolean
-  vehiculo_resuelto?:       boolean
-  placa?:                   string | null
-  placa_pendiente?:         boolean
-  vehiculos_opciones?:      Array<{ id: string; descripcion: string }>
-  servicio?:                string | null
-  fecha?:                   string | null
-  hora?:                    string | null
-  cliente_id?:              string | null
-  vehiculo_id?:             string | null
-  cita_id?:                 string | null
-  updated_at?:              string
+  step:                       AppointmentFlowStep
+  nombre_resuelto?:           boolean
+  vehiculo_resuelto?:         boolean
+  placa?:                     string | null
+  placa_pendiente?:           boolean
+  vehiculos_opciones?:        Array<{ id: string; descripcion: string }>
+  servicio?:                  string | null
+  fecha?:                     string | null
+  hora?:                      string | null
+  cliente_id?:                string | null
+  cliente_alternativo_id?:    string | null
+  vehiculo_id?:               string | null
+  cita_id?:                   string | null
+  updated_at?:                string
 }
 
 // ── State accessors ───────────────────────────────────────────────────────────
@@ -52,7 +54,7 @@ export function getAppointmentFlowState(metadata: unknown): AppointmentFlowState
   if (typeof f.step !== 'string') return null
 
   const VALID = new Set<string>([
-    'capturar_nombre', 'resolver_vehiculo', 'capturar_vehiculo',
+    'capturar_nombre', 'confirmar_identidad', 'resolver_vehiculo', 'capturar_vehiculo',
     'capturar_placa', 'capturar_servicio', 'capturar_fecha', 'capturar_hora',
     'esperando_confirmacion', 'completado', 'escalado',
   ])
@@ -82,9 +84,10 @@ export function getAppointmentFlowState(metadata: unknown): AppointmentFlowState
     servicio:            typeof f.servicio    === 'string' ? f.servicio    : null,
     fecha:               typeof f.fecha       === 'string' ? f.fecha       : null,
     hora:                typeof f.hora        === 'string' ? f.hora        : null,
-    cliente_id:          typeof f.cliente_id  === 'string' ? f.cliente_id  : null,
-    vehiculo_id:         typeof f.vehiculo_id === 'string' ? f.vehiculo_id : null,
-    cita_id:             typeof f.cita_id     === 'string' ? f.cita_id     : null,
+    cliente_id:               typeof f.cliente_id               === 'string' ? f.cliente_id               : null,
+    cliente_alternativo_id:   typeof f.cliente_alternativo_id   === 'string' ? f.cliente_alternativo_id   : null,
+    vehiculo_id:              typeof f.vehiculo_id              === 'string' ? f.vehiculo_id              : null,
+    cita_id:                  typeof f.cita_id                  === 'string' ? f.cita_id                  : null,
     updated_at:          typeof f.updated_at  === 'string' ? f.updated_at  : undefined,
   }
 }
@@ -252,7 +255,7 @@ export function parsearHora(texto: string): string | null {
 }
 
 export function parsearPlaca(texto: string): string | null {
-  const placaM = texto.match(/\b([A-Z]{2,3}[-\s]?\d{3,4}[A-Z]{0,2}|\d{3,4}[-\s]?[A-Z]{2,3})\b/i)
+  const placaM = texto.match(/\b([A-ZÑ]{2,3}[-\s]?\d{3,4}[A-ZÑ]{0,2}|\d{3,4}[-\s]?[A-ZÑ]{2,3})\b/i)
   return placaM ? placaM[1].replace(/[-\s]/g, '').toUpperCase() : null
 }
 
@@ -362,7 +365,7 @@ export function parsearVehiculo(texto: string): VehiculoParseado | null {
   const anio  = yearM ? parseInt(yearM[0], 10) : null
 
   // Mexican placa pattern (very loose: ABC-123 or 123-ABC etc.)
-  const placaM = texto.match(/\b([A-Z]{2,3}[-\s]?\d{3,4}[A-Z]{0,2}|\d{3,4}[-\s]?[A-Z]{2,3})\b/i)
+  const placaM = texto.match(/\b([A-ZÑ]{2,3}[-\s]?\d{3,4}[A-ZÑ]{0,2}|\d{3,4}[-\s]?[A-ZÑ]{2,3})\b/i)
   const placa  = placaM
     ? placaM[1].replace(/[-\s]/g, '').toUpperCase()
     : undefined

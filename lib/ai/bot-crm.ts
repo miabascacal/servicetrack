@@ -124,6 +124,24 @@ export async function actualizarPlacaVehiculoBot(params: {
   return { ok: true }
 }
 
+export async function buscarClientesPorNombre(
+  grupo_id: string,
+  nombre: string,
+  apellido: string,
+): Promise<Array<{ id: string; nombre: string; apellido: string; whatsapp: string | null }>> {
+  const admin = createAdminClient()
+
+  const { data } = await admin
+    .from('clientes')
+    .select('id, nombre, apellido, whatsapp')
+    .eq('grupo_id', grupo_id)
+    .eq('nombre', nombre.toUpperCase())
+    .eq('apellido', apellido.toUpperCase())
+    .eq('activo', true)
+
+  return (data ?? []) as Array<{ id: string; nombre: string; apellido: string; whatsapp: string | null }>
+}
+
 export async function leerInfoSucursal(
   sucursal_id: string,
 ): Promise<InfoSucursal | null> {
