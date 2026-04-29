@@ -1,7 +1,7 @@
 # IMPLEMENTATION_RUNBOOK.md — ServiceTrack
 
 > Documento técnico y operativo para la implementación de ServiceTrack en clientes reales.
-> Última revisión: 2026-04-16
+> Última revisión: 2026-04-28
 > Sprint de referencia: Sprint 9 cerrado (estado OT en_proceso, crash /taller resuelto, flujo contextual Citas parcial)
 
 ---
@@ -224,6 +224,56 @@ ON CONFLICT (sucursal_id) DO UPDATE
 - [ ] Si la sucursal no tiene dirección configurada: documentar como dependencia operativa pendiente del cliente
 
 **Nota:** si `sucursales.direccion` o `configuracion_citas_sucursal.horario_*` están vacíos, el bot no puede responder preguntas de ubicación/horario y debe decir que no tiene esa información disponible. Configurar estos campos como parte del onboarding del cliente.
+
+#### Validación P0.3 — BotIA Operational Brain
+
+**Objetivo:** dejar trazable en runbook que P0.3 agregó el corpus y las reglas operativas de BotIA, pero sin cambiar la naturaleza determinística de las acciones críticas ya cerradas en P0.2.1.
+
+**Confirmaciones de artefactos:**
+- Existe `lib/ai/botia-brain.ts`.
+- `lib/ai/appointment-flow.ts` importa constantes desde `@/lib/ai/botia-brain`.
+- Existen los documentos:
+  - `docs/ai/BOTIA_OPERATIONAL_BRAIN.md`
+  - `docs/ai/BOTIA_INTENTS.md`
+  - `docs/ai/BOTIA_ENTITIES.md`
+  - `docs/ai/BOTIA_SLOT_RULES.md`
+  - `docs/ai/BOTIA_RESPONSE_POLICIES.md`
+  - `docs/ai/BOTIA_ESCALATION_RULES.md`
+  - `docs/ai/BOTIA_LEARNING_POLICY.md`
+  - `docs/ai/BOTIA_TRAINING_CORPUS.md`
+  - `docs/ai/BOTIA_MODULE_PLAYBOOKS.md`
+
+**Reglas operativas que deben mantenerse:**
+- BotIA no aprende automáticamente a producción.
+- Todo aprendizaje debe ser supervisado por admin o jefe de módulo antes de incorporarse.
+- BotIA no debe aprender groserías, insultos, malos modales ni respuestas agresivas.
+- P0.3 no significa demo final lista.
+- P0.3 no reemplaza los hard gates de P0.2.1.
+- Las acciones críticas siguen siendo determinísticas.
+
+**Interpretación correcta de P0.3:**
+- P0.3 agrega cerebro operativo documentado, taxonomía de intents, entidades, slot rules, políticas de respuesta, escalación y corpus base.
+- P0.3 no autoriza relajar guardrails previos de captura de nombre, resolución de vehículo, servicio obligatorio o validaciones de disponibilidad.
+- La creación de cita, confirmaciones sensibles y demás acciones críticas deben seguir protegidas por lógica determinística y hard gates server-side.
+
+**Pendientes posteriores a P0.3:**
+- Búsqueda por placa/VIN.
+- OCR de tarjeta de circulación por WhatsApp.
+- Widget global BotIA / Requieren asesor.
+- Vistas Hoy / Semana / Mes / Todas en Citas.
+- Automation Engine propio sin n8n.
+- Permisos por rol en Bandeja.
+- Configuración formal por módulo.
+
+**Checklist post-deploy P0.3:**
+- [ ] Probar que P0.2.1 sigue funcionando.
+- [ ] Probar captura de nombre.
+- [ ] Probar captura de vehículo.
+- [ ] Probar servicio obligatorio.
+- [ ] Probar hora ocupada.
+- [ ] Probar "hoy" sin horarios pasados.
+- [ ] Probar "ya te dije".
+- [ ] Probar "dónde queda".
 
 ### 4.7 Email
 
