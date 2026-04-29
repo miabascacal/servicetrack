@@ -923,3 +923,34 @@ No debería ocurrir — los índices parciales únicos en BD previenen duplicado
 - Filtro por sucursal.
 - Filtro por estado.
 - Drag and drop mensual directo sobre calendario.
+
+#### ValidaciÃ³n P0.5 â€” BotIA agencia completa + confirmaciÃ³n correcta
+
+**Problema detectado antes del fix:**
+- BotIA todavÃ­a se presentaba y respondÃ­a como si solo fuera asistente de citas.
+- Solicitudes de refacciones, taller, ventas, CSI o seguros no quedaban canalizadas por mÃ³dulo de forma consistente.
+- Si el cliente aceptaba fecha/hora pero pedÃ­a llamada humana, el flujo podÃ­a terminar como confirmaciÃ³n explÃ­cita aunque negocio requerÃ­a `pendiente_contactar`.
+
+**Correcciones validadas en cÃ³digo:**
+- `classify-intent.ts` y `types.ts` ahora contemplan intents de agencia: refacciones, taller, ventas, CSI, seguros, atenciÃ³n a clientes, recordatorio y confirmaciÃ³n humana.
+- `bandeja.ts` enruta por mÃ³dulo de forma determinÃ­stica y crea escalaciones/actividades usando `ai_settings.escalation_assignee_id` cuando existe, sin hardcodear usuarios.
+- Refacciones ya no responde "solo citas": BotIA pide pieza + vehÃ­culo y canaliza con Refacciones; si no hay acciÃ³n segura suficiente, deja `waiting_agent`.
+- ConfirmaciÃ³n explÃ­cita del cliente â†’ cita `confirmada`.
+- Solicitud de llamada / confirmaciÃ³n humana â†’ cita `pendiente_contactar` + actividad de seguimiento + thread `waiting_agent`.
+- La placa se pide de forma preferente. Si el cliente no la tiene a la mano, el flujo puede continuar con `placa_pendiente`.
+- La polÃ­tica de recordatorio queda alineada al sistema real: WhatsApp un dÃ­a antes solo si la automatizaciÃ³n estÃ¡ activa; llamada solo si se crea actividad para asesor; no se promete llamada automÃ¡tica IA.
+
+**Pendientes posteriores a P0.5:**
+- BÃºsqueda real por placa/VIN.
+- OCR de tarjeta de circulaciÃ³n por WhatsApp.
+- Widget global BotIA / Requiere asesor.
+- Permisos por rol en Bandeja.
+- ConfiguraciÃ³n formal por mÃ³dulo.
+
+**Checklist post-deploy P0.5:**
+- [ ] Cliente pide refacciones y BotIA lo enruta a Refacciones sin decir que solo atiende citas.
+- [ ] Cliente pide cita y BotIA solicita nombre, vehÃ­culo, placa preferente, servicio, fecha y hora.
+- [ ] Cliente pide una hora ocupada y BotIA ofrece alternativas sin escalar si sÃ­ hay horarios disponibles.
+- [ ] Cliente confirma "sÃ­" y la cita queda `confirmada`.
+- [ ] Cliente dice "llÃ¡mame para confirmar" y la cita queda `pendiente_contactar` con actividad para asesor.
+- [ ] Cliente pide recordatorio y BotIA responde con la polÃ­tica real de WhatsApp 24h + seguimiento humano si existe actividad.

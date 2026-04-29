@@ -28,6 +28,8 @@ import { type InfoSucursal } from './bot-crm'
 const client = new Anthropic()
 
 const SYSTEM_PROMPT = `Eres Ara, el asistente virtual de una agencia automotriz en México.
+Atiendes a toda la agencia: citas, taller, refacciones, atención a clientes, ventas, CSI y seguros.
+Si el cliente pide algo fuera de citas, canalízalo al módulo correcto. Nunca digas que solo atiendes citas.
 
 PRIORIDADES (en orden estricto):
 1. Seguimiento de citas YA agendadas del cliente (confirmar, recordar, cancelar si pide)
@@ -70,6 +72,10 @@ PASO 6. Solo con confirmación explícita del cliente, llama a crear_cita
    → Después de crear_cita exitosa: da el mensaje de confirmación con todos los datos
      y termina con "Hasta pronto" — NO hagas más preguntas
    → CRÍTICO: llama a crear_cita SOLO UNA VEZ. Si ya fue creada, NO la vuelvas a crear
+PASO 6.1. Si el cliente acepta fecha/hora pero pide llamada o confirmación humana:
+   → NO confirmes la cita como final
+   → Explica que un asesor debe contactarle
+   → El flujo determinístico la dejará pendiente de confirmación humana
 
 ━━━ REGLA CRÍTICA — NUNCA INVENTAR CONFIRMACIÓN ━━━
 NUNCA uses frases como "tu cita está confirmada", "cita confirmada", "te agendé",
@@ -83,9 +89,10 @@ Si el cliente confirma pero no tienes datos de fecha+hora disponibles → llama 
 - NO repitas preguntas por datos que el cliente ya dio en mensajes anteriores
 - Si el cliente pide hablar con una persona → escalar_a_asesor
 - Si no puedes resolver algo o el cliente está molesto → escalar_a_asesor
+- Si pregunta por recordatorios: explica que el WhatsApp 24h antes depende de que la automatización esté activa
+- Nunca prometas llamadas automáticas de IA
 - Usa formato YYYY-MM-DD internamente; muestra fechas legibles al cliente ("jueves 15 de mayo")
-- Horario de atención: lunes a viernes 8:00–18:00, sábados 9:00–14:00
-- Para recoger tu vehículo trae: factura/tarjeta de circulación, identificación oficial y llaves`
+- Usa únicamente la información de sucursal inyectada en contexto para horario, ubicación y teléfono`
 
 export interface BotMensaje {
   role:    'user' | 'assistant'
@@ -267,7 +274,7 @@ export async function generarRespuestaBot(
   let respuesta = 'En este momento no puedo procesar tu solicitud. Un asesor se pondrá en contacto contigo pronto.'
 
   const systemPrimer = ctx.confirmacion_pendiente
-    ? `\n\n[SISTEMA] Hay confirmación pendiente. Si el cliente dice "sí" o confirma → llama INMEDIATAMENTE a crear_cita con: fecha=${ctx.confirmacion_pendiente.fecha}, hora=${ctx.confirmacion_pendiente.hora}, servicio=${ctx.confirmacion_pendiente.servicio ?? 'sin especificar'}. NO llames consultar_citas_cliente ni ninguna otra herramienta antes.`
+    ? `\n\n[SISTEMA] Hay confirmación pendiente. Si el cliente confirma explícitamente ("sí", "confirmo", "correcto") → llama INMEDIATAMENTE a crear_cita con: fecha=${ctx.confirmacion_pendiente.fecha}, hora=${ctx.confirmacion_pendiente.hora}, servicio=${ctx.confirmacion_pendiente.servicio ?? 'sin especificar'}. Si el cliente pide llamada o confirmación humana, NO confirmes por tu cuenta y escala a asesor. NO llames consultar_citas_cliente ni ninguna otra herramienta antes.`
     : debeConsultarCitas
       ? `\n\n[SISTEMA] Llama AHORA a consultar_citas_cliente antes de responder. No omitas este paso.`
       : ''
@@ -291,7 +298,10 @@ export async function generarRespuestaBot(
           return `\n\n[ESTADO DE AGENDAMIENTO]\n→ El cliente aún no tiene nombre registrado. Pregunta únicamente: "¿Cómo te llamas?" — Solo esta pregunta, nada más.`
         }
         if (f.step === 'capturar_vehiculo') {
-          return `\n\n[ESTADO DE AGENDAMIENTO]\n→ No hay vehículo registrado. Pregunta: "¿Qué vehículo vas a traer? (marca, modelo y año)" — Solo esta pregunta.`
+          return `\n\n[ESTADO DE AGENDAMIENTO]\n→ No hay vehículo registrado. Pregunta: "¿Qué vehículo vas a traer? (marca, modelo y año)" — Solo esta pregunta. Después pide la placa de forma preferente.`
+        }
+        if (f.step === 'capturar_placa') {
+          return `\n\n[ESTADO DE AGENDAMIENTO]\n→ Falta la placa. Pregunta: "¿Me compartes la placa? Si no la tienes a la mano, puedo continuar y dejarla pendiente."`
         }
         if (f.step === 'resolver_vehiculo') {
           const opts = f.vehiculos_opciones ?? []

@@ -7,12 +7,17 @@ import {
   BOTIA_SCHEDULING_PHRASES,
   BOTIA_SERVICE_SYNONYMS,
   BOTIA_VEHICLE_HINTS,
+  BOTIA_HUMAN_CONFIRMATION_PATTERNS,
+  BOTIA_REMINDER_PATTERNS,
+  BOTIA_PLATE_PENDING_PATTERNS,
+  BOTIA_EXPLICIT_REJECTION_PATTERNS,
 } from '@/lib/ai/botia-brain'
 
 export type AppointmentFlowStep =
   | 'capturar_nombre'
   | 'resolver_vehiculo'
   | 'capturar_vehiculo'
+  | 'capturar_placa'
   | 'capturar_servicio'
   | 'capturar_fecha'
   | 'capturar_hora'
@@ -24,6 +29,8 @@ export interface AppointmentFlowState {
   step:                     AppointmentFlowStep
   nombre_resuelto?:         boolean
   vehiculo_resuelto?:       boolean
+  placa?:                   string | null
+  placa_pendiente?:         boolean
   vehiculos_opciones?:      Array<{ id: string; descripcion: string }>
   servicio?:                string | null
   fecha?:                   string | null
@@ -46,7 +53,7 @@ export function getAppointmentFlowState(metadata: unknown): AppointmentFlowState
 
   const VALID = new Set<string>([
     'capturar_nombre', 'resolver_vehiculo', 'capturar_vehiculo',
-    'capturar_servicio', 'capturar_fecha', 'capturar_hora',
+    'capturar_placa', 'capturar_servicio', 'capturar_fecha', 'capturar_hora',
     'esperando_confirmacion', 'completado', 'escalado',
   ])
   if (!VALID.has(f.step)) return null
@@ -69,6 +76,8 @@ export function getAppointmentFlowState(metadata: unknown): AppointmentFlowState
     step:                f.step as AppointmentFlowStep,
     nombre_resuelto:     f.nombre_resuelto   === true ? true : undefined,
     vehiculo_resuelto:   f.vehiculo_resuelto === true ? true : undefined,
+    placa:               typeof f.placa       === 'string' ? f.placa       : null,
+    placa_pendiente:     f.placa_pendiente === true ? true : undefined,
     vehiculos_opciones,
     servicio:            typeof f.servicio    === 'string' ? f.servicio    : null,
     fecha:               typeof f.fecha       === 'string' ? f.fecha       : null,
@@ -89,6 +98,7 @@ export function mergeAppointmentFlowState(
 }
 
 export function nextStep(state: AppointmentFlowState): AppointmentFlowStep {
+  if (!state.placa && !state.placa_pendiente) return 'capturar_placa'
   if (!state.servicio) return 'capturar_servicio'
   if (!state.fecha)    return 'capturar_fecha'
   if (!state.hora)     return 'capturar_hora'
@@ -241,6 +251,11 @@ export function parsearHora(texto: string): string | null {
   return null
 }
 
+export function parsearPlaca(texto: string): string | null {
+  const placaM = texto.match(/\b([A-Z]{2,3}[-\s]?\d{3,4}[A-Z]{0,2}|\d{3,4}[-\s]?[A-Z]{2,3})\b/i)
+  return placaM ? placaM[1].replace(/[-\s]/g, '').toUpperCase() : null
+}
+
 // ── Intent helpers ────────────────────────────────────────────────────────────
 
 export function isAfirmacionFlow(texto: string): boolean {
@@ -256,6 +271,26 @@ export function isAfirmacionFlow(texto: string): boolean {
 export function isFrustracion(texto: string): boolean {
   const t = texto.toLowerCase()
   return BOTIA_FRUSTRATION_PATTERNS.some(f => t.includes(f))
+}
+
+export function isSolicitudConfirmacionHumana(texto: string): boolean {
+  const t = texto.toLowerCase()
+  return BOTIA_HUMAN_CONFIRMATION_PATTERNS.some(pattern => t.includes(pattern))
+}
+
+export function isSolicitudRecordatorio(texto: string): boolean {
+  const t = texto.toLowerCase()
+  return BOTIA_REMINDER_PATTERNS.some(pattern => t.includes(pattern))
+}
+
+export function isNoTienePlaca(texto: string): boolean {
+  const t = texto.toLowerCase()
+  return BOTIA_PLATE_PENDING_PATTERNS.some(pattern => t.includes(pattern))
+}
+
+export function isRechazoCita(texto: string): boolean {
+  const t = texto.toLowerCase()
+  return BOTIA_EXPLICIT_REJECTION_PATTERNS.some(pattern => t.includes(pattern))
 }
 
 // ── P0.2 Parsers ─────────────────────────────────────────────────────────────

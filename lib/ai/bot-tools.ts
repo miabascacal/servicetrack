@@ -94,6 +94,8 @@ export async function crearCitaBot(params: {
   servicio?:    string | null
   confirmada?:  boolean    // true → estado 'confirmada' (cliente ya confirmó)
   vehiculo_id?: string | null
+  notas?:       string | null
+  tipoActividad?: string | null
 }): Promise<{ id: string; confirmacion: string } | { error: string }> {
   // Hard gates — protect DB against incomplete citas regardless of caller
   if (!params.vehiculo_id) {
@@ -154,19 +156,21 @@ export async function crearCitaBot(params: {
   // Crear actividad de trazabilidad (best-effort — no falla la operación principal)
   try {
     const fechaProgr = new Date(`${params.fecha}T${params.hora}:00`).toISOString()
-    const srv        = params.servicio ? `: ${params.servicio}` : ''
-    const descripcion = `Cita confirmada por BotIA${srv} — ${params.fecha} ${params.hora}`
+    const srv = params.servicio ? `: ${params.servicio}` : ''
+    const descripcion = params.confirmada
+      ? `Cita confirmada por BotIA${srv} — ${params.fecha} ${params.hora}`
+      : `Cita creada por BotIA pendiente de confirmacion humana${srv} — ${params.fecha} ${params.hora}`
 
     const actividadData: Record<string, unknown> = {
       sucursal_id:      params.sucursal_id,
       cliente_id:       params.cliente_id,
       cita_id:          citaId,
-      tipo:             'cita_agendada',
+      tipo:             params.tipoActividad ?? (params.confirmada ? 'cita_agendada' : 'confirmacion_cita'),
       descripcion,
-      estado:           'realizada',
+      estado:           params.confirmada ? 'realizada' : 'pendiente',
       prioridad:        'normal',
-      completada:       true,
-      realizada_at:     now,
+      completada:       params.confirmada,
+      realizada_at:     params.confirmada ? now : null,
       fecha_programada: fechaProgr,
       fecha_vencimiento: fechaProgr,
       modulo_origen:    'ia',
@@ -174,6 +178,7 @@ export async function crearCitaBot(params: {
         const lines: string[] = []
         if (!responsableId)      lines.push('Sin responsable configurado en ai_settings.escalation_assignee_id')
         if (!params.vehiculo_id) lines.push('Vehículo pendiente por confirmar')
+        if (params.notas)        lines.push(params.notas)
         return lines.length > 0 ? lines.join(' — ') : null
       })(),
     }
@@ -188,11 +193,64 @@ export async function crearCitaBot(params: {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
   })
   const srvLabel = params.servicio ? ` para ${params.servicio}` : ''
+  const confirmacion = params.confirmada
+    ? `Cita${srvLabel} confirmada para el ${fechaLegible} a las ${params.hora} hrs.`
+    : `Cita${srvLabel} registrada como pendiente de confirmación para el ${fechaLegible} a las ${params.hora} hrs.`
 
   return {
     id:           citaId,
-    confirmacion: `Cita${srvLabel} confirmada para el ${fechaLegible} a las ${params.hora} hrs.`,
+    confirmacion,
   }
+}
+
+export async function crearActividadBot(params: {
+  sucursal_id:          string
+  cliente_id:           string
+  tipo:                 string
+  descripcion:          string
+  prioridad?:           string
+  fecha_programada?:    string | null
+  cita_id?:             string | null
+  vehiculo_id?:         string | null
+  modulo_origen?:       string
+  notas?:               string | null
+  usuario_asignado_id?: string | null
+}): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('actividades')
+    .insert({
+      sucursal_id:        params.sucursal_id,
+      cliente_id:         params.cliente_id,
+      cita_id:            params.cita_id ?? null,
+      vehiculo_id:        params.vehiculo_id ?? null,
+      tipo:               params.tipo,
+      descripcion:        params.descripcion,
+      estado:             'pendiente',
+      prioridad:          params.prioridad ?? 'normal',
+      fecha_programada:   params.fecha_programada ?? null,
+      fecha_vencimiento:  params.fecha_programada ?? null,
+      modulo_origen:      params.modulo_origen ?? 'ia',
+      notas:              params.notas ?? null,
+      usuario_asignado_id: params.usuario_asignado_id ?? null,
+      completada:         false,
+    })
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+export async function obtenerEscalationAssigneeId(
+  sucursal_id: string,
+): Promise<string | null> {
+  const supabase = createAdminClient()
+  const { data: aiCfg } = await supabase
+    .from('ai_settings')
+    .select('escalation_assignee_id')
+    .eq('sucursal_id', sucursal_id)
+    .maybeSingle()
+
+  return (aiCfg as { escalation_assignee_id?: string | null } | null)?.escalation_assignee_id ?? null
 }
 
 // ── Seguimiento de citas existentes ──────────────────────────────────────────

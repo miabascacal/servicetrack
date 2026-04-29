@@ -10,9 +10,11 @@ import { generarRespuestaBot, type CitaProxima } from '@/lib/ai/bot-citas'
 import { generarRespuestaSimple } from '@/lib/ai/bot-respuestas'
 import {
   crearCitaBot,
+  crearActividadBot,
   confirmarCitaBot,
   guardarConfirmacionPendiente,
   limpiarConfirmacionPendiente,
+  obtenerEscalationAssigneeId,
   type ConfirmacionPendiente,
 } from '@/lib/ai/bot-tools'
 import {
@@ -27,19 +29,29 @@ import {
   parsearServicio,
   parsearFecha,
   parsearHora,
+  parsearPlaca,
   parsearNombre,
   parsearVehiculo,
   parsearSeleccion,
   isNegacion,
+  isNoTienePlaca,
+  isRechazoCita,
+  isSolicitudConfirmacionHumana,
+  isSolicitudRecordatorio,
   isClientePlaceholder,
   type AppointmentFlowState,
 } from '@/lib/ai/appointment-flow'
 import {
   buscarVehiculosCliente,
   crearVehiculoYVincularBot,
+  actualizarPlacaVehiculoBot,
   actualizarNombreClienteBot,
   leerInfoSucursal,
 } from '@/lib/ai/bot-crm'
+import {
+  BOTIA_AGENCY_MODULE_KEYWORDS,
+  BOTIA_ESCALATION_REASONS,
+} from '@/lib/ai/botia-brain'
 
 export interface MensajeRow {
   id:             string
@@ -238,6 +250,66 @@ function parsePendingConfirmation(metadata: unknown): ConfirmacionPendiente | nu
   }
 }
 
+type AgencyModule =
+  | 'citas'
+  | 'taller'
+  | 'refacciones'
+  | 'atencion_clientes'
+  | 'ventas'
+  | 'csi'
+  | 'seguros'
+
+function detectAgencyModule(
+  message: string,
+  intent: string,
+): AgencyModule | null {
+  const lowered = message.toLowerCase()
+
+  if (intent === 'agendar_cita') return 'citas'
+  if (intent === 'consulta_estado_ot' || intent === 'solicitud_taller') return 'taller'
+  if (intent === 'solicitud_refacciones') return 'refacciones'
+  if (intent === 'solicitud_ventas') return 'ventas'
+  if (intent === 'solicitud_csi') return 'csi'
+  if (intent === 'solicitud_seguros') return 'seguros'
+  if (intent === 'solicitud_atencion_clientes' || intent === 'queja') return 'atencion_clientes'
+
+  for (const [moduleName, keywords] of Object.entries(BOTIA_AGENCY_MODULE_KEYWORDS)) {
+    if (keywords.some(keyword => lowered.includes(keyword))) {
+      return moduleName as AgencyModule
+    }
+  }
+
+  return null
+}
+
+function formatReminderPolicyResponse(): string {
+  return 'Si la automatización está activa, recibirás recordatorio por WhatsApp un día antes de tu cita.\nSi se crea una actividad para asesor, también pueden darte seguimiento por llamada.'
+}
+
+async function crearEscalacionAgencia(params: {
+  sucursal_id: string
+  cliente_id: string
+  modulo: AgencyModule
+  descripcion: string
+  notas?: string | null
+  vehiculo_id?: string | null
+  cita_id?: string | null
+}) {
+  const responsableId = await obtenerEscalationAssigneeId(params.sucursal_id)
+  await crearActividadBot({
+    sucursal_id: params.sucursal_id,
+    cliente_id: params.cliente_id,
+    tipo: `seguimiento_${params.modulo}`,
+    descripcion: params.descripcion,
+    prioridad: 'normal',
+    modulo_origen: params.modulo,
+    notas: params.notas ?? null,
+    vehiculo_id: params.vehiculo_id ?? null,
+    cita_id: params.cita_id ?? null,
+    usuario_asignado_id: responsableId,
+  })
+}
+
 /**
  * Simula un mensaje entrante de WhatsApp sin necesidad de número Meta activo.
  * Crea o reutiliza un cliente DEMO por teléfono, persiste en mensajes,
@@ -403,6 +475,71 @@ export async function simularMensajeAction(params: {
   // Falls through to existing step-5a/5b/5c when state machine doesn't handle it.
   let flowState: AppointmentFlowState | null = getAppointmentFlowState(existingThread?.metadata ?? null)
   const frustrado = isFrustracion(params.mensaje)
+  const currentModule = detectAgencyModule(params.mensaje, intentResult.intent)
+
+  if (!skipBot && isSolicitudRecordatorio(params.mensaje)) {
+    respuesta = formatReminderPolicyResponse()
+    skipBot = true
+  }
+
+  if (!skipBot && currentModule && currentModule !== 'citas' && !flowState) {
+    const vehiculoDetectado = parsearVehiculo(params.mensaje)
+    const placaDetectada = parsearPlaca(params.mensaje)
+    const notasModulo = [
+      vehiculoDetectado
+        ? `Vehiculo: ${vehiculoDetectado.marca} ${vehiculoDetectado.modelo} ${vehiculoDetectado.anio}`
+        : null,
+      placaDetectada ? `Placa/VIN referencial: ${placaDetectada}` : null,
+      `Mensaje original: ${params.mensaje}`,
+    ].filter(Boolean).join(' — ')
+
+    if (currentModule === 'refacciones') {
+      const tieneVehiculo = vehiculoDetectado || placaDetectada
+      const tienePieza = /refaccion|refacciones|pieza|piezas|balata|balatas|filtro|parabrisas|faro|fascia|bateria|amortiguador|llanta/i.test(params.mensaje)
+
+      if (!tienePieza || !tieneVehiculo) {
+        respuesta = 'Claro, te ayudo a canalizar tu solicitud con Refacciones.\n¿Qué pieza necesitas y para qué vehículo?'
+        skipBot = true
+      } else {
+        await crearEscalacionAgencia({
+          sucursal_id,
+          cliente_id: cliente.id as string,
+          modulo: 'refacciones',
+          descripcion: 'Solicitud de refacciones recibida por BotIA',
+          notas: notasModulo,
+        })
+        respuesta = 'Claro, ya dejé tu solicitud canalizada con Refacciones.\nUn asesor revisará la pieza y te dará seguimiento.'
+        handoff = true
+        skipBot = true
+      }
+    } else {
+      const reasonMap: Record<Exclude<AgencyModule, 'citas' | 'refacciones'>, string> = {
+        taller: BOTIA_ESCALATION_REASONS.TALLER,
+        atencion_clientes: BOTIA_ESCALATION_REASONS.ATENCION_CLIENTES,
+        ventas: BOTIA_ESCALATION_REASONS.VENTAS,
+        csi: BOTIA_ESCALATION_REASONS.CSI,
+        seguros: BOTIA_ESCALATION_REASONS.SEGUROS,
+      }
+      await crearEscalacionAgencia({
+        sucursal_id,
+        cliente_id: cliente.id as string,
+        modulo: currentModule,
+        descripcion: `Solicitud de ${currentModule} recibida por BotIA`,
+        notas: `${reasonMap[currentModule as Exclude<AgencyModule, 'citas' | 'refacciones'>]} — ${notasModulo}`,
+      })
+
+      const messageMap: Record<Exclude<AgencyModule, 'citas' | 'refacciones'>, string> = {
+        taller: 'Claro, te ayudo a canalizar tu solicitud con Taller.\nUn asesor revisará tu caso y te dará seguimiento.',
+        atencion_clientes: 'Entiendo. Voy a canalizar tu caso con Atención a Clientes para revisarlo contigo.',
+        ventas: 'Claro, te ayudo a canalizar tu solicitud con Ventas.\nUn asesor te contactará para continuar.',
+        csi: 'Gracias por compartirlo. Voy a canalizar tu comentario con el área correspondiente.',
+        seguros: 'Claro, te ayudo a canalizarlo con Seguros.\nUn asesor revisará tu caso y te contactará.',
+      }
+      respuesta = messageMap[currentModule as Exclude<AgencyModule, 'citas' | 'refacciones'>]
+      handoff = true
+      skipBot = true
+    }
+  }
 
   const shouldProcessFlow =
     flowState !== null ||
@@ -478,7 +615,12 @@ export async function simularMensajeAction(params: {
 
         if (idx !== null) {
           // Client selected an existing vehicle
-          flowState = { ...flowState, vehiculo_id: opciones[idx].id, vehiculo_resuelto: true }
+          flowState = {
+            ...flowState,
+            vehiculo_id: opciones[idx].id,
+            vehiculo_resuelto: true,
+            placa: parsearPlaca(opciones[idx].descripcion),
+          }
           // Fall through to Step C
         } else if (isNegacion(params.mensaje)) {
           // Client wants a different vehicle not in the list → capture new one
@@ -492,7 +634,13 @@ export async function simularMensajeAction(params: {
           if (vData) {
             const vRes = await crearVehiculoYVincularBot({ grupo_id, cliente_id: cliente.id as string, ...vData })
             if ('id' in vRes) {
-              flowState = { ...flowState, vehiculo_id: vRes.id, vehiculo_resuelto: true }
+              flowState = {
+                ...flowState,
+                vehiculo_id: vRes.id,
+                vehiculo_resuelto: true,
+                placa: vData.placa ?? null,
+                placa_pendiente: vData.placa ? false : undefined,
+              }
               // Fall through to Step C
             } else {
               await setAppointmentFlowState(thread_id, flowState)
@@ -518,7 +666,13 @@ export async function simularMensajeAction(params: {
         if (vData) {
           const vRes = await crearVehiculoYVincularBot({ grupo_id, cliente_id: cliente.id as string, ...vData })
           if ('id' in vRes) {
-            flowState = { ...flowState, vehiculo_id: vRes.id, vehiculo_resuelto: true }
+            flowState = {
+              ...flowState,
+              vehiculo_id: vRes.id,
+              vehiculo_resuelto: true,
+              placa: vData.placa ?? null,
+              placa_pendiente: vData.placa ? false : undefined,
+            }
             // Fall through to Step C
           } else {
             await setAppointmentFlowState(thread_id, flowState)
@@ -568,6 +722,27 @@ export async function simularMensajeAction(params: {
     }
 
     // ── Step C: Service / fecha / hora / confirmation (P0.1) ─────────────────
+    if (!skipBot && flowState.nombre_resuelto && flowState.vehiculo_resuelto && !flowState.placa && !flowState.placa_pendiente) {
+      const placaDetectada = parsearPlaca(params.mensaje)
+
+      if (placaDetectada && flowState.vehiculo_id) {
+        const updPlaca = await actualizarPlacaVehiculoBot({
+          vehiculo_id: flowState.vehiculo_id,
+          placa: placaDetectada,
+        })
+        if (updPlaca.ok) {
+          flowState = { ...flowState, placa: placaDetectada, placa_pendiente: false }
+        }
+      } else if (isNoTienePlaca(params.mensaje)) {
+        flowState = { ...flowState, placa_pendiente: true, step: 'capturar_servicio' }
+      } else {
+        flowState = { ...flowState, step: 'capturar_placa' }
+        await setAppointmentFlowState(thread_id, flowState)
+        respuesta = `Â¿Me compartes la placa? Si no la tienes a la mano, puedo continuar y dejarla pendiente.`
+        skipBot = true
+      }
+    }
+
     // Safety gate: only proceed if both name and vehicle are resolved.
     if (!skipBot && flowState.nombre_resuelto && flowState.vehiculo_resuelto) {
       // If coming from a vehicle step, transition to service capture
@@ -590,7 +765,39 @@ export async function simularMensajeAction(params: {
       flowState = mergeAppointmentFlowState(flowState, patch)
       flowState = { ...flowState, step: nextStep(flowState) }
 
-      if (flowState.step === 'esperando_confirmacion' && isAfirmacionFlow(params.mensaje)) {
+      if (flowState.step === 'esperando_confirmacion' && isSolicitudConfirmacionHumana(params.mensaje)) {
+        const flowResult = await crearCitaBot({
+          sucursal_id,
+          cliente_id:  cliente.id as string,
+          fecha:       flowState.fecha!,
+          hora:        flowState.hora!,
+          servicio:    flowState.servicio ?? undefined,
+          vehiculo_id: flowState.vehiculo_id ?? undefined,
+          confirmada:  false,
+          notas: flowState.placa_pendiente ? 'Placa pendiente por compartir por el cliente' : null,
+          tipoActividad: 'confirmacion_cita',
+        })
+        if ('id' in flowResult) {
+          cita_id = flowResult.id
+          await crearEscalacionAgencia({
+            sucursal_id,
+            cliente_id: cliente.id as string,
+            modulo: 'citas',
+            descripcion: 'Cita pendiente de confirmacion humana creada por BotIA',
+            notas: `Cliente pidió llamada para confirmar. Cita ${flowState.fecha} ${flowState.hora}${flowState.placa_pendiente ? ' — placa pendiente' : ''}`,
+            vehiculo_id: flowState.vehiculo_id ?? null,
+            cita_id: flowResult.id,
+          })
+          respuesta = `Entendido. Dejo tu cita como pendiente de confirmaciÃ³n para que un asesor te contacte.\nAdemÃ¡s, si la automatizaciÃ³n estÃ¡ activa, recibirÃ¡s recordatorio por WhatsApp un dÃ­a antes de tu cita.`
+          flowState = { ...flowState, step: 'completado', cita_id: flowResult.id }
+          handoff = true
+          skipBot = true
+        }
+      } else if (flowState.step === 'esperando_confirmacion' && isRechazoCita(params.mensaje)) {
+        respuesta = `Entendido, no la confirmo.\nSi quieres te ayudo a buscar otro horario o lo canalizo con un asesor.`
+        flowState = { ...flowState, step: 'capturar_hora', hora: null }
+        skipBot = true
+      } else if (flowState.step === 'esperando_confirmacion' && isAfirmacionFlow(params.mensaje)) {
         const flowResult = await crearCitaBot({
           sucursal_id,
           cliente_id:  cliente.id as string,
@@ -599,6 +806,7 @@ export async function simularMensajeAction(params: {
           servicio:    flowState.servicio ?? undefined,
           vehiculo_id: flowState.vehiculo_id ?? undefined,
           confirmada:  true,
+          notas: flowState.placa_pendiente ? 'Placa pendiente por compartir por el cliente' : null,
         })
         if ('id' in flowResult) {
           cita_id = flowResult.id
@@ -625,14 +833,44 @@ export async function simularMensajeAction(params: {
 
   const pendingConf = parsePendingConfirmation(existingThread?.metadata)
 
-  if (!skipBot && pendingConf && isAfirmacion(params.mensaje)) {
+  if (!skipBot && pendingConf && isSolicitudConfirmacionHumana(params.mensaje)) {
     const result = await crearCitaBot({
       sucursal_id,
       cliente_id: cliente.id,
       fecha:      pendingConf.fecha,
       hora:       pendingConf.hora,
       servicio:   pendingConf.servicio ?? undefined,
+      vehiculo_id: flowState?.vehiculo_id ?? null,
+      confirmada: false,
+      notas: flowState?.placa_pendiente ? 'Placa pendiente por compartir por el cliente' : null,
+      tipoActividad: 'confirmacion_cita',
+    })
+    if ('id' in result) {
+      cita_id = result.id
+      await crearEscalacionAgencia({
+        sucursal_id,
+        cliente_id: cliente.id as string,
+        modulo: 'citas',
+        descripcion: 'Cita pendiente de confirmacion humana creada por BotIA',
+        notas: `Cliente pidió llamada para confirmar. Cita ${pendingConf.fecha} ${pendingConf.hora}${flowState?.placa_pendiente ? ' — placa pendiente' : ''}`,
+        vehiculo_id: flowState?.vehiculo_id ?? null,
+        cita_id: result.id,
+      })
+      respuesta = `Entendido. Dejo tu cita como pendiente de confirmaciÃ³n para que un asesor te contacte.\nAdemÃ¡s, si la automatizaciÃ³n estÃ¡ activa, recibirÃ¡s recordatorio por WhatsApp un dÃ­a antes de tu cita.`
+      handoff = true
+      skipBot = true
+      await limpiarConfirmacionPendiente(thread_id)
+    }
+  } else if (!skipBot && pendingConf && isAfirmacion(params.mensaje)) {
+    const result = await crearCitaBot({
+      sucursal_id,
+      cliente_id: cliente.id,
+      fecha:      pendingConf.fecha,
+      hora:       pendingConf.hora,
+      servicio:   pendingConf.servicio ?? undefined,
+      vehiculo_id: flowState?.vehiculo_id ?? null,
       confirmada: true,
+      notas: flowState?.placa_pendiente ? 'Placa pendiente por compartir por el cliente' : null,
     })
     if ('id' in result) {
       cita_id  = result.id

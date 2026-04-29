@@ -12,6 +12,14 @@ const VALID_INTENTS: IntentTipo[] = [
   'consulta_estado_ot',
   'consulta_presupuesto',
   'consulta_horario',
+  'solicitud_refacciones',
+  'solicitud_taller',
+  'solicitud_ventas',
+  'solicitud_csi',
+  'solicitud_seguros',
+  'solicitud_atencion_clientes',
+  'solicitud_recordatorio',
+  'solicitud_confirmacion_humana',
   'saludo',
   'queja',
   'confirmacion',
@@ -30,6 +38,14 @@ Intenciones posibles:
 - consulta_estado_ot: pregunta por el estado de su vehículo u orden de trabajo activa
 - consulta_presupuesto: pregunta por precios, cotizaciones o costos
 - consulta_horario: pregunta por horarios de atención, ubicación o información general
+- solicitud_refacciones: pide una pieza, refacción o disponibilidad de partes
+- solicitud_taller: pide apoyo de taller o seguimiento general de trabajo fuera de cita nueva
+- solicitud_ventas: pide cotización de vehículo, financiamiento o seguimiento comercial
+- solicitud_csi: pide encuesta, calificación, reseña o seguimiento de satisfacción
+- solicitud_seguros: pide apoyo con aseguradora, siniestro o deducible
+- solicitud_atencion_clientes: pide supervisor, atención a clientes o expresa problema de servicio
+- solicitud_recordatorio: pide que le recuerden la cita o pregunta si le llamarán antes
+- solicitud_confirmacion_humana: acepta propuesta de cita pero pide que un asesor llame o confirme
 - saludo: solo saluda sin intención específica
 - queja: expresa molestia, insatisfacción o reclamo
 - confirmacion: confirma recepción de información genérica (no relacionada con asistencia a cita)

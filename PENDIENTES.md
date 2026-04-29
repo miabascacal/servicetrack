@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-28 — P0.3 BotIA Operational Brain: docs/ai/ 9 archivos, lib/ai/botia-brain.ts con constantes centralizadas, appointment-flow.ts integrado sin duplicados inline._
+_Actualizado: 2026-04-28 — P0.5 BotIA agencia completa + política de confirmación humana; P0.4.1 corrige filtros reales de Citas y agrega calendario mensual._
 
 ---
 
@@ -818,3 +818,31 @@ Orden recomendado:
 - [ ] Filtro por sucursal
 - [ ] Filtro por estado
 - [ ] Drag and drop directo sobre calendario
+
+---
+
+## P0.5 BotIA agencia completa + confirmaciÃ³n correcta â€” COMPLETADO 2026-04-28
+
+> BotIA deja de hablar como si solo fuera asistente de citas. Ahora enruta solicitudes por mÃ³dulo y diferencia confirmaciÃ³n explÃ­cita vs solicitud de llamada humana.
+
+### QuÃ© implementa P0.5
+
+| Elemento | Estado |
+|---------|--------|
+| BotIA asistente de agencia | âœ… citas, taller, refacciones, atenciÃ³n a clientes, ventas, CSI, seguros |
+| Enrutamiento por mÃ³dulo con escalaciÃ³n segura | âœ… implementado |
+| Refacciones: pedir pieza + vehÃ­culo y canalizar | âœ… implementado |
+| ConfirmaciÃ³n humana â‰  confirmaciÃ³n explÃ­cita | âœ… implementado |
+| `pendiente_contactar` si cliente pide llamada | âœ… implementado |
+| PolÃ­tica real de recordatorio 24h | âœ… implementado |
+| Hora ocupada ofrece alternativas sin escalar | âœ… se mantiene |
+| Placa preferente, pero no hard gate | âœ… implementado |
+
+### Pendientes posteriores a P0.5
+
+- [ ] BÃºsqueda real por placa/VIN en CRM desde BotIA
+- [ ] OCR de tarjeta de circulaciÃ³n por WhatsApp
+- [ ] Widget global BotIA / Requiere asesor
+- [ ] Permisos por rol en Bandeja
+- [ ] ConfiguraciÃ³n formal por mÃ³dulo
+- [ ] Llamada automÃ¡tica IA no implementada

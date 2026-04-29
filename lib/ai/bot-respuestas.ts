@@ -21,7 +21,7 @@ export function generarRespuestaSimple(params: RespuestaSimpleParams): Respuesta
   switch (params.intent) {
     case 'saludo':
       return {
-        respuesta: `¡Hola ${nombre}! Soy Ara, el asistente de citas de la agencia. 😊\n\n¿En qué puedo ayudarte hoy? Puedo:\n• Agendar una cita de servicio\n• Informarte sobre horarios y ubicación`,
+        respuesta: `¡Hola ${nombre}! Soy Ara, el asistente de la agencia.\nPuedo ayudarte con citas, taller, refacciones, ventas y atención general.\n¿Qué necesitas hoy?`,
         handoff: false,
       }
 
@@ -52,6 +52,54 @@ export function generarRespuestaSimple(params: RespuestaSimpleParams): Respuesta
     case 'consulta_presupuesto':
       return {
         respuesta: `Hola ${nombre}, los presupuestos los prepara un asesor especializado según el diagnóstico de tu vehículo. Te contactarán en breve con toda la información.`,
+        handoff: true,
+      }
+
+    case 'solicitud_refacciones':
+      return {
+        respuesta: `Claro, ${nombre}. Te ayudo a canalizar tu solicitud con Refacciones.\n¿Qué pieza necesitas y para qué vehículo?`,
+        handoff: false,
+      }
+
+    case 'solicitud_taller':
+      return {
+        respuesta: `Hola ${nombre}, te ayudo con Taller.\nCuéntame qué necesitas revisar de tu vehículo para canalizarlo correctamente.`,
+        handoff: false,
+      }
+
+    case 'solicitud_ventas':
+      return {
+        respuesta: `Hola ${nombre}, te ayudo a canalizar tu solicitud con Ventas.\n¿Qué vehículo o cotización te interesa?`,
+        handoff: false,
+      }
+
+    case 'solicitud_csi':
+      return {
+        respuesta: `Gracias, ${nombre}. Te ayudo con tu seguimiento de satisfacción.\nCuéntame tu comentario para canalizarlo con el área correcta.`,
+        handoff: false,
+      }
+
+    case 'solicitud_seguros':
+      return {
+        respuesta: `Hola ${nombre}, te ayudo a canalizarlo con Seguros.\n¿Me compartes qué pasó y para qué vehículo es?`,
+        handoff: false,
+      }
+
+    case 'solicitud_atencion_clientes':
+      return {
+        respuesta: `Entiendo, ${nombre}. Voy a canalizar tu caso con Atención a Clientes para revisarlo contigo.`,
+        handoff: true,
+      }
+
+    case 'solicitud_recordatorio':
+      return {
+        respuesta: `Si la automatización está activa, recibirás recordatorio por WhatsApp un día antes de tu cita.\nSi necesitas llamada de un asesor, debo dejar una actividad para seguimiento.`,
+        handoff: false,
+      }
+
+    case 'solicitud_confirmacion_humana':
+      return {
+        respuesta: `Entendido, ${nombre}. Lo dejo pendiente para que un asesor te contacte y confirme contigo.`,
         handoff: true,
       }
 

@@ -109,6 +109,21 @@ export async function actualizarNombreClienteBot(params: {
   return { ok: true }
 }
 
+export async function actualizarPlacaVehiculoBot(params: {
+  vehiculo_id: string
+  placa:       string
+}): Promise<{ ok: boolean; error?: string }> {
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('vehiculos')
+    .update({ placa: params.placa.toUpperCase() })
+    .eq('id', params.vehiculo_id)
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
 export async function leerInfoSucursal(
   sucursal_id: string,
 ): Promise<InfoSucursal | null> {

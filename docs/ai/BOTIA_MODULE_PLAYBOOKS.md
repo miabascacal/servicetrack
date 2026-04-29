@@ -232,3 +232,20 @@ Cada módulo necesitará config propia:
 | CSI | horas_post_entrega_encuesta |
 | Ventas | dias_inactividad_followup |
 | Bot general | max_reintentos, umbral_frustracion, escalation_assignee |
+## Addendum P0.5 â€” mÃ³dulos de agencia
+
+### Refacciones
+- BotIA debe responder como asistente de agencia.
+- Datos mÃ­nimos a pedir: pieza/refacciÃ³n, vehÃ­culo y placa/VIN si el cliente la tiene.
+- Si hay datos suficientes, canalizar a Refacciones con actividad segura.
+- Si faltan datos o no hay acciÃ³n segura suficiente, mantener la conversaciÃ³n abierta y dejar `waiting_agent`.
+
+### ConfirmaciÃ³n de cita
+- ConfirmaciÃ³n explÃ­cita del cliente â†’ cita `confirmada`.
+- Solicitud de llamada o confirmaciÃ³n humana â†’ cita `pendiente_contactar` + actividad para asesor + thread `waiting_agent`.
+- Rechazo de la cita â†’ no crear cita confirmada; ofrecer reagendar o asesor.
+
+### Recordatorios
+- WhatsApp un dÃ­a antes solo si la automatizaciÃ³n estÃ¡ activa.
+- Llamada humana solo si existe actividad para asesor.
+- Llamada automÃ¡tica IA sigue pendiente.

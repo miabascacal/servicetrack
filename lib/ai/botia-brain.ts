@@ -91,6 +91,96 @@ export const BOTIA_INTENTS = {
   QUEJA_CLIENTE:           'queja_cliente',
 } as const
 
+export const BOTIA_AGENCY_MODULE_KEYWORDS = {
+  citas: [
+    'cita', 'agendar', 'agendame', 'agendarme', 'servicio', 'mantenimiento',
+    'cambio de aceite', 'diagnostico', 'revision', 'frenos',
+  ],
+  taller: [
+    'taller', 'orden de trabajo', 'ot', 'estado de mi carro', 'estado de mi coche',
+    'estado de mi vehiculo', 'ya quedo mi carro', 'cuando sale',
+  ],
+  refacciones: [
+    'refaccion', 'refacciones', 'pieza', 'piezas', 'balata', 'balatas', 'filtro',
+    'parabrisas', 'faro', 'fascia', 'bateria', 'amortiguador', 'llanta',
+  ],
+  atencion_clientes: [
+    'queja', 'reclamo', 'mal servicio', 'atencion a clientes', 'supervisor',
+    'gerente', 'no me atendieron',
+  ],
+  ventas: [
+    'cotizacion', 'comprar', 'comprar auto', 'comprar coche', 'seminuevo',
+    'nuevo', 'financiamiento', 'enganche', 'mensualidad',
+  ],
+  csi: [
+    'encuesta', 'satisfaccion', 'calificacion', 'opinion', 'resena', 'reseña',
+  ],
+  seguros: [
+    'seguro', 'aseguradora', 'siniestro', 'deducible', 'choque', 'valuacion', 'valuación',
+  ],
+} as const
+
+export const BOTIA_HUMAN_CONFIRMATION_PATTERNS = [
+  'llamame para confirmar',
+  'llámame para confirmar',
+  'quiero que me confirme un asesor',
+  'quiero que me confirme alguien',
+  'que me llame un asesor',
+  'que me llamen',
+  'tu debes llamarme',
+  'tú debes llamarme',
+  'no confirmo por aqui',
+  'no confirmo por aquí',
+  'prefiero que me llamen',
+  'prefiero confirmarlo por llamada',
+  'quiero que me contacten',
+  'quiero hablar con un asesor para confirmar',
+  'mejor por llamada',
+  'mejor llamame',
+  'mejor llámame',
+] as const
+
+export const BOTIA_REMINDER_PATTERNS = [
+  'recordatorio',
+  'me recuerdas',
+  'me recuerdan',
+  'me mandas recordatorio',
+  'me mandan recordatorio',
+  'me llamas antes',
+  'me llaman antes',
+  'me avisas antes',
+] as const
+
+export const BOTIA_PLATE_PENDING_PATTERNS = [
+  'no tengo la placa',
+  'no tengo placa',
+  'no la tengo a la mano',
+  'no la traigo',
+  'te la paso despues',
+  'te la paso después',
+  'luego te la paso',
+  'la placa luego',
+  'sin placa',
+  'no recuerdo la placa',
+  'no me la se',
+  'no me la sé',
+] as const
+
+export const BOTIA_EXPLICIT_REJECTION_PATTERNS = [
+  'no quiero',
+  'cancela',
+  'cancelalo',
+  'cancélalo',
+  'mejor no',
+  'ya no',
+  'olvidalo',
+  'olvídalo',
+  'no confirmo',
+  'no la quiero',
+  'no puedo',
+  'no voy',
+] as const
+
 export type BotiaIntent = (typeof BOTIA_INTENTS)[keyof typeof BOTIA_INTENTS]
 
 // ── Entity types ──────────────────────────────────────────────────────────────
@@ -152,6 +242,13 @@ export const BOTIA_ESCALATION_REASONS = {
   QUEJA_COMPLEJA:           'queja_compleja',
   FUERA_DE_ALCANCE:         'solicitud_fuera_de_alcance',
   CLIENTE_NO_PUEDE_IDENTIFICARSE: 'cliente_no_identificado',
+  REFACCIONES:              'refacciones',
+  TALLER:                   'taller',
+  VENTAS:                   'ventas',
+  CSI:                      'csi',
+  SEGUROS:                  'seguros',
+  ATENCION_CLIENTES:        'atencion_clientes',
+  CONFIRMACION_HUMANA:      'confirmacion_humana',
 } as const
 
 export const BOTIA_NO_ESCALAR = [

@@ -231,3 +231,13 @@ Tuve un problema al registrar la cita. Un asesor se pondrá en contacto contigo 
 | Decir "cita confirmada" sin cita_id | Hard gate en código |
 | Aprender groserías | BOTIA_FORBIDDEN_LEARNING_PATTERNS |
 | Copiar tono agresivo del cliente | Policy de respuesta |
+## Addendum P0.5 â€” confirmaciÃ³n y recordatorios
+
+- BotIA es asistente de agencia, no solo de citas.
+- Si el cliente pide refacciones, taller, ventas, CSI, seguros o atenciÃ³n a clientes, debe canalizar la solicitud al mÃ³dulo correcto sin rendirse.
+- ConfirmaciÃ³n explÃ­cita (`sÃ­`, `confirmo`, `correcto`, `adelante`) â†’ la cita puede quedar `confirmada`.
+- Solicitud de llamada o confirmaciÃ³n humana (`llÃ¡mame para confirmar`, `quiero que me confirme un asesor`, `no confirmo por aquÃ­`) â†’ la cita debe quedar `pendiente_contactar`, no `confirmada`.
+- Si el cliente pregunta por recordatorio, responder solo el flujo real: WhatsApp un dÃ­a antes si la automatizaciÃ³n estÃ¡ activa; llamada solo si existe actividad para asesor.
+- BotIA no debe prometer llamada automÃ¡tica IA.
+- Si una hora estÃ¡ ocupada, debe ofrecer alternativas antes de escalar.
+- La placa se pide de forma preferente: "Â¿Me compartes la placa? Si no la tienes a la mano, puedo continuar y dejarla pendiente."

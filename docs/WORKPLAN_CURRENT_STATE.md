@@ -1,8 +1,8 @@
 # WORKPLAN_CURRENT_STATE.md — ServiceTrack
 > **FUENTE DE VERDAD ÚNICA del proyecto. Todo análisis, bug, decisión y mejora debe integrarse aquí.**
 > Documento de estado consolidado para arquitectos, asistentes IA y equipo de desarrollo.
-> **Última actualización:** 2026-04-28 (P0.3 BotIA Operational Brain — docs/ai/ 9 archivos, lib/ai/botia-brain.ts, integración appointment-flow.ts)
-> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento) + P0 BotIA (commit 713e605) + P0.2 BotIA CRM+Vehículo (commit d57c8c2) + P0.2.1 hard gates (commit 8fdc771) + P0.3 Operational Brain
+> **Última actualización:** 2026-04-28 (P0.5 BotIA agencia completa + confirmación humana; P0.4.1 filtros reales + calendario mensual de Citas)
+> **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento) + P0 BotIA (commit 713e605) + P0.2 BotIA CRM+Vehículo (commit d57c8c2) + P0.2.1 hard gates (commit 8fdc771) + P0.3 Operational Brain + P0.4.1 + P0.5
 > **Estado general:** ~47% del producto completo — CRM+Citas+Taller+Usuarios operativos, bot con flujo completo captura nombre+vehículo+servicio+fecha+hora+confirmación. Demo pendiente de re-prueba con teléfono 5511118888 (validar: nombre capturado, vehiculo_personas poblado, cita.vehiculo_id NOT NULL, cita.servicio NOT NULL, horarios filtran pasados para hoy).
 
 ---
@@ -639,3 +639,23 @@ Módulos   → Ventas/CSI/Seguros/Atención (ya tienen placeholders, no son prio
 - Filtro por sucursal.
 - Filtro por estado.
 - Drag and drop de citas dentro del calendario mensual.
+
+## P0.5 BotIA agencia completa + confirmaciÃ³n correcta â€” IMPLEMENTADO 2026-04-28
+
+**DiagnÃ³stico del problema real:** la clasificaciÃ³n base, las respuestas simples y parte del prompt seguÃ­an presentando a BotIA como asistente de citas. AdemÃ¡s, la confirmaciÃ³n determinÃ­stica trataba cualquier afirmaciÃ³n como cita confirmada, aunque el cliente pidiera llamada humana.
+
+**Correcciones implementadas:**
+- `classify-intent.ts` y `types.ts` ahora contemplan intents de agencia: refacciones, taller, ventas, CSI, seguros, atenciÃ³n a clientes, recordatorio y confirmaciÃ³n humana.
+- `bandeja.ts` agrega enrutamiento determinÃ­stico por mÃ³dulo y crea escalaciones seguras con `ai_settings.escalation_assignee_id`, sin hardcodear responsables.
+- Refacciones ya no se corta como "solo citas": BotIA pide pieza + vehÃ­culo y, si ya hay datos suficientes, canaliza a Refacciones.
+- La cita queda `confirmada` solo con confirmaciÃ³n explÃ­cita del cliente.
+- Si el cliente pide llamada o confirmaciÃ³n humana, la cita se crea como `pendiente_contactar`, se genera actividad de seguimiento y el thread pasa a `waiting_agent`.
+- La placa ahora se pide de forma preferente. Si el cliente no la tiene a la mano, el flujo puede continuar con `placa_pendiente`.
+- La polÃ­tica de recordatorio se alinea con el estado real del sistema: WhatsApp 24h solo si la automatizaciÃ³n estÃ¡ activa; llamada solo si hay actividad para asesor.
+
+**Pendientes posteriores:**
+- BÃºsqueda real por placa/VIN.
+- OCR de tarjeta de circulaciÃ³n por WhatsApp.
+- Widget global BotIA / Requiere asesor.
+- Permisos por rol en Bandeja.
+- ConfiguraciÃ³n formal por mÃ³dulo.

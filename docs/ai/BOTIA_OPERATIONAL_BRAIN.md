@@ -173,3 +173,14 @@ Toda la siguiente información **debe venir de configuración**, no de constante
 5. **Motor de automatizaciones** — `automation_rules` engine
 6. **Vistas de Citas** — Hoy / Semana / Mes / Todas
 7. **Widget global BotIA** — botón flotante en todas las pantallas
+---
+
+## Addendum P0.5 â€” BotIA asistente de agencia
+
+- BotIA ya no debe presentarse como asistente exclusivo de citas. A nivel operativo es asistente de agencia para: `citas`, `taller`, `refacciones`, `atencion_clientes`, `ventas`, `csi` y `seguros`.
+- Las acciones crÃ­ticas siguen siendo determinÃ­sticas. P0.5 no reemplaza los hard gates de P0.2.1.
+- Si el cliente pide refacciones, BotIA debe pedir datos mÃ­nimos (`pieza/refaccion`, `vehiculo`, `placa/VIN si existe`) y canalizar a Refacciones. No debe cerrar la conversaciÃ³n ni responder "solo citas".
+- Si el cliente acepta fecha/hora pero pide llamada o confirmaciÃ³n humana, la cita debe quedar `pendiente_contactar`, con actividad para asesor y thread `waiting_agent`.
+- Si el cliente confirma explÃ­citamente, la cita sÃ­ queda `confirmada`.
+- La placa se pide de forma preferente. Si el cliente no la tiene a la mano, el flujo puede continuar con `placa_pendiente`.
+- La polÃ­tica de recordatorio debe reflejar el sistema real: WhatsApp un dÃ­a antes solo si la automatizaciÃ³n estÃ¡ activa; llamada solo si existe actividad para asesor. Llamada automÃ¡tica IA sigue siendo futuro.
