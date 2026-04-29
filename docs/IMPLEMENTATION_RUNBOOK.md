@@ -6,6 +6,14 @@
 
 ---
 
+> Hotfix 2026-04-28: P0.4.2 restaura carga real de `/citas` con query base + enrichment separado. P0.5.1 fuerza identity gates de BotIA, evita confirmacion sin identidad/vehiculo/servicio/fecha/hora y agrega auditoria best-effort en `automation_logs`.
+
+> Alcance operativo del hotfix:
+> - `/citas` vuelve a leer datos reales por RLS en `Todas`, `Hoy`, `Semana actual` y `Mes`, manteniendo calendario mensual y toggle `Calendario / Kanban`.
+> - BotIA debe resolver cliente y vehiculo antes de servicio/fecha/hora, no puede crear cliente basura y no debe decir que no tiene acceso a CRM/BD.
+> - Si el cliente pide llamada humana, la cita queda `pendiente_contactar`, con actividad para asesor, thread `waiting_agent` y auditoria best-effort.
+> - Pendiente posterior: P0.6 CRM Entity Resolver global para unificar OT, Seguros, Refacciones, Citas y BotIA.
+
 ## 1. Propósito del documento
 
 Este runbook describe los pasos técnicos, configuraciones y validaciones necesarios para desplegar ServiceTrack en un cliente nuevo. Cubre infraestructura, dependencias externas, datos por cliente y por sucursal, y el proceso de go-live.

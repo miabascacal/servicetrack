@@ -760,6 +760,17 @@ Orden recomendado:
 - Recién después seguir con webhook WhatsApp, IA y madurez de bandeja
 ---
 
+## HOTFIX 2026-04-28 â€” P0.4.2 + P0.5.1
+
+- [x] P0.4.2 corrige `/citas` vacio en produccion: la vista ahora carga citas reales por RLS con query base a `citas` y enrichment separado de `clientes` + `vehiculos`.
+- [x] P0.4.2 mantiene `Todas`, `Hoy`, `Semana actual`, `Mes`, el calendario mensual y el toggle `Calendario / Kanban`.
+- [x] P0.5.1 fuerza identity gates antes de agendar: cliente/nombre completo, vehiculo, placa preferente, servicio, fecha, hora y confirmacion final.
+- [x] BotIA ya no puede confirmar una cita si falta identidad, vehiculo, servicio, fecha u hora.
+- [x] BotIA ya no debe responder que no tiene acceso a CRM/BD ni que solo atiende citas.
+- [x] Se integra auditoria best-effort en `automation_logs` para `botia_cita_creada`, `botia_cita_pendiente_contactar`, `botia_escalado_asesor`, `botia_refacciones_enrutado` y `botia_recordatorio_solicitado`.
+- [ ] P0.6 CRM Entity Resolver global sigue pendiente para unificar OT, Seguros, Refacciones, Citas y BotIA.
+- [ ] Pendientes futuros de Citas: rango personalizado, filtros por asesor/sucursal/estado, drag and drop de calendario, vista calendario semanal completa.
+
 ## P0.4 Dashboard Citas â€” COMPLETADO 2026-04-28
 
 > `/citas` ya no muestra todo el historial mezclado en una sola vista. El kanban ahora soporta vistas temporales operativas.

@@ -5,6 +5,14 @@
 
 ---
 
+## P0.5.1 - identity gates y auditoria
+
+- El orden operativo para agendar queda fijado en codigo: cliente/nombre confiable -> vehiculo -> placa preferente o `placa_pendiente` -> servicio -> fecha -> hora -> confirmacion final.
+- BotIA no puede crear cliente basura ni cerrar una cita `confirmada` si falta cualquiera de esos datos criticos.
+- Si el cliente pide llamada humana o confirmacion humana, la cita debe quedar `pendiente_contactar`, con actividad para asesor y thread `waiting_agent`.
+- BotIA debe responder como asistente de agencia y no puede decir que no tiene acceso a CRM/BD o que solo atiende citas.
+- La trazabilidad minima obligatoria queda en `mensajes`, metadata de `conversation_threads` y `automation_logs` best-effort.
+
 ## 1. Principio Rector
 
 **La IA redacta y ayuda a interpretar, pero las acciones críticas las decide código determinístico.**

@@ -5,6 +5,8 @@
 > **Sprint cerrado:** Sprint 9 + Sprint 10 (bot seguimiento) + P0 BotIA (commit 713e605) + P0.2 BotIA CRM+Vehículo (commit d57c8c2) + P0.2.1 hard gates (commit 8fdc771) + P0.3 Operational Brain + P0.4.1 + P0.5
 > **Estado general:** ~47% del producto completo — CRM+Citas+Taller+Usuarios operativos, bot con flujo completo captura nombre+vehículo+servicio+fecha+hora+confirmación. Demo pendiente de re-prueba con teléfono 5511118888 (validar: nombre capturado, vehiculo_personas poblado, cita.vehiculo_id NOT NULL, cita.servicio NOT NULL, horarios filtran pasados para hoy).
 
+> **Hotfix 2026-04-28:** P0.4.2 restaura la carga real de `/citas` por RLS con enrichment separado y conserva calendario mensual. P0.5.1 fuerza identity gates antes de agendar y agrega trazabilidad best-effort en `automation_logs` + metadata de `conversation_threads`. P0.6 CRM Entity Resolver global sigue pendiente.
+
 ---
 
 ## 1. RESUMEN EJECUTIVO
