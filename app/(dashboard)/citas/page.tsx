@@ -24,17 +24,35 @@ type CitaRow = {
   estado: EstadoCita
   servicio: string | null
   notas: string | null
+  cliente_id: string | null
+  vehiculo_id: string | null
   cliente: { id: string; nombre: string; apellido: string; whatsapp: string } | null
   vehiculo: { id: string; marca: string; modelo: string; anio: number; placa: string | null } | null
   asesor?: null
 }
 
-function getMexicoNow() {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }))
+function getMexicoDateParts(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const parts = formatter.formatToParts(date)
+  const year = Number(parts.find((part) => part.type === 'year')?.value)
+  const month = Number(parts.find((part) => part.type === 'month')?.value)
+  const day = Number(parts.find((part) => part.type === 'day')?.value)
+
+  return { year, month, day }
 }
 
 function pad2(value: number) {
   return value.toString().padStart(2, '0')
+}
+
+function getMexicoNow() {
+  const { year, month, day } = getMexicoDateParts()
+  return new Date(year, month - 1, day, 12, 0, 0)
 }
 
 function formatDateKey(date: Date) {
@@ -43,7 +61,9 @@ function formatDateKey(date: Date) {
 
 function startOfOperationalWeek(date: Date) {
   const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  start.setDate(date.getDate() - date.getDay())
+  const day = date.getDay()
+  const diffToMonday = day === 0 ? -6 : 1 - day
+  start.setDate(date.getDate() + diffToMonday)
   return start
 }
 
@@ -135,9 +155,7 @@ export default async function CitasPage({ searchParams }: { searchParams: Search
   let query = supabase
     .from('citas')
     .select(`
-      id, fecha_cita, hora_cita, estado, servicio, notas,
-      cliente:clientes ( id, nombre, apellido, whatsapp ),
-      vehiculo:vehiculos ( id, marca, modelo, anio, placa )
+      id, fecha_cita, hora_cita, estado, servicio, notas, cliente_id, vehiculo_id
     `)
     .order('fecha_cita', { ascending: true })
     .order('hora_cita', { ascending: true })
@@ -148,8 +166,63 @@ export default async function CitasPage({ searchParams }: { searchParams: Search
       .lte('fecha_cita', visibleRange.end)
   }
 
-  const { data: citas } = await query
-  const filteredCitas = (citas as unknown as CitaRow[]) ?? []
+  const { data: citasBase, error: citasError } = await query
+
+  if (citasError) {
+    console.error('[citas/page] error cargando citas:', citasError.message)
+  }
+
+  const citasRows = (citasBase as Array<{
+    id: string
+    fecha_cita: string
+    hora_cita: string
+    estado: EstadoCita
+    servicio: string | null
+    notas: string | null
+    cliente_id: string | null
+    vehiculo_id: string | null
+  }> | null) ?? []
+
+  const clienteIds = [...new Set(citasRows.map((cita) => cita.cliente_id).filter((id): id is string => Boolean(id)))]
+  const vehiculoIds = [...new Set(citasRows.map((cita) => cita.vehiculo_id).filter((id): id is string => Boolean(id)))]
+
+  const [{ data: clientesData, error: clientesError }, { data: vehiculosData, error: vehiculosError }] = await Promise.all([
+    clienteIds.length > 0
+      ? supabase
+          .from('clientes')
+          .select('id, nombre, apellido, whatsapp')
+          .in('id', clienteIds)
+      : Promise.resolve({ data: [], error: null }),
+    vehiculoIds.length > 0
+      ? supabase
+          .from('vehiculos')
+          .select('id, marca, modelo, anio, placa')
+          .in('id', vehiculoIds)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  if (clientesError) {
+    console.error('[citas/page] error cargando clientes:', clientesError.message)
+  }
+  if (vehiculosError) {
+    console.error('[citas/page] error cargando vehiculos:', vehiculosError.message)
+  }
+
+  const clientesById = new Map(
+    ((clientesData as Array<{ id: string; nombre: string; apellido: string; whatsapp: string }> | null) ?? [])
+      .map((cliente) => [cliente.id, cliente] as const)
+  )
+  const vehiculosById = new Map(
+    ((vehiculosData as Array<{ id: string; marca: string; modelo: string; anio: number; placa: string | null }> | null) ?? [])
+      .map((vehiculo) => [vehiculo.id, vehiculo] as const)
+  )
+
+  const filteredCitas: CitaRow[] = citasRows.map((cita) => ({
+    ...cita,
+    cliente: cita.cliente_id ? clientesById.get(cita.cliente_id) ?? null : null,
+    vehiculo: cita.vehiculo_id ? vehiculosById.get(cita.vehiculo_id) ?? null : null,
+  }))
+
   const summaryLabel = `${VISTAS_CONFIG[vistaActiva].label} - ${visibleRange.rangeLabel} - ${filteredCitas.length} cita${filteredCitas.length !== 1 ? 's' : ''}`
   const kanbanKey = [
     vistaActiva,
