@@ -107,6 +107,20 @@ export async function crearCitaBot(params: {
 
   const supabase = createAdminClient()
 
+  // Guard: prevent duplicate citas for same client/date
+  const { data: citaExistente } = await supabase
+    .from('citas')
+    .select('id, fecha_cita, hora_cita')
+    .eq('sucursal_id', params.sucursal_id)
+    .eq('cliente_id', params.cliente_id)
+    .eq('fecha_cita', params.fecha)
+    .not('estado', 'in', '(cancelada,no_show)')
+    .maybeSingle()
+
+  if (citaExistente) {
+    return { error: 'Ya tienes una cita registrada para ese día. ¿Quieres confirmarla o prefieres una fecha diferente?' }
+  }
+
   const { data: conflicto } = await supabase
     .from('citas')
     .select('id')

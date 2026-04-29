@@ -850,10 +850,14 @@ export async function simularMensajeAction(params: {
         }
       } else if (isNoTienePlaca(params.mensaje)) {
         flowState = { ...flowState, placa_pendiente: true, step: 'capturar_servicio' }
+      } else if (flowState.step === 'capturar_placa') {
+        // Already asked once — accept as placa_pendiente and continue
+        flowState = { ...flowState, placa_pendiente: true }
+        // Fall through to service capture
       } else {
         flowState = { ...flowState, step: 'capturar_placa' }
         await setAppointmentFlowState(thread_id, flowState)
-        respuesta = `Â¿Me compartes la placa? Si no la tienes a la mano, puedo continuar y dejarla pendiente.`
+        respuesta = `¿Me compartes la placa? Si no la tienes a la mano, puedo continuar y dejarla pendiente.`
         skipBot = true
       }
     }
@@ -918,7 +922,7 @@ export async function simularMensajeAction(params: {
             vehiculo_id: flowState.vehiculo_id ?? null,
             cita_id: flowResult.id,
           })
-          respuesta = `Entendido. Dejo tu cita como pendiente de confirmaciÃ³n para que un asesor te contacte.\nAdemÃ¡s, si la automatizaciÃ³n estÃ¡ activa, recibirÃ¡s recordatorio por WhatsApp un dÃ­a antes de tu cita.`
+          respuesta = `Entendido. Dejo tu cita como pendiente de confirmación para que un asesor te contacte.\nAdemás, si la automatización está activa, recibirás recordatorio por WhatsApp un día antes de tu cita.`
           flowState = { ...flowState, step: 'completado', cita_id: flowResult.id }
           handoff = true
           skipBot = true
@@ -935,24 +939,24 @@ export async function simularMensajeAction(params: {
           hora:        flowState.hora!,
           servicio:    flowState.servicio ?? undefined,
           vehiculo_id: flowState.vehiculo_id ?? undefined,
-          confirmada:  true,
+          confirmada:  false,
           notas: flowState.placa_pendiente ? 'Placa pendiente por compartir por el cliente' : null,
         })
         if ('id' in flowResult) {
           cita_id = flowResult.id
           await registrarAutomationLogBot({
             sucursal_id,
-            event: 'botia_cita_creada',
+            event: 'botia_cita_pendiente_contactar',
             referencia_tipo: 'cita',
             referencia_id: flowResult.id,
-            detalle: `Cita confirmada por BotIA ${flowState.fecha} ${flowState.hora}`,
-            idempotency_key: `${flowResult.id}:botia_cita_creada`,
+            detalle: `Cita registrada por BotIA pendiente de confirmacion ${flowState.fecha} ${flowState.hora}`,
+            idempotency_key: `${flowResult.id}:botia_cita_pendiente_contactar`,
           })
           const fechaLeg = new Date(flowState.fecha! + 'T12:00:00').toLocaleDateString('es-MX', {
             weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
           })
           const srv = flowState.servicio ? ` para ${flowState.servicio}` : ''
-          respuesta = `¡Listo! Tu cita${srv} ha sido confirmada para el ${fechaLeg} a las ${flowState.hora} hrs. ¡Hasta pronto!`
+          respuesta = `¡Listo! Tu cita${srv} ha sido registrada para el ${fechaLeg} a las ${flowState.hora} hrs. Un asesor te confirmará en breve. ¡Hasta pronto!`
           flowState = { ...flowState, step: 'completado', cita_id: flowResult.id }
           skipBot   = true
         }
@@ -1009,7 +1013,7 @@ export async function simularMensajeAction(params: {
         vehiculo_id: flowState?.vehiculo_id ?? null,
         cita_id: result.id,
       })
-      respuesta = `Entendido. Dejo tu cita como pendiente de confirmaciÃ³n para que un asesor te contacte.\nAdemÃ¡s, si la automatizaciÃ³n estÃ¡ activa, recibirÃ¡s recordatorio por WhatsApp un dÃ­a antes de tu cita.`
+      respuesta = `Entendido. Dejo tu cita como pendiente de confirmación para que un asesor te contacte.\nAdemás, si la automatización está activa, recibirás recordatorio por WhatsApp un día antes de tu cita.`
       handoff = true
       skipBot = true
       await limpiarConfirmacionPendiente(thread_id)
@@ -1022,26 +1026,25 @@ export async function simularMensajeAction(params: {
       hora:       pendingConf.hora,
       servicio:   pendingConf.servicio ?? undefined,
       vehiculo_id: flowState?.vehiculo_id ?? null,
-      confirmada: true,
+      confirmada: false,
       notas: flowState?.placa_pendiente ? 'Placa pendiente por compartir por el cliente' : null,
     })
     if ('id' in result) {
       cita_id  = result.id
       await registrarAutomationLogBot({
         sucursal_id,
-        event: 'botia_cita_creada',
+        event: 'botia_cita_pendiente_contactar',
         referencia_tipo: 'cita',
         referencia_id: result.id,
-        detalle: `Cita confirmada por BotIA ${pendingConf.fecha} ${pendingConf.hora}`,
-        idempotency_key: `${result.id}:botia_cita_creada`,
+        detalle: `Cita registrada por BotIA pendiente de confirmacion ${pendingConf.fecha} ${pendingConf.hora}`,
+        idempotency_key: `${result.id}:botia_cita_pendiente_contactar`,
       })
       const fechaLegible = new Date(pendingConf.fecha + 'T12:00:00').toLocaleDateString('es-MX', {
         weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
       })
       const srv = pendingConf.servicio ? ` para ${pendingConf.servicio}` : ''
-      respuesta = `¡Listo! Tu cita${srv} ha sido confirmada para el ${fechaLegible} a las ${pendingConf.hora} hrs. ¡Hasta pronto! 🎉`
+      respuesta = `¡Listo! Tu cita${srv} ha sido registrada para el ${fechaLegible} a las ${pendingConf.hora} hrs. Un asesor te confirmará en breve.`
       skipBot   = true
-      // Clear pending state now that cita is created
       await limpiarConfirmacionPendiente(thread_id)
     }
     // If crearCitaBot returned an error (slot taken, etc.) fall through to bot
@@ -1104,23 +1107,23 @@ export async function simularMensajeAction(params: {
         fecha:      detectedSlot.fecha,
         hora:       detectedSlot.hora,
         servicio:   detectedSlot.servicio ?? undefined,
-        confirmada: true,
+        confirmada: false,
       })
       if ('id' in slotResult) {
         cita_id  = slotResult.id
         await registrarAutomationLogBot({
           sucursal_id,
-          event: 'botia_cita_creada',
+          event: 'botia_cita_pendiente_contactar',
           referencia_tipo: 'cita',
           referencia_id: slotResult.id,
-          detalle: `Cita confirmada por BotIA ${detectedSlot.fecha} ${detectedSlot.hora}`,
-          idempotency_key: `${slotResult.id}:botia_cita_creada`,
+          detalle: `Cita registrada por BotIA pendiente de confirmacion ${detectedSlot.fecha} ${detectedSlot.hora}`,
+          idempotency_key: `${slotResult.id}:botia_cita_pendiente_contactar`,
         })
         const fechaLegible = new Date(detectedSlot.fecha + 'T12:00:00').toLocaleDateString('es-MX', {
           weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
         })
         const srv = detectedSlot.servicio ? ` para ${detectedSlot.servicio}` : ''
-        respuesta = `¡Listo! Tu cita${srv} ha sido confirmada para el ${fechaLegible} a las ${detectedSlot.hora} hrs. ¡Te esperamos!`
+        respuesta = `¡Listo! Tu cita${srv} ha sido registrada para el ${fechaLegible} a las ${detectedSlot.hora} hrs. Un asesor te confirmará en breve.`
         skipBot   = true
       }
       await limpiarConfirmacionPendiente(thread_id)
