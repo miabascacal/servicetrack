@@ -788,3 +788,33 @@ Orden recomendado:
 - [ ] Filtro por sucursal
 - [ ] Filtro por estado como control explÃ­cito de UI
 - [ ] Vista calendario mensual completa de Citas
+
+---
+
+## P0.4.1 Dashboard Citas â€” COMPLETADO 2026-04-28
+
+> P0.4 saliÃ³ con fallo visual real: el header cambiaba de vista y conteo, pero el kanban podÃ­a seguir mostrando tarjetas de la vista anterior porque el componente cliente retenÃ­a estado local viejo.
+
+### QuÃ© corrige P0.4.1
+
+| Elemento | Estado |
+|---------|--------|
+| Filtro real de tarjetas por vista | âœ… corregido |
+| Conteos por columna alineados con tarjetas renderizadas | âœ… corregido |
+| Semana operativa real | âœ… domingo a sÃ¡bado |
+| Vista Mes tipo calendario | âœ… MVP implementado |
+| Toggle Mes `Calendario` / `Kanban` | âœ… agregado |
+
+### Causa raÃ­z del fallo de P0.4
+
+- `app/(dashboard)/citas/page.tsx` sÃ­ recalculaba la lista filtrada.
+- `app/_components/citas/CitasKanban.tsx` guardaba `initialCitas` en `useState(...)` y no se resincronizaba al cambiar props.
+- Resultado: el resumen superior reflejaba la vista nueva, pero las tarjetas podÃ­an seguir siendo de la vista anterior.
+
+### Pendientes posteriores a P0.4.1
+
+- [ ] Rango personalizado
+- [ ] Filtro por asesor
+- [ ] Filtro por sucursal
+- [ ] Filtro por estado
+- [ ] Drag and drop directo sobre calendario

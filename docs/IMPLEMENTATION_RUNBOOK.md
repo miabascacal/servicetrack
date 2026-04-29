@@ -902,3 +902,24 @@ No debería ocurrir — los índices parciales únicos en BD previenen duplicado
 - [ ] Vista Mes solo muestra citas del mes actual.
 - [ ] Vista Todas muestra todo el historial visible por RLS.
 - [ ] Las columnas por estado siguen funcionando.
+
+#### ValidaciÃ³n P0.4.1 â€” Fix filtros reales + calendario mensual de Citas
+
+**Problema detectado tras deploy de P0.4:**
+- El resumen superior podÃ­a mostrar una vista y rango correctos mientras el kanban seguÃ­a renderizando tarjetas de otra vista.
+- La causa fue estado cliente stale en `CitasKanban`, no un problema de RLS ni de datos en Supabase.
+- La vista `Mes` seguÃ­a siendo un kanban filtrado, cuando negocio pidiÃ³ calendario mensual.
+
+**Correcciones validadas en cÃ³digo:**
+- `CitasKanban` resincroniza su lista interna cuando cambia la lista filtrada recibida por props.
+- `Semana actual` usa semana operativa `domingo -> sÃ¡bado`, segÃºn el criterio validado en la prueba del `2026-04-28`.
+- `Mes` ahora muestra calendario mensual visual por defecto.
+- `Mes` conserva toggle explÃ­cito `Calendario` / `Kanban`.
+- Los conteos por columna y el total superior se calculan sobre la misma lista filtrada que se renderiza.
+
+**Pendientes posteriores a P0.4.1:**
+- Rango personalizado.
+- Filtro por asesor.
+- Filtro por sucursal.
+- Filtro por estado.
+- Drag and drop mensual directo sobre calendario.

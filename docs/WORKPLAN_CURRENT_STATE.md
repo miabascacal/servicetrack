@@ -621,3 +621,21 @@ Módulos   → Ventas/CSI/Seguros/Atención (ya tienen placeholders, no son prio
 - Filtro por asesor.
 - Filtro por sucursal.
 - Vista calendario mensual completa para Citas, si se requiere mÃ¡s que el selector temporal del kanban.
+
+## P0.4.1 Dashboard Citas â€” IMPLEMENTADO 2026-04-28
+
+**DiagnÃ³stico del fallo P0.4:** el page component de `/citas` recalculaba vista y conteo, pero `app/_components/citas/CitasKanban.tsx` conservaba la lista inicial en estado local y no la resincronizaba al cambiar props. Eso explicaba el sÃ­ntoma real: header correcto con tarjetas incorrectas.
+
+**Correcciones implementadas:**
+- `CitasKanban` ahora sincroniza su estado interno cuando cambia `initialCitas`.
+- La semana operativa de `/citas` se corrige al comportamiento validado por negocio para el 28 de abril de 2026: `domingo 27-abr-2026` a `sÃ¡bado 03-may-2026`.
+- La vista `Mes` ya no es solo kanban filtrado: ahora muestra calendario mensual visual por defecto.
+- Se agregÃ³ toggle claro `Calendario` / `Kanban` dentro de la vista `Mes`.
+- Los conteos por columna siguen calculÃ¡ndose sobre la misma lista filtrada que se renderiza.
+
+**Pendientes posteriores:**
+- Rango personalizado.
+- Filtro por asesor.
+- Filtro por sucursal.
+- Filtro por estado.
+- Drag and drop de citas dentro del calendario mensual.

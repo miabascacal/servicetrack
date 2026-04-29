@@ -1,11 +1,14 @@
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
+import { CitasMonthCalendar } from '@/app/_components/citas/CitasMonthCalendar'
 import { CitasKanban } from '@/app/_components/citas/CitasKanban'
 import { createClient } from '@/lib/supabase/server'
+import { cn } from '@/lib/utils'
 import type { EstadoCita } from '@/types/database'
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>
 type CitasVista = 'hoy' | 'semana' | 'mes' | 'todas'
+type MonthDisplayMode = 'calendario' | 'kanban'
 
 const VISTAS_CONFIG: Record<CitasVista, { label: string }> = {
   hoy: { label: 'Hoy' },
@@ -38,15 +41,17 @@ function formatDateKey(date: Date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
 }
 
-function startOfWeek(date: Date) {
-  const day = date.getDay()
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1)
-  return new Date(date.getFullYear(), date.getMonth(), diff)
+function startOfOperationalWeek(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  start.setDate(date.getDate() - date.getDay())
+  return start
 }
 
-function endOfWeek(date: Date) {
-  const start = startOfWeek(date)
-  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6)
+function endOfOperationalWeek(date: Date) {
+  const start = startOfOperationalWeek(date)
+  const end = new Date(start)
+  end.setDate(start.getDate() + 6)
+  return end
 }
 
 function startOfMonth(date: Date) {
@@ -72,6 +77,11 @@ function resolveVista(rawVista: string | string[] | undefined): CitasVista {
     : 'todas'
 }
 
+function resolveMonthMode(rawMode: string | string[] | undefined): MonthDisplayMode {
+  const value = Array.isArray(rawMode) ? rawMode[0] : rawMode
+  return value === 'kanban' ? 'kanban' : 'calendario'
+}
+
 function getVistaRange(vista: CitasVista) {
   const nowMX = getMexicoNow()
 
@@ -81,16 +91,18 @@ function getVistaRange(vista: CitasVista) {
       start: today,
       end: today,
       rangeLabel: formatRangeDate(nowMX),
+      monthDate: startOfMonth(nowMX),
     }
   }
 
   if (vista === 'semana') {
-    const start = startOfWeek(nowMX)
-    const end = endOfWeek(nowMX)
+    const start = startOfOperationalWeek(nowMX)
+    const end = endOfOperationalWeek(nowMX)
     return {
       start: formatDateKey(start),
       end: formatDateKey(end),
       rangeLabel: `${formatRangeDate(start)} - ${formatRangeDate(end)}`,
+      monthDate: startOfMonth(nowMX),
     }
   }
 
@@ -101,6 +113,7 @@ function getVistaRange(vista: CitasVista) {
       start: formatDateKey(start),
       end: formatDateKey(end),
       rangeLabel: `${formatRangeDate(start)} - ${formatRangeDate(end)}`,
+      monthDate: start,
     }
   }
 
@@ -108,14 +121,15 @@ function getVistaRange(vista: CitasVista) {
     start: null,
     end: null,
     rangeLabel: 'Sin filtro de fecha',
+    monthDate: startOfMonth(nowMX),
   }
 }
 
 export default async function CitasPage({ searchParams }: { searchParams: SearchParams }) {
-  // createClient() aplica RLS: solo devuelve citas de la sucursal del usuario autenticado.
   const supabase = await createClient()
   const resolvedSearchParams = await searchParams
   const vistaActiva = resolveVista(resolvedSearchParams.vista)
+  const monthMode = resolveMonthMode(resolvedSearchParams.modo)
   const visibleRange = getVistaRange(vistaActiva)
 
   let query = supabase
@@ -135,14 +149,20 @@ export default async function CitasPage({ searchParams }: { searchParams: Search
   }
 
   const { data: citas } = await query
-  const typedCitas = (citas as unknown as CitaRow[]) ?? []
-  const summaryLabel = `${VISTAS_CONFIG[vistaActiva].label} - ${visibleRange.rangeLabel} - ${typedCitas.length} cita${typedCitas.length !== 1 ? 's' : ''}`
+  const filteredCitas = (citas as unknown as CitaRow[]) ?? []
+  const summaryLabel = `${VISTAS_CONFIG[vistaActiva].label} - ${visibleRange.rangeLabel} - ${filteredCitas.length} cita${filteredCitas.length !== 1 ? 's' : ''}`
+  const kanbanKey = [
+    vistaActiva,
+    visibleRange.start ?? 'all',
+    visibleRange.end ?? 'all',
+    monthMode,
+  ].join(':')
 
-  function buildVistaHref(nextVista: CitasVista) {
+  function buildHref(updates: Partial<{ vista: CitasVista; modo: MonthDisplayMode }>) {
     const params = new URLSearchParams()
 
     for (const [key, value] of Object.entries(resolvedSearchParams)) {
-      if (key === 'vista' || value == null) continue
+      if ((key === 'vista' || key === 'modo') || value == null) continue
 
       if (Array.isArray(value)) {
         for (const item of value) params.append(key, item)
@@ -151,7 +171,12 @@ export default async function CitasPage({ searchParams }: { searchParams: Search
       }
     }
 
+    const nextVista = updates.vista ?? vistaActiva
     params.set('vista', nextVista)
+
+    const nextMode = updates.modo ?? monthMode
+    if (nextVista === 'mes') params.set('modo', nextMode)
+
     return `/citas?${params.toString()}`
   }
 
@@ -171,7 +196,7 @@ export default async function CitasPage({ searchParams }: { searchParams: Search
               return (
                 <Link
                   key={vista}
-                  href={buildVistaHref(vista)}
+                  href={buildHref({ vista, modo: vista === 'mes' ? 'calendario' : monthMode })}
                   className={[
                     'rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
                     isActive
@@ -185,12 +210,34 @@ export default async function CitasPage({ searchParams }: { searchParams: Search
             })}
           </div>
 
-          <div className="w-fit rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
-            <span className="font-medium text-gray-900">{VISTAS_CONFIG[vistaActiva].label}</span>
-            {' - '}
-            <span>{visibleRange.rangeLabel}</span>
-            {' - '}
-            <span>{typedCitas.length} cita{typedCitas.length !== 1 ? 's' : ''}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-fit rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
+              <span className="font-medium text-gray-900">{VISTAS_CONFIG[vistaActiva].label}</span>
+              {' - '}
+              <span>{visibleRange.rangeLabel}</span>
+              {' - '}
+              <span>{filteredCitas.length} cita{filteredCitas.length !== 1 ? 's' : ''}</span>
+            </div>
+
+            {vistaActiva === 'mes' && (
+              <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
+                {(['calendario', 'kanban'] as MonthDisplayMode[]).map((mode) => {
+                  const isActive = mode === monthMode
+                  return (
+                    <Link
+                      key={mode}
+                      href={buildHref({ vista: 'mes', modo: mode })}
+                      className={cn(
+                        'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                        isActive ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+                      )}
+                    >
+                      {mode === 'calendario' ? 'Calendario' : 'Kanban'}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -203,7 +250,10 @@ export default async function CitasPage({ searchParams }: { searchParams: Search
         </Link>
       </div>
 
-      <CitasKanban citas={typedCitas} />
+      {vistaActiva === 'mes' && monthMode === 'calendario'
+        ? <CitasMonthCalendar citas={filteredCitas} monthDate={visibleRange.monthDate} />
+        : <CitasKanban key={kanbanKey} citas={filteredCitas} />
+      }
     </div>
   )
 }
