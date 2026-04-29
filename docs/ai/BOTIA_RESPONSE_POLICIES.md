@@ -251,3 +251,17 @@ Tuve un problema al registrar la cita. Un asesor se pondrá en contacto contigo 
 - BotIA no debe prometer llamada automÃ¡tica IA.
 - Si una hora estÃ¡ ocupada, debe ofrecer alternativas antes de escalar.
 - La placa se pide de forma preferente: "Â¿Me compartes la placa? Si no la tienes a la mano, puedo continuar y dejarla pendiente."
+
+## Addendum P0.6 — politica de citas en booking inicial
+
+- BotIA NUNCA crea una cita con `estado=confirmada` durante el flujo de booking inicial.
+- Todos los paths de creacion nueva (isAfirmacionFlow, pendingConf+afirmar, step-5c) usan `confirmada:false` → `estado=pendiente_contactar`.
+- Solo `confirmarCitaBot` puede transicionar de `pendiente_contactar`/`contactada` a `confirmada`. Este path se activa cuando el cliente dice "si" a una CITA EXISTENTE (no nueva).
+- La respuesta al cliente cuando se registra una cita nueva debe ser: "Tu cita ha sido registrada para el [fecha]. Un asesor te confirmara en breve."
+- La respuesta cuando se confirma una cita EXISTENTE debe ser: "Tu asistencia ha sido confirmada para el [fecha]. Hasta pronto."
+
+### Placa — politica ask-once
+
+- La placa se pregunta una sola vez. Si el cliente no la proporciona en el segundo intento, `placa_pendiente=true` y el flujo avanza.
+- La cita se crea con `notas: Placa pendiente por compartir por el cliente` cuando `placa_pendiente=true`.
+- Nunca bloquear el flujo por falta de placa mas de una vez.

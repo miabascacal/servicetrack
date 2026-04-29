@@ -360,6 +360,26 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
   - `parsearServicio()` y `parsearVehiculo()` en appointment-flow.ts ya los usan.
   - Amplían cobertura sin cambiar comportamiento existente.
 
+### Decisiones clave — P0.6 Hotfix /citas + BotIA booking policy (2026-04-28)
+
+- **`/citas` y `/agenda` usan `createAdminClient()` + `ensureUsuario()` + filtro explícito de `sucursal_id`.**
+  - ADR-08 (migración a `createClient()` con RLS en 2026-04-16) se revierte para estas dos páginas.
+  - Causa raíz: `get_mi_sucursal_id()` retorna NULL para usuarios cuya fila en `usuarios` no existe o cuyo JWT no coincide → RLS excluye todas las filas silenciosamente.
+  - Patrón correcto para pages con datos de operación crítica: admin client + `ensureUsuario()` + `.eq('sucursal_id', sucursal_id)` explícito.
+  - Server actions ya usaban este patrón; ahora las páginas también.
+
+- **BotIA nunca crea citas con `estado=confirmada` en el flujo inicial de booking.**
+  - Todos los paths de creación nueva pasan `confirmada: false` → `estado = 'pendiente_contactar'`.
+  - Solo `confirmarCitaBot` puede transicionar a `confirmada` (confirmar cita existente).
+  - `automation_logs` usa `event: botia_cita_pendiente_contactar` para todos los paths de creación.
+
+- **Placa ask-once: si el cliente no responde con placa en el segundo intento, `placa_pendiente=true` y el flujo avanza.**
+  - Antes: `else` en Step C siempre reenviaba la pregunta → loop infinito.
+  - Fix: if `flowState.step === 'capturar_placa'` y no hay placa → marcar `placa_pendiente=true` y continuar.
+
+- **`crearCitaBot` valida duplicados de cliente+fecha antes del gate de horario.**
+  - Si el cliente ya tiene una cita activa en la misma fecha → error descriptivo pide confirmar la existente o cambiar fecha.
+
 ### Decisiones clave — Sprint 9 (2026-04-15 → 2026-04-16)
 
 - **ENUM `estado_ot`: valor canónico es `'en_proceso'`, no `'en_reparacion'`.**

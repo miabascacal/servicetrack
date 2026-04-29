@@ -1,5 +1,5 @@
 # PENDIENTES — ServiceTrack
-_Actualizado: 2026-04-28 — P0.5 BotIA agencia completa + política de confirmación humana; P0.4.1 corrige filtros reales de Citas y agrega calendario mensual._
+_Actualizado: 2026-04-28 — P0.6 hotfix: /citas restituido (RLS bypass), BotIA siempre pendiente_contactar en booking inicial, placa loop fix._
 
 ---
 
@@ -857,3 +857,28 @@ Orden recomendado:
 - [ ] Permisos por rol en Bandeja
 - [ ] ConfiguraciÃ³n formal por mÃ³dulo
 - [ ] Llamada automÃ¡tica IA no implementada
+
+---
+
+## P0.6 Hotfix /citas + BotIA booking policy — COMPLETADO 2026-04-28
+
+### Diagnostico /citas (BLOQUE A)
+
+- **Causa: B — RLS bloqueando** — `get_mi_sucursal_id()` retornaba NULL para el usuario autenticado (fila ausente o `sucursal_id` no coincidente en `usuarios`).
+- `citas/page.tsx` usaba `createClient()` (anon key + RLS) sin filtro de sucursal explicito → 0 filas silenciosamente en las 4 vistas.
+
+### Que implementa P0.6
+
+| Elemento | Estado |
+|---------|--------|
+| `/citas` — 4 vistas (Todas, Hoy, Semana, Mes) restauradas | ✅ admin client + ensureUsuario |
+| `/agenda` — citas y actividades restauradas | ✅ mismo patron |
+| BotIA booking inicial siempre `pendiente_contactar` | ✅ isAfirmacionFlow, pendingConf, step-5c |
+| Placa — ask once, luego `placa_pendiente=true` | ✅ loop roto en Step C |
+| Duplicados — gate en `crearCitaBot` por cliente+fecha | ✅ antes del conflicto de horario |
+| Encoding corregido en mensajes de confirmacion | ✅ |
+
+### Pendientes posteriores a P0.6
+
+- [ ] Validar en produccion con citas reales post-deploy
+- [ ] Confirmar que `ensureUsuario` retorna sucursal_id correcto en Vercel (verificar tabla `usuarios`)

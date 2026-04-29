@@ -192,3 +192,10 @@ Toda la siguiente información **debe venir de configuración**, no de constante
 - Si el cliente confirma explÃ­citamente, la cita sÃ­ queda `confirmada`.
 - La placa se pide de forma preferente. Si el cliente no la tiene a la mano, el flujo puede continuar con `placa_pendiente`.
 - La polÃ­tica de recordatorio debe reflejar el sistema real: WhatsApp un dÃ­a antes solo si la automatizaciÃ³n estÃ¡ activa; llamada solo si existe actividad para asesor. Llamada automÃ¡tica IA sigue siendo futuro.
+
+## Addendum P0.6 — estado inicial de citas y duplicados
+
+- **Todas las citas nuevas creadas por BotIA tienen `estado=pendiente_contactar`.** Esto aplica en todos los paths: flujo determinista (isAfirmacionFlow, pendingConf), step-5c (slot detection fallback), y tool `crear_cita` del LLM.
+- **Solo `confirmarCitaBot` produce `estado=confirmada`.** Este helper se invoca exclusivamente cuando el cliente confirma asistencia a una cita que ya existe en BD (paso de seguimiento, no booking inicial).
+- **Guarda de duplicados en `crearCitaBot`:** antes de crear una cita, verifica si el cliente ya tiene una cita activa en la misma fecha (estados distintos a cancelada/no_show). Si existe, retorna error descriptivo para que el bot pregunte al cliente si quiere confirmar la existente o cambiar de fecha.
+- **Placa ask-once:** si el bot ya esta en `step=capturar_placa` y el cliente responde sin placa valida ni frase explicita de no tenerla, se marca `placa_pendiente=true` y se avanza. No hay loop infinito de preguntas de placa.

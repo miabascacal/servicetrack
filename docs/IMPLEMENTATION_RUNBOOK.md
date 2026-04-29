@@ -6,13 +6,15 @@
 
 ---
 
-> Hotfix 2026-04-28: P0.4.2 restaura carga real de `/citas` con query base + enrichment separado. P0.5.1 fuerza identity gates de BotIA, evita confirmacion sin identidad/vehiculo/servicio/fecha/hora y agrega auditoria best-effort en `automation_logs`.
+> Hotfix 2026-04-28 P0.6: `/citas` y `/agenda` restauradas con admin client + ensureUsuario (causa raiz: RLS get_mi_sucursal_id() = NULL). BotIA siempre crea pendiente_contactar. Placa ask-once. Guard de duplicados por cliente+fecha.
 
-> Alcance operativo del hotfix:
-> - `/citas` vuelve a leer datos reales por RLS en `Todas`, `Hoy`, `Semana actual` y `Mes`, manteniendo calendario mensual y toggle `Calendario / Kanban`.
-> - BotIA debe resolver cliente y vehiculo antes de servicio/fecha/hora, no puede crear cliente basura y no debe decir que no tiene acceso a CRM/BD.
-> - Si el cliente pide llamada humana, la cita queda `pendiente_contactar`, con actividad para asesor, thread `waiting_agent` y auditoria best-effort.
-> - Pendiente posterior: P0.6 CRM Entity Resolver global para unificar OT, Seguros, Refacciones, Citas y BotIA.
+> Alcance operativo P0.6:
+> - `/citas` (4 vistas) y `/agenda` ahora usan `createAdminClient()` + `ensureUsuario()` + `.eq('sucursal_id', sucursal_id)` explícito.
+> - BotIA: todos los paths de booking inicial pasan `confirmada:false`. Solo `confirmarCitaBot` transiciona a `confirmada`.
+> - Placa ask-once: si ya estamos en `step=capturar_placa` y el cliente no da placa, `placa_pendiente=true` y se avanza.
+> - `crearCitaBot`: nueva guarda de duplicados por cliente+fecha antes del gate de horario.
+>
+> **Troubleshooting: si `/citas` sigue mostrando 0 en produccion**, verificar que el usuario tiene fila en tabla `usuarios` con `sucursal_id` poblado. Correr en Supabase SQL: `SELECT id, sucursal_id FROM usuarios WHERE id = '<auth.uid del usuario>'`.
 
 ## 1. Propósito del documento
 

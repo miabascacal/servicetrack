@@ -661,3 +661,21 @@ Módulos   → Ventas/CSI/Seguros/Atención (ya tienen placeholders, no son prio
 - Widget global BotIA / Requiere asesor.
 - Permisos por rol en Bandeja.
 - ConfiguraciÃ³n formal por mÃ³dulo.
+
+## P0.6 Hotfix /citas + BotIA booking policy — IMPLEMENTADO 2026-04-28
+
+**Diagnostico BLOQUE A (/citas = 0):** causa B — RLS. La policy `citas_por_sucursal` usa `get_mi_sucursal_id()` que hace SELECT en `usuarios WHERE id = auth.uid()`. Si la fila no existe o el JWT no resuelve correctamente, retorna NULL y la condicion `sucursal_id = NULL` excluye todas las filas silenciosamente. `citas/page.tsx` usaba `createClient()` (anon key + RLS) sin filtro explicito de sucursal.
+
+**Nota sobre ADR-08:** ADR-08 (2026-04-16) migro pages a `createClient()` asumiendo que RLS funcionaria. El problema real es que `get_mi_sucursal_id()` no retorna un valor para todos los usuarios en produccion. La decision correcta para pages con datos de operacion critica es admin client + `ensureUsuario()` + filtro explicito de `sucursal_id`, como ya hacian los server actions.
+
+**Correcciones implementadas:**
+- `citas/page.tsx`: `createAdminClient()` + `ensureUsuario()` para resolver `sucursal_id`, luego `.eq(sucursal_id)` explicito. Las 4 vistas (Todas, Hoy, Semana, Mes) restauradas.
+- `agenda/page.tsx`: mismo patron. Citas y actividades ahora usan admin client. Config de sucursal tambien corregida.
+- `crearCitaBot`: nueva guarda que verifica si el cliente ya tiene cita activa en la misma fecha antes del gate de conflicto de horario.
+- BotIA: todos los paths de creacion inicial pasan `confirmada:false` → `pendiente_contactar`. Solo `confirmarCitaBot` puede transicionar a `confirmada`.
+- Placa loop: si `flowState.step === capturar_placa` y no hay placa ni `isNoTienePlaca`, marca `placa_pendiente=true` y avanza (rompe el loop de una pregunta infinita).
+- Encoding: corregidos caracteres mojibake en mensajes de confirmacion humana.
+
+**Pendientes posteriores:**
+- Validar en produccion con citas reales post-deploy.
+- Confirmar que `ensureUsuario` retorna `sucursal_id` correcto en Vercel para el usuario de produccion.
