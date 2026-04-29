@@ -21,6 +21,7 @@ export async function buscarDisponibilidad(
       .from('configuracion_horarios_sucursal')
       .select('horario_inicio, horario_fin')
       .eq('sucursal_id', sucursal_id)
+      .eq('modulo', 'citas')
       .eq('dia_semana', diaSemana)
       .eq('activo', true)
       .maybeSingle(),
@@ -30,6 +31,9 @@ export async function buscarDisponibilidad(
       .select('motivo')
       .eq('sucursal_id', sucursal_id)
       .eq('fecha', fecha)
+      .eq('activa', true)
+      .or('modulo.eq.citas,modulo.is.null')
+      .limit(1)
       .maybeSingle(),
     supabase
       .from('citas')
@@ -38,14 +42,11 @@ export async function buscarDisponibilidad(
       .eq('fecha_cita', fecha),
   ])
 
-  const cfg = cfgRes.data ?? {
-    horario_inicio: '08:00',
-    horario_fin: '18:00',
-    intervalo_minutos: 30,
-    dias_disponibles: [1, 2, 3, 4, 5, 6],
-    activa: true,
-    timezone: 'America/Mexico_City',
+  if (!cfgRes.data) {
+    return { slots: [], mensaje: 'Necesito validar disponibilidad con un asesor antes de confirmarte horario.' }
   }
+
+  const cfg = cfgRes.data
 
   if (!cfg.activa) {
     return { slots: [], mensaje: 'El servicio de citas no está disponible en este momento.' }
@@ -87,8 +88,8 @@ export async function buscarDisponibilidad(
   const BUFFER_MIN = 30
   const nowTotalMin = nowMX.getHours() * 60 + nowMX.getMinutes()
 
-  const [startH = 8, startM = 0] = (horarioEfectivo.horario_inicio as string).split(':').map(Number)
-  const [endH = 18, endM = 0] = (horarioEfectivo.horario_fin as string).split(':').map(Number)
+  const [startH = 0, startM = 0] = (horarioEfectivo.horario_inicio as string).split(':').map(Number)
+  const [endH = 0, endM = 0] = (horarioEfectivo.horario_fin as string).split(':').map(Number)
   const intervalo = (cfg.intervalo_minutos as number) ?? 30
 
   const slots: SlotDisponible[] = []

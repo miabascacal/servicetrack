@@ -387,7 +387,8 @@ Las policies de `ai_settings` y `outbound_queue` actualmente solo validan `sucur
   - `021_workflow_automation_refacciones.sql`: extiende `automation_rules.trigger_tipo` con `ot_pendiente_refacciones` y `solicitud_refacciones`.
 
 - **`buscarDisponibilidad` usa las nuevas tablas con fallback seguro.**
-  - Prioridad: día no laborable > override per-day (`configuracion_horarios_sucursal`) > global (`configuracion_citas_sucursal`) > hardcoded `08:00-18:00`.
+  - Prioridad: día no laborable > override per-day (`configuracion_horarios_sucursal`) > global (`configuracion_citas_sucursal`). Si no existe config global → responde `"Necesito validar disponibilidad con un asesor antes de confirmarte horario."` (NO inventa horario).
+  - Consulta `configuracion_horarios_sucursal` filtrado por `modulo='citas'`; consulta `configuracion_dias_no_laborables` filtrado por `activa=true` y `(modulo='citas' OR modulo IS NULL)`.
   - Usa `timezone` de `configuracion_citas_sucursal` para filtrar slots pasados (antes hardcodeado a `America/Mexico_City`).
 
 - **`tieneCaracteresInvalidosPlaca(texto): boolean` en `appointment-flow.ts`.**
