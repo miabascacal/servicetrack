@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { ensureUsuario } from '@/lib/ensure-usuario'
 import { NuevaActividad } from '../crm/agenda/NuevaActividad'
 import { CalendarioGrid } from './CalendarioGrid'
 import type { Vista, CalActividad, CalCita } from './CalendarioGrid'
@@ -34,12 +36,23 @@ export default async function MiAgendaPage({ searchParams }: PageProps) {
   } = await supabase.auth.getUser()
   if (!user) return null
 
+  let sucursal_id: string | null = null
+  try {
+    const ctx = await ensureUsuario(supabase, user.id, user.email ?? '')
+    sucursal_id = ctx.sucursal_id
+  } catch {
+    // sucursal_id stays null
+  }
+
+  const admin = createAdminClient()
+
   // Leer vista default desde config solo cuando no viene en URL
   let vistaDefault: Vista = 'semana'
-  if (!vistaParam) {
-    const { data: cfgVista } = await supabase
+  if (!vistaParam && sucursal_id) {
+    const { data: cfgVista } = await admin
       .from('configuracion_citas_sucursal')
       .select('agenda_vista_default')
+      .eq('sucursal_id', sucursal_id)
       .limit(1)
       .maybeSingle()
     const raw = (cfgVista as unknown as { agenda_vista_default?: string } | null)?.agenda_vista_default
@@ -84,8 +97,26 @@ export default async function MiAgendaPage({ searchParams }: PageProps) {
   const startISO = rangeStart.toISOString()
   const endISO = new Date(rangeEnd.getTime() + 24 * 60 * 60 * 1000).toISOString()
 
+  let citasQuery = admin
+    .from('citas')
+    .select(`
+      id, fecha_cita, hora_cita, estado, servicio,
+      cliente:clientes ( id, nombre, apellido )
+    `)
+    .eq('asesor_id', user.id)
+    .not('estado', 'in', '("cancelada","no_show")')
+    .gte('fecha_cita', startStr)
+    .lte('fecha_cita', endStr)
+    .order('fecha_cita', { ascending: true })
+    .order('hora_cita', { ascending: true })
+    .limit(200)
+
+  if (sucursal_id) {
+    citasQuery = citasQuery.eq('sucursal_id', sucursal_id)
+  }
+
   const [{ data: actividades }, { data: citas }] = await Promise.all([
-    supabase
+    admin
       .from('actividades')
       .select(`
         id, tipo, descripcion, estado, prioridad, fecha_vencimiento,
@@ -97,19 +128,7 @@ export default async function MiAgendaPage({ searchParams }: PageProps) {
       .lt('fecha_vencimiento', endISO)
       .order('fecha_vencimiento', { ascending: true })
       .limit(200),
-    supabase
-      .from('citas')
-      .select(`
-        id, fecha_cita, hora_cita, estado, servicio,
-        cliente:clientes ( id, nombre, apellido )
-      `)
-      .eq('asesor_id', user.id)
-      .not('estado', 'in', '("cancelada","no_show")')
-      .gte('fecha_cita', startStr)
-      .lte('fecha_cita', endStr)
-      .order('fecha_cita', { ascending: true })
-      .order('hora_cita', { ascending: true })
-      .limit(200),
+    citasQuery,
   ])
 
   return (

@@ -3,6 +3,8 @@ import { Plus } from 'lucide-react'
 import { CitasMonthCalendar } from '@/app/_components/citas/CitasMonthCalendar'
 import { CitasKanban } from '@/app/_components/citas/CitasKanban'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { ensureUsuario } from '@/lib/ensure-usuario'
 import { cn } from '@/lib/utils'
 import type { EstadoCita } from '@/types/database'
 
@@ -147,18 +149,36 @@ function getVistaRange(vista: CitasVista) {
 
 export default async function CitasPage({ searchParams }: { searchParams: SearchParams }) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
   const resolvedSearchParams = await searchParams
   const vistaActiva = resolveVista(resolvedSearchParams.vista)
   const monthMode = resolveMonthMode(resolvedSearchParams.modo)
   const visibleRange = getVistaRange(vistaActiva)
 
-  let query = supabase
+  let sucursal_id: string | null = null
+  if (user) {
+    try {
+      const ctx = await ensureUsuario(supabase, user.id, user.email ?? '')
+      sucursal_id = ctx.sucursal_id
+    } catch {
+      // sucursal_id stays null — admin client query will return empty safely
+    }
+  }
+
+  const admin = createAdminClient()
+
+  let query = admin
     .from('citas')
     .select(`
       id, fecha_cita, hora_cita, estado, servicio, notas, cliente_id, vehiculo_id
     `)
     .order('fecha_cita', { ascending: true })
     .order('hora_cita', { ascending: true })
+
+  if (sucursal_id) {
+    query = query.eq('sucursal_id', sucursal_id)
+  }
 
   if (visibleRange.start && visibleRange.end) {
     query = query
@@ -188,13 +208,13 @@ export default async function CitasPage({ searchParams }: { searchParams: Search
 
   const [{ data: clientesData, error: clientesError }, { data: vehiculosData, error: vehiculosError }] = await Promise.all([
     clienteIds.length > 0
-      ? supabase
+      ? admin
           .from('clientes')
           .select('id, nombre, apellido, whatsapp')
           .in('id', clienteIds)
       : Promise.resolve({ data: [], error: null }),
     vehiculoIds.length > 0
-      ? supabase
+      ? admin
           .from('vehiculos')
           .select('id, marca, modelo, anio, placa')
           .in('id', vehiculoIds)
