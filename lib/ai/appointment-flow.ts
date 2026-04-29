@@ -93,7 +93,7 @@ export function mergeAppointmentFlowState(
   existing: AppointmentFlowState | null,
   patch: Partial<AppointmentFlowState>,
 ): AppointmentFlowState {
-  const base: AppointmentFlowState = existing ?? { step: 'capturar_servicio' }
+  const base: AppointmentFlowState = existing ?? { step: 'capturar_nombre' }
   return { ...base, ...patch }
 }
 
@@ -296,6 +296,8 @@ export function isRechazoCita(texto: string): boolean {
 // ── P0.2 Parsers ─────────────────────────────────────────────────────────────
 
 const PALABRAS_NO_NOMBRE = new Set([
+  'a', 'al', 'de', 'del', 'el', 'ella', 'ellos', 'en', 'la', 'las', 'lo', 'los',
+  'mi', 'mis', 'para', 'por', 'su', 'sus', 'tu', 'tus', 'un', 'una', 'unos', 'unas',
   'hola', 'gracias', 'buenos', 'días', 'dias', 'tardes', 'noches', 'buen',
   'ok', 'sí', 'si', 'no', 'claro', 'correcto', 'perfecto', 'dale', 'órale',
   'orale', 'ándale', 'andale', 'quiero', 'necesito', 'quisiera', 'puede',
@@ -465,8 +467,13 @@ export function isClientePlaceholder(
   if (!nombre) return true
   const n = nombre.toUpperCase().trim()
   const a = (apellido ?? '').toUpperCase().trim()
-  if (n.length < 2) return true
+  if (n.length < 2 || a.length < 2) return true
   if (BOTIA_PLACEHOLDER_NOMBRES.has(n)) return true
   if (n.includes('DEMO') || a.includes('DEMO')) return true
+  const meaningfulTokens = `${n} ${a}`
+    .split(/\s+/)
+    .map(token => token.trim().toLowerCase())
+    .filter(token => token.length >= 2 && !PALABRAS_NO_NOMBRE.has(token))
+  if (meaningfulTokens.length < 2) return true
   return false
 }

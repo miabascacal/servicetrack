@@ -15,6 +15,7 @@ import {
   guardarConfirmacionPendiente,
   limpiarConfirmacionPendiente,
   obtenerEscalationAssigneeId,
+  registrarAutomationLogBot,
   type ConfirmacionPendiente,
 } from '@/lib/ai/bot-tools'
 import {
@@ -286,6 +287,79 @@ function formatReminderPolicyResponse(): string {
   return 'Si la automatización está activa, recibirás recordatorio por WhatsApp un día antes de tu cita.\nSi se crea una actividad para asesor, también pueden darte seguimiento por llamada.'
 }
 
+function formatHumanConfirmationResponse(): string {
+  return 'Entendido. Dejo tu cita como pendiente de confirmacion para que un asesor te contacte.\nSi la automatizacion esta activa, recibiras recordatorio por WhatsApp un dia antes.'
+}
+
+function sanitizeBotResponse(respuesta: string): string {
+  const normalized = respuesta.toLowerCase()
+  const blockedPhrases = [
+    'no tengo acceso a la base de datos',
+    'no puedo consultar crm',
+    'no tengo acceso al crm',
+    'no estoy programado para eso',
+    'me crearon solo para citas',
+    'soy solo asistente de citas',
+    'no puedo consultar la base de datos',
+  ]
+
+  if (blockedPhrases.some((phrase) => normalized.includes(phrase))) {
+    return 'Estoy revisando la informacion disponible. Para asegurar que quede correcto, necesito confirmar el dato faltante contigo.'
+  }
+
+  return respuesta
+}
+
+function isPreguntaBusquedaNombre(texto: string): boolean {
+  const t = texto.toLowerCase()
+  return (
+    (t.includes('buscaste') || t.includes('revisaste') || t.includes('consultaste')) &&
+    (t.includes('nombre') || t.includes('bd') || t.includes('base de datos') || t.includes('crm'))
+  )
+}
+
+function buildNombreLookupResponse(params: {
+  nombre: string | null | undefined
+  apellido: string | null | undefined
+}): string {
+  if (isClientePlaceholder(params.nombre, params.apellido)) {
+    return 'Si, revise el registro asociado a tu WhatsApp y todavia no tengo un nombre completo confiable. Para asegurar que quede correcto, necesito tu nombre completo.'
+  }
+
+  const nombreCompleto = [params.nombre, params.apellido].filter(Boolean).join(' ').trim()
+  return `Si, revise el registro asociado a tu WhatsApp y tengo a ${nombreCompleto}. Si quieres actualizarlo, comparteme el dato correcto.`
+}
+
+async function persistThreadRouting(params: {
+  thread_id: string
+  estado?: 'waiting_agent' | 'bot_active' | 'open' | 'waiting_customer'
+  escalation_reason?: string | null
+  modulo?: AgencyModule | null
+  last_bot_event?: string | null
+}) {
+  const admin = createAdminClient()
+  const { data: current } = await admin
+    .from('conversation_threads')
+    .select('metadata')
+    .eq('id', params.thread_id)
+    .single()
+
+  const existing = (current?.metadata ?? {}) as Record<string, unknown>
+  const nextMetadata: Record<string, unknown> = { ...existing }
+
+  if (params.escalation_reason) nextMetadata.escalation_reason = params.escalation_reason
+  if (params.modulo) nextMetadata.current_module = params.modulo
+  if (params.last_bot_event) nextMetadata.last_bot_event = params.last_bot_event
+
+  const updatePayload: Record<string, unknown> = { metadata: nextMetadata }
+  if (params.estado) updatePayload.estado = params.estado
+
+  await admin
+    .from('conversation_threads')
+    .update(updatePayload)
+    .eq('id', params.thread_id)
+}
+
 async function crearEscalacionAgencia(params: {
   sucursal_id: string
   cliente_id: string
@@ -479,6 +553,22 @@ export async function simularMensajeAction(params: {
 
   if (!skipBot && isSolicitudRecordatorio(params.mensaje)) {
     respuesta = formatReminderPolicyResponse()
+    await registrarAutomationLogBot({
+      sucursal_id,
+      event: 'botia_recordatorio_solicitado',
+      referencia_tipo: 'thread',
+      referencia_id: thread_id,
+      detalle: `Recordatorio solicitado por cliente ${cliente.id}`,
+      idempotency_key: `${thread_id}:botia_recordatorio_solicitado:${msgIn?.id ?? params.mensaje}`,
+    })
+    skipBot = true
+  }
+
+  if (!skipBot && isPreguntaBusquedaNombre(params.mensaje)) {
+    respuesta = buildNombreLookupResponse({
+      nombre: cliente.nombre as string | null,
+      apellido: cliente.apellido as string | null,
+    })
     skipBot = true
   }
 
@@ -541,13 +631,38 @@ export async function simularMensajeAction(params: {
     }
   }
 
+  if (handoff && skipBot && currentModule && currentModule !== 'citas' && !flowState) {
+    await registrarAutomationLogBot({
+      sucursal_id,
+      event: currentModule === 'refacciones' ? 'botia_refacciones_enrutado' : 'botia_escalado_asesor',
+      referencia_tipo: 'thread',
+      referencia_id: thread_id,
+      detalle: `Modulo ${currentModule} - mensaje original: ${params.mensaje}`,
+      idempotency_key: `${thread_id}:${currentModule}:${msgIn?.id ?? params.mensaje}`,
+    })
+    await persistThreadRouting({
+      thread_id,
+      estado: 'waiting_agent',
+      escalation_reason: currentModule,
+      modulo: currentModule,
+      last_bot_event: currentModule === 'refacciones' ? 'botia_refacciones_enrutado' : 'botia_escalado_asesor',
+    })
+  }
+
+  const bookingSignals =
+    intentResult.intent === 'agendar_cita' ||
+    intentoAgendar(params.mensaje) ||
+    Boolean(parsearServicio(params.mensaje)) ||
+    Boolean(parsearVehiculo(params.mensaje)) ||
+    Boolean(parsearFecha(params.mensaje)) ||
+    Boolean(parsearHora(params.mensaje))
+
   const shouldProcessFlow =
     flowState !== null ||
-    (intentResult.intent === 'agendar_cita' && intentResult.confidence >= 0.5) ||
-    intentoAgendar(params.mensaje)
+    ((intentResult.intent === 'agendar_cita' && intentResult.confidence >= 0.5) || bookingSignals)
 
   if (shouldProcessFlow && !citaProxima) {
-    if (!flowState) flowState = { step: 'capturar_servicio' }
+    if (!flowState) flowState = { step: 'capturar_nombre' }
 
     // ── Step A: Name capture — DETERMINISTIC, no LLM fallback ───────────────
     //
@@ -779,6 +894,21 @@ export async function simularMensajeAction(params: {
         })
         if ('id' in flowResult) {
           cita_id = flowResult.id
+          await registrarAutomationLogBot({
+            sucursal_id,
+            event: 'botia_cita_pendiente_contactar',
+            referencia_tipo: 'cita',
+            referencia_id: flowResult.id,
+            detalle: `Cita pendiente de confirmacion humana ${flowState.fecha} ${flowState.hora}`,
+            idempotency_key: `${flowResult.id}:botia_cita_pendiente_contactar`,
+          })
+          await persistThreadRouting({
+            thread_id,
+            estado: 'waiting_agent',
+            escalation_reason: 'confirmacion_humana',
+            modulo: 'citas',
+            last_bot_event: 'botia_cita_pendiente_contactar',
+          })
           await crearEscalacionAgencia({
             sucursal_id,
             cliente_id: cliente.id as string,
@@ -810,6 +940,14 @@ export async function simularMensajeAction(params: {
         })
         if ('id' in flowResult) {
           cita_id = flowResult.id
+          await registrarAutomationLogBot({
+            sucursal_id,
+            event: 'botia_cita_creada',
+            referencia_tipo: 'cita',
+            referencia_id: flowResult.id,
+            detalle: `Cita confirmada por BotIA ${flowState.fecha} ${flowState.hora}`,
+            idempotency_key: `${flowResult.id}:botia_cita_creada`,
+          })
           const fechaLeg = new Date(flowState.fecha! + 'T12:00:00').toLocaleDateString('es-MX', {
             weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
           })
@@ -847,6 +985,21 @@ export async function simularMensajeAction(params: {
     })
     if ('id' in result) {
       cita_id = result.id
+      await registrarAutomationLogBot({
+        sucursal_id,
+        event: 'botia_cita_pendiente_contactar',
+        referencia_tipo: 'cita',
+        referencia_id: result.id,
+        detalle: `Cita pendiente de confirmacion humana ${pendingConf.fecha} ${pendingConf.hora}`,
+        idempotency_key: `${result.id}:botia_cita_pendiente_contactar`,
+      })
+      await persistThreadRouting({
+        thread_id,
+        estado: 'waiting_agent',
+        escalation_reason: 'confirmacion_humana',
+        modulo: 'citas',
+        last_bot_event: 'botia_cita_pendiente_contactar',
+      })
       await crearEscalacionAgencia({
         sucursal_id,
         cliente_id: cliente.id as string,
@@ -874,6 +1027,14 @@ export async function simularMensajeAction(params: {
     })
     if ('id' in result) {
       cita_id  = result.id
+      await registrarAutomationLogBot({
+        sucursal_id,
+        event: 'botia_cita_creada',
+        referencia_tipo: 'cita',
+        referencia_id: result.id,
+        detalle: `Cita confirmada por BotIA ${pendingConf.fecha} ${pendingConf.hora}`,
+        idempotency_key: `${result.id}:botia_cita_creada`,
+      })
       const fechaLegible = new Date(pendingConf.fecha + 'T12:00:00').toLocaleDateString('es-MX', {
         weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
       })
@@ -906,6 +1067,14 @@ export async function simularMensajeAction(params: {
       const cita  = citasActivas[0]
       const cr    = await confirmarCitaBot({ cita_id: cita.id, sucursal_id })
       if (cr.ok) {
+        await registrarAutomationLogBot({
+          sucursal_id,
+          event: 'botia_cita_creada',
+          referencia_tipo: 'cita',
+          referencia_id: cita.id,
+          detalle: `Cita existente confirmada por BotIA ${cita.fecha_cita} ${(cita.hora_cita as string).slice(0, 5)}`,
+          idempotency_key: `${cita.id}:botia_cita_creada`,
+        })
         const fechaLeg = new Date((cita.fecha_cita as string) + 'T12:00:00').toLocaleDateString('es-MX', {
           weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
         })
@@ -939,6 +1108,14 @@ export async function simularMensajeAction(params: {
       })
       if ('id' in slotResult) {
         cita_id  = slotResult.id
+        await registrarAutomationLogBot({
+          sucursal_id,
+          event: 'botia_cita_creada',
+          referencia_tipo: 'cita',
+          referencia_id: slotResult.id,
+          detalle: `Cita confirmada por BotIA ${detectedSlot.fecha} ${detectedSlot.hora}`,
+          idempotency_key: `${slotResult.id}:botia_cita_creada`,
+        })
         const fechaLegible = new Date(detectedSlot.fecha + 'T12:00:00').toLocaleDateString('es-MX', {
           weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Mexico_City',
         })
@@ -1014,6 +1191,11 @@ export async function simularMensajeAction(params: {
     }
   }
 
+  respuesta = sanitizeBotResponse(respuesta)
+  if (respuesta.toLowerCase().includes('pendiente de confirm')) {
+    respuesta = formatHumanConfirmationResponse()
+  }
+
   // 7. Persistir respuesta del bot
   const { error: botMsgError } = await admin
     .from('mensajes')
@@ -1044,10 +1226,15 @@ export async function simularMensajeAction(params: {
 
   // 8. Actualizar estado del hilo
   const nuevoEstado = handoff ? 'waiting_agent' : 'bot_active'
+  await persistThreadRouting({
+    thread_id,
+    estado: nuevoEstado as 'waiting_agent' | 'bot_active',
+    modulo: currentModule ?? 'citas',
+    escalation_reason: handoff ? ((currentModule && currentModule !== 'citas') ? currentModule : 'asesor') : null,
+  })
   await admin
     .from('conversation_threads')
     .update({
-      estado:              nuevoEstado,
       last_message_at:     new Date().toISOString(),
       last_message_source: 'agent_bot',
     })

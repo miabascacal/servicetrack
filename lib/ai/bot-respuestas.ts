@@ -27,7 +27,7 @@ export function generarRespuestaSimple(params: RespuestaSimpleParams): Respuesta
 
     case 'consulta_horario':
       return {
-        respuesta: `¡Claro, ${nombre}! 🕐\n\n*Horarios de atención:*\n• Lunes a viernes: 8:00 AM – 6:00 PM\n• Sábados: 9:00 AM – 2:00 PM\n\n¿Te gustaría agendar una cita?`,
+        respuesta: `Claro, ${nombre}. Estoy revisando la información disponible de la sucursal.\nPara asegurar que quede correcto, dime si buscas horario o ubicación.`,
         handoff: false,
       }
 
@@ -118,7 +118,7 @@ export function generarRespuestaSimple(params: RespuestaSimpleParams): Respuesta
     case 'agendar_cita':
       // Fallback — normalmente este caso lo maneja generarRespuestaBot
       return {
-        respuesta: `Con gusto te ayudo a agendar tu cita, ${nombre}. ¿Para qué fecha tienes disponibilidad?`,
+        respuesta: `Con gusto te ayudo a agendar tu cita, ${nombre}.\nPara asegurar que quede correcto, necesito confirmar tu nombre completo primero.`,
         handoff: false,
       }
 

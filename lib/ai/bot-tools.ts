@@ -255,6 +255,40 @@ export async function obtenerEscalationAssigneeId(
 
 // ── Seguimiento de citas existentes ──────────────────────────────────────────
 
+export async function registrarAutomationLogBot(params: {
+  sucursal_id: string
+  event: 'botia_cita_creada' | 'botia_cita_pendiente_contactar' | 'botia_escalado_asesor' | 'botia_refacciones_enrutado' | 'botia_recordatorio_solicitado'
+  referencia_tipo: 'cita' | 'thread' | 'cliente'
+  referencia_id: string
+  detalle: string
+  canal?: 'whatsapp' | 'email' | 'push' | null
+  idempotency_key: string
+}): Promise<void> {
+  const supabase = createAdminClient()
+
+  try {
+    await supabase
+      .from('automation_logs')
+      .upsert(
+        {
+          sucursal_id: params.sucursal_id,
+          workflow_key: 'botia',
+          rule_key: params.event,
+          idempotency_key: params.idempotency_key,
+          estado: 'success',
+          canal: params.canal ?? 'whatsapp',
+          referencia_tipo: params.referencia_tipo,
+          referencia_id: params.referencia_id,
+          executed_at: new Date().toISOString(),
+          resultado_detalle: params.detalle,
+        },
+        { onConflict: 'idempotency_key', ignoreDuplicates: true },
+      )
+  } catch (error) {
+    console.error('[registrarAutomationLogBot] best-effort falló:', error)
+  }
+}
+
 export interface CitaResumen {
   id:         string
   fecha_cita: string
